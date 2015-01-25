@@ -4,9 +4,49 @@ if (typeof require !== 'undefined') {
 }
 
 function main() {
+  var combatants = [];
+  var BASE_SPEED = 255; // Equalize speed for all players so it doesn't factor into simulation.
+
+  // Crystal arrays for convenience
+  var allPerfectAirs = [ Item.PerfectAir, Item.PerfectAir, Item.PerfectAir, Item.PerfectAir ];
+  var allPerfectWaters = [ Item.PerfectWater, Item.PerfectWater, Item.PerfectWater, Item.PerfectWater ];
+  var allPerfectVoids = [ Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid ];
+  var allPerfectFires = [ Item.PerfectFire, Item.PerfectFire, Item.PerfectFire, Item.PerfectFire ];
+  var allPerfectPinks = [ Item.PerfectPink, Item.PerfectPink, Item.PerfectPink, Item.PerfectPink ];
+  var allPerfectOranges = [ Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange ];
+
+  // As a general principle, set accuracy and dodge to be about the same.
+  var dualcsword = Player.generateFullyTrainedPlayer(
+    'Dual C. Swords',
+    { hp: 50, speed: 2, accuracy: 66, dodge: 65 },
+    [
+      Item.TitanGuard,
+      Item.CrystalSword,
+      Item.CrystalSword,
+      Item.Amulet,
+      Item.Amulet
+    ]
+  );
+  assert(dualcsword.speed === BASE_SPEED);
+  combatants.push(dualcsword);
+
+  var dualscythe = Player.generateFullyTrainedPlayer(
+    'Dual Scythes w/ Primes',
+    { hp: 50, speed: 6, accuracy: 66, dodge: 61 },
+    [
+      Item.TitanGuard,
+      Item.Scythe,
+      Item.Scythe,
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
+    ]
+  );
+  assert(dualscythe.speed === BASE_SPEED);
+  combatants.push(dualscythe);
+
   var dualrift = Player.generateFullyTrainedPlayer(
-    'Dual Rift',
-    { hp: 60, speed: 5, accuracy: 4, dodge: 114 },
+    'Dual Rift w/ Primes',
+    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
     [
       Item.TitanGuard,
       Item.RiftGun,
@@ -15,22 +55,64 @@ function main() {
       Item.PrimeAmulet
     ]
   );
+  assert(dualrift.speed === BASE_SPEED);
+  combatants.push(dualrift);
+
+  var maxdualrift = Player.generateFullyTrainedPlayer(
+    'Maxed Dual Rift /w Infernos',
+    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
+    [
+      Item.TitanGuard
+        .socket(allPerfectVoids),
+      Item.RiftGun
+        .socket(allPerfectFires),
+      Item.RiftGun
+        .socket(allPerfectFires),
+      Item.InfernoAmulet
+        .socket(allPerfectPinks),
+      Item.InfernoAmulet
+        .socket(allPerfectPinks)
+    ]
+  );
+  assert(maxdualrift.speed === BASE_SPEED);
+  combatants.push(maxdualrift);
 
   var dualvoid = Player.generateFullyTrainedPlayer(
-    'Dual Void',
-    { hp: 50, speed: 10, accuracy: 68, dodge: 55 },
+    'Dual Void w/ Primes',
+    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
     [
       Item.TitanGuard,
       Item.VoidSword,
       Item.VoidSword,
-      Item.InfernoAmulet,
-      Item.InfernoAmulet
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
     ]
   );
+  assert(dualvoid.speed === BASE_SPEED);
+  combatants.push(dualvoid);
+
+  var maxdualvoid = Player.generateFullyTrainedPlayer(
+    'Maxed Dual Void /w Infernos',
+    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
+    [
+      Item.TitanGuard
+        .socket(allPerfectWaters),
+      Item.VoidSword
+        .socket(allPerfectFires),
+      Item.VoidSword
+        .socket(allPerfectFires),
+      Item.InfernoAmulet
+        .socket(allPerfectOranges),
+      Item.InfernoAmulet
+        .socket(allPerfectOranges)
+    ]
+  );
+  assert(maxdualvoid.speed === BASE_SPEED);
+  combatants.push(maxdualvoid);
 
   var riftvoid = Player.generateFullyTrainedPlayer(
-    'Rift/Void',
-    { hp: 60, speed: 10, accuracy: 53, dodge: 60 },
+    'Rift/Void w/ Primes',
+    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
     [
       Item.TitanGuard,
       Item.RiftGun,
@@ -39,7 +121,30 @@ function main() {
       Item.PrimeAmulet
     ]
   );
+  assert(riftvoid.speed === BASE_SPEED);
+  combatants.push(riftvoid);
 
+  var maxriftvoid = Player.generateFullyTrainedPlayer(
+    'Maxed Rift/Void w/ Infernos',
+    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
+    [
+      Item.TitanGuard
+        .socket(allPerfectWaters),
+      Item.RiftGun
+        .socket(allPerfectAirs),
+      Item.VoidSword
+        .socket(allPerfectFires),
+      Item.InfernoAmulet
+        .socket(allPerfectOranges),
+      Item.InfernoAmulet
+        .socket(allPerfectOranges)
+    ]
+  );
+  assert(maxriftvoid.speed === BASE_SPEED);
+  combatants.push(maxriftvoid);
+
+
+  // ============================ COMBAT SIMULATION ============================
   var combatResults = function(player1, player2) {
     var fights = 25000;
     var res = CombatSim.simulateCombat(player1, player2, fights);
@@ -51,8 +156,10 @@ function main() {
   };
 
   console.log('Running Simulation');
-  combatResults(dualrift, riftvoid);
-  combatResults(dualvoid, riftvoid);
+  combatants.forEach(function(opponent) {
+    var attacker = _.extend({}, maxriftvoid);
+    combatResults(attacker, opponent);
+  });
 }
 
 // =============================================================================
@@ -63,11 +170,28 @@ function getRandom(min, max) {
   return min + Math.round(Math.random() * (max - min));
 }
 
+function ceil(num) {
+  // Because of floating number arithmetic, subtract some epsilon first before
+  // applying ceil. That way expressions like ceil(110 * 1.1) === 110.
+  var EPSILON = 0.0000000001;
+  return Math.ceil(num - EPSILON);
+}
+
 function idx(obj, key, def) {
   if (obj && typeof obj[key] !== 'undefined') {
     return obj[key];
   } else {
     return def;
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    message = message || "Assertion failed";
+    if (typeof Error !== "undefined") {
+      throw new Error(message);
+    }
+    throw message; // Fallback
   }
 }
 
@@ -335,14 +459,20 @@ Equipment.prototype.socket = function(crystals) {
   var new_stats = _.extend({}, this);
   new_stats.crystals = crystals;
 
+  var stat_bonuses = {};
   crystals.forEach(function(c) {
     for (var stat in new_stats) {
       var stat_mult = idx(c, stat + '_mult', null);
       if (stat_mult !== null) {
-        new_stats[stat] *= stat_mult;
+        stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
       }
     }
   });
+
+  for (var stat in stat_bonuses) {
+    // Apply ceiling function after we've calculated partial bonus from all crystals.
+    new_stats[stat] += ceil(stat_bonuses[stat]);
+  }
 
   var new_item = new Equipment(new_stats);
   return new_item;

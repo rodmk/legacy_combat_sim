@@ -60,3 +60,20 @@ function argmin(arr, fn) {
 
   return results;
 }
+
+
+function logStatRatioStats() {
+  var pct = 0;
+  var prev_pct = 0;
+  for (var i = 0; i <= 200; i += 5) {
+    prev_pct = pct;
+    pct = combat_pct(i, 100);
+    var ratio = i/100;
+
+    console.log(
+      'Stat ratio: ' + parseFloat(ratio).toFixed(2) + ' ' +
+      'Chance to hit: ' + parseFloat(pct).toFixed(3) + ' ' +
+      'Marginal difference: ' + parseFloat(pct - prev_pct).toFixed(3)
+    );
+  }
+}
