@@ -145,21 +145,26 @@ function main() {
 
 
   // ============================ COMBAT SIMULATION ============================
-  var combatResults = function(player1, player2) {
-    var fights = 25000;
-    var res = CombatSim.simulateCombat(player1, player2, fights);
-
+  var combatResults = function(attacker, opponents) {
     console.log('---');
-    console.log(player1.name + ' VS ' + player2.name);
-    console.log(player1.name + ': ' + res.player1_wins.toLocaleString() + ' (' + (Math.round((res.player1_wins / fights) * 10000) / 100) + '%)');
-    console.log(player2.name + ': ' + res.player2_wins.toLocaleString() + ' (' + (Math.round((res.player2_wins / fights) * 10000) / 100) + '%)');
+    console.log('Attacker: ' + attacker.name);
+
+    var fights = 25000;
+    opponents.forEach(function(opponent) {
+      var res = CombatSim.simulateCombat(attacker, opponent, fights);
+      var win_rate = ((res.player1_wins / fights) * 100).toFixed(2);
+
+      var opponent_text = ' VS ' + opponent.name + ': ';
+      var win_rate_text = win_rate + '%';
+      var output_width = 50;
+      var spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(" ");
+      console.log(opponent_text + spaces + win_rate_text);
+    });
   };
 
   console.log('Running Simulation');
-  combatants.forEach(function(opponent) {
-    var attacker = _.extend({}, maxriftvoid);
-    combatResults(attacker, opponent);
-  });
+  var attacker = _.extend({}, riftvoid);
+  combatResults(attacker, combatants);
 }
 
 // =============================================================================
