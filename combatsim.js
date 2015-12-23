@@ -4,167 +4,59 @@ if (typeof require !== 'undefined') {
 }
 
 function main() {
-  var combatants = [];
-  var BASE_SPEED = 255; // Equalize speed for all players so it doesn't factor into simulation.
-
-  // Crystal arrays for convenience
-  var allPerfectAirs = [ Item.PerfectAir, Item.PerfectAir, Item.PerfectAir, Item.PerfectAir ];
-  var allPerfectWaters = [ Item.PerfectWater, Item.PerfectWater, Item.PerfectWater, Item.PerfectWater ];
-  var allPerfectVoids = [ Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid ];
-  var allPerfectFires = [ Item.PerfectFire, Item.PerfectFire, Item.PerfectFire, Item.PerfectFire ];
-  var allPerfectPinks = [ Item.PerfectPink, Item.PerfectPink, Item.PerfectPink, Item.PerfectPink ];
-  var allPerfectOranges = [ Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange ];
-
-  // As a general principle, set accuracy and dodge to be about the same.
-  var dualcsword = Player.generateFullyTrainedPlayer(
-    'Dual C. Swords',
-    { hp: 50, speed: 2, accuracy: 66, dodge: 65 },
-    [
-      Item.TitanGuard,
-      Item.CrystalSword,
-      Item.CrystalSword,
-      Item.Amulet,
-      Item.Amulet
-    ]
-  );
-  assert(dualcsword.speed === BASE_SPEED);
-  combatants.push(dualcsword);
-
-  var dualscythe = Player.generateFullyTrainedPlayer(
-    'Dual Scythes w/ Primes',
-    { hp: 50, speed: 6, accuracy: 66, dodge: 61 },
-    [
-      Item.TitanGuard,
-      Item.Scythe,
-      Item.Scythe,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  );
-  assert(dualscythe.speed === BASE_SPEED);
-  combatants.push(dualscythe);
-
-  var dualrift = Player.generateFullyTrainedPlayer(
-    'Dual Rift w/ Primes',
-    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
-    [
-      Item.TitanGuard,
-      Item.RiftGun,
-      Item.RiftGun,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  );
-  assert(dualrift.speed === BASE_SPEED);
-  combatants.push(dualrift);
-
-  var maxdualrift = Player.generateFullyTrainedPlayer(
-    'Maxed Dual Rift /w Infernos',
-    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
-    [
-      Item.TitanGuard
-        .socket(allPerfectVoids),
-      Item.RiftGun
-        .socket(allPerfectFires),
-      Item.RiftGun
-        .socket(allPerfectFires),
-      Item.InfernoAmulet
-        .socket(allPerfectPinks),
-      Item.InfernoAmulet
-        .socket(allPerfectPinks)
-    ]
-  );
-  assert(maxdualrift.speed === BASE_SPEED);
-  combatants.push(maxdualrift);
-
-  var dualvoid = Player.generateFullyTrainedPlayer(
-    'Dual Void w/ Primes',
-    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
-    [
-      Item.TitanGuard,
-      Item.VoidSword,
-      Item.VoidSword,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  );
-  assert(dualvoid.speed === BASE_SPEED);
-  combatants.push(dualvoid);
-
-  var maxdualvoid = Player.generateFullyTrainedPlayer(
-    'Maxed Dual Void /w Infernos',
-    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
-    [
-      Item.TitanGuard
-        .socket(allPerfectWaters),
-      Item.VoidSword
-        .socket(allPerfectFires),
-      Item.VoidSword
-        .socket(allPerfectFires),
-      Item.InfernoAmulet
-        .socket(allPerfectOranges),
-      Item.InfernoAmulet
-        .socket(allPerfectOranges)
-    ]
-  );
-  assert(maxdualvoid.speed === BASE_SPEED);
-  combatants.push(maxdualvoid);
-
-  var riftvoid = Player.generateFullyTrainedPlayer(
-    'Rift/Void w/ Primes',
-    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
-    [
-      Item.TitanGuard,
-      Item.RiftGun,
-      Item.VoidSword,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  );
-  assert(riftvoid.speed === BASE_SPEED);
-  combatants.push(riftvoid);
-
-  var maxriftvoid = Player.generateFullyTrainedPlayer(
-    'Maxed Rift/Void w/ Infernos',
-    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
-    [
-      Item.TitanGuard
-        .socket(allPerfectWaters),
-      Item.RiftGun
-        .socket(allPerfectAirs),
-      Item.VoidSword
-        .socket(allPerfectFires),
-      Item.InfernoAmulet
-        .socket(allPerfectOranges),
-      Item.InfernoAmulet
-        .socket(allPerfectOranges)
-    ]
-  );
-  assert(maxriftvoid.speed === BASE_SPEED);
-  combatants.push(maxriftvoid);
-
-
   // ============================ COMBAT SIMULATION ============================
+  var combatants = Player.generateReferencePlayers();
   var combatResults = function(attacker, opponents) {
     console.log('---');
     console.log('Attacker: ' + attacker.name);
 
-    var fights = 25000;
-    opponents.forEach(function(opponent) {
-      var res = CombatSim.simulateCombat(attacker, opponent, fights);
-      var win_rate = ((res.player1_wins / fights) * 100).toFixed(2);
+    var fights = 100000;
+    opponents.forEach(function(defender) {
+      var res = CombatSim.simulateCombat(attacker, defender, fights);
+      var win_rate = res.player1_wins / fights;
 
-      var opponent_text = ' VS ' + opponent.name + ': ';
-      var win_rate_text = win_rate + '%';
+      var opponent_text = ' VS ' + defender.name + ': ';
+      var win_rate_text = (win_rate * 100).toFixed(2) + '%';
       var output_width = 50;
       var spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(" ");
       console.log(opponent_text + spaces + win_rate_text);
+
+      // Average damage rates
+      // var avg_dmg_att = CombatSim.averageDamagePerRound(attacker, defender, fights).toFixed(2);
+      // var avg_dmg_def = CombatSim.averageDamagePerRound(defender, attacker, fights).toFixed(2);
+      // console.log('    Dmg per round: ' + avg_dmg_att + ' / ' + avg_dmg_def);
     });
   };
 
+  var basePlayer = Player.generateFullyTrainedPlayer(
+    'BasePlayer',
+    { hp: 60, speed: 8, accuracy: 4, dodge: 111 },
+    [
+      Item.TitanGuard
+        .socket(Crystals.allPerfectVoids),
+      Item.RiftGun
+        .socket(Crystals.allPerfectAirs),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges),
+    ]
+  );
+  combatants.push(_.extend({}, basePlayer));
+
+  combatants.forEach(function(combatant) {
+    // Equalize stats for all players so they don't factor into simulation.
+    var BASE_HP = 300;
+    var BASE_SPEED = 255;
+
+    assert(combatant.max_hp === BASE_HP, combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP);
+    assert(combatant.speed === BASE_SPEED, combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED);
+  });
+
   console.log('Running Simulation');
-  var attacker = _.extend({}, riftvoid);
-  combatResults(attacker, combatants);
+  combatResults(basePlayer, combatants);
 }
 
 // =============================================================================
@@ -180,6 +72,22 @@ function ceil(num) {
   // applying ceil. That way expressions like ceil(110 * 1.1) === 110.
   var EPSILON = 0.0000000001;
   return Math.ceil(num - EPSILON);
+}
+
+function argmin(arr, fn) {
+  var min_key;
+  var min_val;
+
+  _.each(arr, function(v, k) {
+    v = fn ? fn(v) : v; // apply fn if provided
+    if (typeof min_val === "undefined" || v < min_val) {
+      min_key = k;
+      min_val = v;
+    }
+  });
+
+  var results = { key: min_key, val: min_val };
+  return results;
 }
 
 function idx(obj, key, def) {
@@ -268,6 +176,19 @@ CombatSim.fight = function(att, def) {
   return def_hp > 0 ? def : att;
 };
 
+CombatSim.averageDamagePerRound = function(att, def, rounds) {
+  var w1_damage = 0;
+  var w2_damage = 0;
+
+  for (var i = 0; i < rounds; i++) {
+    w1_damage += this.attemptHit(att, def, att.weapon1);
+    w2_damage += this.attemptHit(att, def, att.weapon2);
+  }
+
+  var average_damage = (w1_damage + w2_damage) / rounds;
+  return average_damage;
+};
+
 // Returns damage given to p2 by p1 in one hit
 CombatSim.attemptHit = function(att, def, weapon) {
   // Roll to-hit
@@ -314,6 +235,42 @@ var WEAPON_TYPE_TO_SKILL = Object.freeze({
   projectile: 'proj_skill',
   unarmed:    'def_skill',
 });
+
+// =============================================================================
+//                                 Combat Utils
+// =============================================================================
+function CombatUtils() {}
+
+CombatUtils.chanceToHit = function(off, def) {
+  var off_roll_range = (off + 1) - (off / 4);
+  var def_roll_range = (def + 1) - (def / 4);
+  var off_def_range = off_roll_range * def_roll_range;
+
+  var pct;
+  if (def > off) {
+    var off_def_diff_range = Math.max((off + 1) - (def / 4), 0);
+    pct = (0.5 * Math.pow(off_def_diff_range, 2)) / off_def_range;
+  } else {
+    var def_off_diff_range = Math.max((def + 1) - (off / 4), 0);
+    pct = (off_def_range - (0.5 * Math.pow(def_off_diff_range, 2))) / off_def_range;
+  }
+
+  return pct;
+};
+
+CombatUtils.offFromToHit = function(def, pct) {
+  var best = argmin(_.range(1, 1000), function(off) {
+    return Math.abs(this.chanceToHit(off, def) - pct);
+  }.bind(this));
+  return best.key;
+};
+
+CombatUtils.defFromToHit = function(off, pct) {
+  var best = argmin(_.range(1, 1000), function(def) {
+    return Math.abs(this.chanceToHit(off, def) - pct);
+  }.bind(this));
+  return best.key;
+};
 
 // =============================================================================
 //                                    Player
@@ -366,11 +323,11 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
   }
 
   if (dodge_points < 4) {
-    throw new Error(' Dodge must be at least 4 points');
+    throw new Error('Dodge must be at least 4 points');
   }
 
   if (accuracy_points < 4) {
-    throw new Error(' Accuracy must be at least 4 points');
+    throw new Error('Accuracy must be at least 4 points');
   }
 
   var MAX_STATS = 183; // 12 fixed + 3 base + 158 from leveling + 10 from 'Versatility' ability
@@ -417,6 +374,169 @@ Player.generatePlayer = function(name, raw_stats, items) {
 
   return stats;
 };
+/**
+ * Generates a variety of different reference player loadouts. For consistency
+ * in simulations, we pin HP at 300 and speed at 255.
+ */
+Player.generateReferencePlayers = function() {
+  var combatants = [];
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual C. Swords',
+    { hp: 60, speed: 2, accuracy: 61, dodge: 60 },
+    [
+      Item.TitanGuard,
+      Item.CrystalSword,
+      Item.CrystalSword,
+      Item.Amulet,
+      Item.Amulet
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual Scythes w/ Primes',
+    { hp: 60, speed: 6, accuracy: 61, dodge: 56 },
+    [
+      Item.TitanGuard,
+      Item.Scythe,
+      Item.Scythe,
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Maxed Dual Scythes w/ Primes',
+    { hp: 60, speed: 6, accuracy: 61, dodge: 56 },
+    [
+      Item.TitanGuard
+        .socket(Crystals.allPerfectVoids),
+      Item.Scythe
+        .socket(Crystals.allPerfectFires),
+      Item.Scythe
+        .socket(Crystals.allPerfectFires),
+      Item.PrimeAmulet
+        .socket(Crystals.allPerfectPinks),
+      Item.PrimeAmulet
+        .socket(Crystals.allPerfectPinks),
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual Rift w/ Primes',
+    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
+    [
+      Item.TitanGuard,
+      Item.RiftGun,
+      Item.RiftGun,
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Maxed Dual Rift /w Infernos',
+    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
+    [
+      Item.TitanGuard
+        .socket(Crystals.allPerfectVoids),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectPinks),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectPinks),
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual Void w/ Primes',
+    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
+    [
+      Item.TitanGuard,
+      Item.VoidSword,
+      Item.VoidSword,
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Maxed Dual Void w/ Infernos',
+    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
+    [
+      Item.TitanGuard
+        .socket(Crystals.allPerfectWaters),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges)
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Rift/Void w/ Primes',
+    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
+    [
+      Item.TitanGuard,
+      Item.RiftGun,
+      Item.VoidSword,
+      Item.PrimeAmulet,
+      Item.PrimeAmulet
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Maxed Rift/Void w/ Infernos',
+    { hp: 60, speed: 8, accuracy: 55, dodge: 60 },
+    [
+      Item.TitanGuard
+        .socket(Crystals.allPerfectWaters),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectPinks),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectPinks)
+    ]
+  ));
+
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Maxed Rift/Void w/ Infernos/Hell',
+    { hp: 60, speed: 6, accuracy: 77, dodge: 40 },
+    [
+      Item.HellforgedArmor
+        .socket(Crystals.allPerfectVoids),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges),
+      Item.InfernoAmulet
+        .socket(Crystals.allPerfectOranges)
+    ]
+  ));
+
+  combatants.forEach(function(combatant) {
+    // Equalize stats for all players so they don't factor into simulation.
+    var BASE_HP = 300;
+    var BASE_SPEED = 255;
+
+    assert(combatant.max_hp === BASE_HP, combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP);
+    assert(combatant.speed === BASE_SPEED, combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED);
+  });
+
+  return combatants;
+}
 
 // =============================================================================
 //                                   Equipment
@@ -457,7 +577,7 @@ Equipment.computeBonuses = function(items) {
 
 
 Equipment.prototype.socket = function(crystals) {
-  if (crystals.size <= 0) {
+  if (!crystals || crystals.size <= 0) {
     return this;
   }
 
@@ -494,7 +614,31 @@ var Item = deepFreeze({
     armor:       24,
     dodge:       68,
     speed:       55,
-    def_skill:   40
+    def_skill:   40,
+  }),
+
+  HellforgedArmor: new Equipment({
+    name:        'Hellforged Armor',
+    armor:       30,
+    dodge:       75,
+    speed:       65,
+    def_skill:   50,
+  }),
+
+  DarkLegionArmor: new Equipment({
+    name:        'Dark Legion Armor',
+    armor:       28,
+    dodge:       82,
+    speed:       65,
+    def_skill:   50,
+  }),
+
+  SG1Armor: new Equipment({
+    name:        'SG1 Armor',
+    armor:       26,
+    dodge:       72,
+    speed:       65,
+    def_skill:   80,
   }),
 
   // === Weapons ===
@@ -584,11 +728,47 @@ var Item = deepFreeze({
     proj_skill:  40
   }),
 
+  NerveGauntlet: new Equipment({
+    name:        'Nerve Gauntlet',
+    accuracy:    6,
+    dodge:       6,
+    def_skill:   25,
+    gun_skill:   40,
+    melee_skill: 40,
+    proj_skill:  50,
+  }),
+
+  BioSpinalEnhancer: new Equipment({
+    name:        'Bio Spinal Enhancer',
+    accuracy:    1,
+    dodge:       1,
+    def_skill:   65,
+    gun_skill:   65,
+    melee_skill: 65,
+    proj_skill:  65,
+  }),
+
+  OrphicAmulet: new Equipment({
+    name:        'Orphic Amulet',
+    accuracy:    10,
+    dodge:       10,
+    def_skill:   -25,
+    gun_skill:   50,
+    melee_skill: 50,
+    proj_skill:  50,
+  }),
+
   // === Crystals ===
   PerfectFire: {
     name: 'Perfect Fire',
     min_damage_mult: 1.1,
     max_damage_mult: 1.1,
+  },
+
+  GiantFire: {
+    name: 'Giant Fire',
+    min_damage_mult: 1.08,
+    max_damage_mult: 1.08,
   },
 
   PerfectVoid: {
@@ -630,6 +810,20 @@ var Item = deepFreeze({
     name: 'Perfect Null',
     speed_mult: 1.2,
   }
+});
+
+/**
+ * For convenience when socketing items, below are 4x crystal arrays for all
+ * crystal types.
+ */
+var Crystals = deepFreeze({
+  allPerfectAirs: [ Item.PerfectAir, Item.PerfectAir, Item.PerfectAir, Item.PerfectAir ],
+  allPerfectWaters: [ Item.PerfectWater, Item.PerfectWater, Item.PerfectWater, Item.PerfectWater ],
+  allPerfectFires: [ Item.PerfectFire, Item.PerfectFire, Item.PerfectFire, Item.PerfectFire ],
+  allPerfectVoids: [ Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid ],
+  allPerfectGreens: [ Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen ],
+  allPerfectOranges: [ Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange ],
+  allPerfectPinks: [ Item.PerfectPink, Item.PerfectPink, Item.PerfectPink, Item.PerfectPink ],
 });
 
 // =============================================================================
