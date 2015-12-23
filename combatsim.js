@@ -28,23 +28,41 @@ function main() {
     });
   };
 
-  var basePlayer = Player.generateFullyTrainedPlayer(
-    'BasePlayer',
-    { hp: 60, speed: 8, accuracy: 4, dodge: 111 },
+  var rod = Player.generateFullyTrainedPlayer(
+    'Rod',
+    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
     [
       Item.TitanGuard
-        .socket(Crystals.allPerfectVoids),
+        .socket(Crystals.allPerfectWaters),
       Item.RiftGun
-        .socket(Crystals.allPerfectAirs),
-      Item.VoidSword
         .socket(Crystals.allPerfectFires),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
     ]
   );
-  combatants.push(_.extend({}, basePlayer));
+  combatants.push(_.extend({}, rod));
+
+  var rodNew = Player.generateFullyTrainedPlayer(
+    'Rod New',
+    { hp: 60, speed: 8, accuracy: 4, dodge: 111 },
+    [
+      Item.HellforgedArmor
+        .socket([]),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.RiftGun
+        .socket(Crystals.allPerfectFires),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+    ]
+  );
+  combatants.push(_.extend({}, rodNew));
 
   combatants.forEach(function(combatant) {
     // Equalize stats for all players so they don't factor into simulation.
@@ -56,7 +74,8 @@ function main() {
   });
 
   console.log('Running Simulation');
-  combatResults(basePlayer, combatants);
+  combatResults(rod, combatants);
+  combatResults(rodNew, combatants);
 }
 
 // =============================================================================
@@ -520,9 +539,9 @@ Player.generateReferencePlayers = function() {
       Item.VoidSword
         .socket(Crystals.allPerfectFires),
       Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges),
+        .socket(Crystals.allPerfectPinks),
       Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges)
+        .socket(Crystals.allPerfectPinks)
     ]
   ));
 
