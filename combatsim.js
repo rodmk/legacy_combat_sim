@@ -536,7 +536,7 @@ Player.generateReferencePlayers = function() {
   });
 
   return combatants;
-}
+};
 
 // =============================================================================
 //                                   Equipment
