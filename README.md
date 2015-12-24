@@ -1,6 +1,8 @@
 Legacy Combat Simulator
 =======================
 
+[![Build Status](https://travis-ci.org/rodmk/legacy_combat_sim.svg?branch=master)](https://travis-ci.org/rodmk/legacy_combat_sim)
+
 Combat simulator for Legacy (http://www.legacy-game.net).
 
 License
