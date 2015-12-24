@@ -4,10 +4,18 @@ var Player = src.Player;
 var Equipment = src.Equipment;
 var Item = src.Item;
 
+var _ = require('underscore');
 var jsondiffpatch = require('jsondiffpatch');
 
 var testDeepEqualWithDiff = function(test, a, b) {
-  test.deepEqual(a, b, 'Difference: ' + JSON.stringify(jsondiffpatch.diff(a, b)));
+  var own_props_a = _.extend({}, a);
+  var own_props_b = _.extend({}, b);
+
+  test.deepEqual(
+    own_props_a,
+    own_props_b,
+    'Difference: ' + JSON.stringify(jsondiffpatch.diff(own_props_a, own_props_b))
+  );
 };
 
 exports.testPlayerGeneration = function(test) {
@@ -301,7 +309,7 @@ exports.testCrystalSocketing = function(test) {
   });
 
   var socketed_item = item.socket([ crystal ]);
-  var expected_stats = {
+  var expected_stats = new Equipment({
     name:        'item',
     min_damage:  110,
     max_damage:  240,
@@ -314,11 +322,11 @@ exports.testCrystalSocketing = function(test) {
     gun_skill:   1710,
     proj_skill:  2000,
     crystals:    [ crystal ]
-  };
+  });
   testDeepEqualWithDiff(test, socketed_item, expected_stats);
 
   var socketed_item_2 = item.socket([ crystal, crystal ]);
-  var expected_stats_2 = {
+  var expected_stats_2 = new Equipment({
     name:        'item',
     min_damage:  120,
     max_damage:  280,
@@ -331,7 +339,7 @@ exports.testCrystalSocketing = function(test) {
     gun_skill:   2520,
     proj_skill:  3000,
     crystals:    [ crystal, crystal ]
-  };
+  });
   testDeepEqualWithDiff(test, socketed_item_2, expected_stats_2);
 
   test.done();
