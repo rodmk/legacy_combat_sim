@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "description": "Combat Simulator for Legacy (http://www.legacy-game.net)",
   "scripts": {
-    "test": "node_modules/nodeunit/bin/nodeunit test/*"
+    "test": "npm run test-jshint && npm run test-unittest",
+    "test-jshint": "node_modules/jshint/bin/jshint combatsim.js test/*",
+    "test-unittest": "node_modules/nodeunit/bin/nodeunit test/*"
   },
   "devDependencies": {
-    "nodeunit": "0.9.1",
-    "jsondiffpatch": "0.1.38"
+    "jshint": "2.9.1-rc2",
+    "jsondiffpatch": "0.1.38",
+    "nodeunit": "0.9.1"
   },
   "dependencies": {
     "underscore": "1.8.3"
