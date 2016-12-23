@@ -40,6 +40,23 @@ function main() {
     ]
   ));
 
+  testCombatants.push(Player.generateFullyTrainedPlayer(
+    'Crystal Rod',
+    { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
+    [
+      Item.DarkLegionArmor
+        .socket(Crystals.allAbyssCrystals),
+      Item.RiftGun
+        .socket(Crystals.allAmuletCrystals),
+      Item.RiftGun
+        .socket(Crystals.allAmuletCrystals),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+    ]
+  ));
+
   var combatants = [];
   combatants = combatants.concat(testCombatants);
   combatants = combatants.concat(Player.generateReferencePlayers());
@@ -739,7 +756,26 @@ var Item = deepFreeze({
   PerfectNull: {
     name: 'Perfect Null',
     speed_mult: 1.2,
-  }
+  },
+
+  AbyssCrystal: {
+    name: 'Abyss Crystal',
+    armor_mult: 1.05,
+    dodge_mult: 1.04,
+    speed_mult: 1.1,
+    def_skill_mult: 1.05,
+  },
+
+  AmuletCrystal: {
+    name: 'Amulet Crystal',
+    min_damage_mult: 1.06,
+    max_damage_mult: 1.06,
+    accuracy_mult: 1.1,
+    melee_skill_mult: 1.1,
+    gun_skill_mult: 1.1,
+    proj_skill_mult: 1.1,
+    def_skill_mult: 1.1,
+  },
 });
 
 /**
@@ -754,6 +790,8 @@ var Crystals = deepFreeze({
   allPerfectGreens: [ Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen ],
   allPerfectOranges: [ Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange ],
   allPerfectPinks: [ Item.PerfectPink, Item.PerfectPink, Item.PerfectPink, Item.PerfectPink ],
+  allAbyssCrystals: [ Item.AbyssCrystal, Item.AbyssCrystal, Item.AbyssCrystal, Item.AbyssCrystal ],
+  allAmuletCrystals: [ Item.AmuletCrystal, Item.AmuletCrystal, Item.AmuletCrystal, Item.AmuletCrystal ],
 });
 
 // =============================================================================
