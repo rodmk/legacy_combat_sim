@@ -5,7 +5,6 @@ if (typeof require !== 'undefined') {
 
 function main() {
   // ============================ COMBAT SIMULATION ============================
-  var combatants = Player.generateReferencePlayers();
   var combatResults = function(attacker, opponents) {
     console.log('---');
     console.log('Attacker: ' + attacker.name);
@@ -20,20 +19,16 @@ function main() {
       var output_width = 50;
       var spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(" ");
       console.log(opponent_text + spaces + win_rate_text);
-
-      // Average damage rates
-      // var avg_dmg_att = CombatSim.averageDamagePerRound(attacker, defender, fights).toFixed(2);
-      // var avg_dmg_def = CombatSim.averageDamagePerRound(defender, attacker, fights).toFixed(2);
-      // console.log('    Dmg per round: ' + avg_dmg_att + ' / ' + avg_dmg_def);
     });
   };
 
-  var rod = Player.generateFullyTrainedPlayer(
+  var testCombatants = [];
+  testCombatants.push(Player.generateFullyTrainedPlayer(
     'Rod',
-    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
+    { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
     [
-      Item.TitanGuard
-        .socket(Crystals.allPerfectWaters),
+      Item.DarkLegionArmor
+        .socket(Crystals.allPerfectVoids),
       Item.RiftGun
         .socket(Crystals.allPerfectFires),
       Item.RiftGun
@@ -43,39 +38,17 @@ function main() {
       Item.BioSpinalEnhancer
         .socket(Crystals.allPerfectPinks),
     ]
-  );
-  combatants.push(_.extend({}, rod));
+  ));
 
-  var rodNew = Player.generateFullyTrainedPlayer(
-    'Rod New',
-    { hp: 60, speed: 8, accuracy: 4, dodge: 111 },
-    [
-      Item.HellforgedArmor
-        .socket([]),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  );
-  combatants.push(_.extend({}, rodNew));
-
-  combatants.forEach(function(combatant) {
-    // Equalize stats for all players so they don't factor into simulation.
-    var BASE_HP = 300;
-    var BASE_SPEED = 255;
-
-    assert(combatant.max_hp === BASE_HP, combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP);
-    assert(combatant.speed === BASE_SPEED, combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED);
-  });
+  var combatants = [];
+  combatants = combatants.concat(testCombatants);
+  combatants = combatants.concat(Player.generateReferencePlayers());
 
   console.log('Running Simulation');
-  combatResults(rod, combatants);
-  combatResults(rodNew, combatants);
+  testCombatants.forEach(function(testCombatant) {
+    var combatant = _.extend({}, testCombatant);
+    combatResults(combatant, combatants);
+  });
 }
 
 // =============================================================================
@@ -93,21 +66,6 @@ function ceil(num) {
   return Math.ceil(num - EPSILON);
 }
 
-function argmin(arr, fn) {
-  var min_key;
-  var min_val;
-
-  _.each(arr, function(v, k) {
-    v = fn ? fn(v) : v; // apply fn if provided
-    if (typeof min_val === "undefined" || v < min_val) {
-      min_key = k;
-      min_val = v;
-    }
-  });
-
-  var results = { key: min_key, val: min_val };
-  return results;
-}
 
 function idx(obj, key, def) {
   if (obj && typeof obj[key] !== 'undefined') {
@@ -184,28 +142,17 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
 CombatSim.fight = function(att, def) {
   var att_hp = att.max_hp;
   var def_hp = def.max_hp;
+  var rounds = 0;
 
   while (att_hp > 0 && def_hp > 0) {
     def_hp -= this.attemptHit(att, def, att.weapon1);
     def_hp -= this.attemptHit(att, def, att.weapon2);
     att_hp -= this.attemptHit(def, att, def.weapon1);
     att_hp -= this.attemptHit(def, att, def.weapon2);
+    rounds += 1;
   }
 
   return def_hp > 0 ? def : att;
-};
-
-CombatSim.averageDamagePerRound = function(att, def, rounds) {
-  var w1_damage = 0;
-  var w2_damage = 0;
-
-  for (var i = 0; i < rounds; i++) {
-    w1_damage += this.attemptHit(att, def, att.weapon1);
-    w2_damage += this.attemptHit(att, def, att.weapon2);
-  }
-
-  var average_damage = (w1_damage + w2_damage) / rounds;
-  return average_damage;
 };
 
 // Returns damage given to p2 by p1 in one hit
@@ -254,42 +201,6 @@ var WEAPON_TYPE_TO_SKILL = Object.freeze({
   projectile: 'proj_skill',
   unarmed:    'def_skill',
 });
-
-// =============================================================================
-//                                 Combat Utils
-// =============================================================================
-function CombatUtils() {}
-
-CombatUtils.chanceToHit = function(off, def) {
-  var off_roll_range = (off + 1) - (off / 4);
-  var def_roll_range = (def + 1) - (def / 4);
-  var off_def_range = off_roll_range * def_roll_range;
-
-  var pct;
-  if (def > off) {
-    var off_def_diff_range = Math.max((off + 1) - (def / 4), 0);
-    pct = (0.5 * Math.pow(off_def_diff_range, 2)) / off_def_range;
-  } else {
-    var def_off_diff_range = Math.max((def + 1) - (off / 4), 0);
-    pct = (off_def_range - (0.5 * Math.pow(def_off_diff_range, 2))) / off_def_range;
-  }
-
-  return pct;
-};
-
-CombatUtils.offFromToHit = function(def, pct) {
-  var best = argmin(_.range(1, 1000), function(off) {
-    return Math.abs(this.chanceToHit(off, def) - pct);
-  }.bind(this));
-  return best.key;
-};
-
-CombatUtils.defFromToHit = function(off, pct) {
-  var best = argmin(_.range(1, 1000), function(def) {
-    return Math.abs(this.chanceToHit(off, def) - pct);
-  }.bind(this));
-  return best.key;
-};
 
 // =============================================================================
 //                                    Player
@@ -495,7 +406,7 @@ Player.generateReferencePlayers = function() {
       Item.InfernoAmulet
         .socket(Crystals.allPerfectOranges),
       Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges)
+        .socket(Crystals.allPerfectOranges),
     ]
   ));
 
@@ -524,15 +435,15 @@ Player.generateReferencePlayers = function() {
       Item.InfernoAmulet
         .socket(Crystals.allPerfectPinks),
       Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks)
+        .socket(Crystals.allPerfectPinks),
     ]
   ));
 
   combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Rift/Void w/ Infernos/Hell',
+    'Maxed Rift/Void w/ Infernos/DL',
     { hp: 60, speed: 6, accuracy: 77, dodge: 40 },
     [
-      Item.HellforgedArmor
+      Item.DarkLegionArmor
         .socket(Crystals.allPerfectVoids),
       Item.RiftGun
         .socket(Crystals.allPerfectFires),
@@ -541,7 +452,7 @@ Player.generateReferencePlayers = function() {
       Item.InfernoAmulet
         .socket(Crystals.allPerfectPinks),
       Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks)
+        .socket(Crystals.allPerfectPinks),
     ]
   ));
 
