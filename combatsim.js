@@ -1,7 +1,4 @@
 // noprotect - for jsbin
-if (typeof require !== 'undefined') {
-  var _ = require('underscore');
-}
 
 function main() {
   // ============================ COMBAT SIMULATION ============================
@@ -63,7 +60,7 @@ function main() {
 
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
-    var combatant = _.extend({}, testCombatant);
+    var combatant = Object.assign({}, testCombatant);
     combatResults(combatant, combatants);
   });
 }
@@ -294,7 +291,7 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
 };
 
 Player.generatePlayer = function(name, raw_stats, items) {
-  var stats = _.extend(this.emptyStats(), raw_stats);
+  var stats = Object.assign(this.emptyStats(), raw_stats);
   stats.name = name;
 
   var equip_stats = Equipment.computeBonuses(items);
@@ -489,7 +486,7 @@ Player.generateReferencePlayers = function() {
 //                                   Equipment
 // =============================================================================
 function Equipment(stats) {
-  _.extend(this, stats);
+  Object.assign(this, stats);
   deepFreeze(this);
 }
 
@@ -528,7 +525,7 @@ Equipment.prototype.socket = function(crystals) {
     return this;
   }
 
-  var new_stats = _.extend({}, this);
+  var new_stats = Object.assign({}, this);
   new_stats.crystals = crystals;
 
   var stat_bonuses = {};

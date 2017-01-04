@@ -134,21 +134,21 @@ exports.testFullyTrainedPlayerGeneration = function(test) {
 };
 
 exports.testPlayerGenerationWithItem = function(test) {
-  var armor = {
+  var armor = new Equipment({
     armor:       10,
     dodge:       5,
-  };
+  });
 
-  var amulet = {
+  var amulet = new Equipment({
     accuracy:    5,
     dodge:       5,
     def_skill:   20,
     gun_skill:   20,
     melee_skill: 20,
     proj_skill:  20
-  };
+  });
 
-  var sword = {
+  var sword = new Equipment({
     type:        'melee',
     min_damage:  10,
     max_damage:  20,
@@ -157,9 +157,9 @@ exports.testPlayerGenerationWithItem = function(test) {
     melee_skill: 15,
     proj_skill:  5,
     def_skill:   5
-  };
+  });
 
-  var gun = {
+  var gun = new Equipment({
     type:        'gun',
     min_damage:  20,
     max_damage:  30,
@@ -168,7 +168,7 @@ exports.testPlayerGenerationWithItem = function(test) {
     gun_skill:   15,
     proj_skill:  5,
     def_skill:   5
-  };
+  });
 
   // Same weapon
   var test_player = Player.generatePlayer(
