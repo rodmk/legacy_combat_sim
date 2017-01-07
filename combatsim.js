@@ -1,25 +1,28 @@
 // noprotect - for jsbin
+/*eslint-env node,
+  global module require */
+'use strict';
 
 function main() {
   // ============================ COMBAT SIMULATION ============================
-  var combatResults = function(attacker, opponents) {
+  let combatResults = function(attacker, opponents) {
     console.log('---');
     console.log('Attacker: ' + attacker.name);
 
-    var fights = 100000;
+    let fights = 100000;
     opponents.forEach(function(defender) {
-      var res = CombatSim.simulateCombat(attacker, defender, fights);
-      var win_rate = res.player1_wins / fights;
+      let res = CombatSim.simulateCombat(attacker, defender, fights);
+      let win_rate = res.player1_wins / fights;
 
-      var opponent_text = ' VS ' + defender.name + ': ';
-      var win_rate_text = (win_rate * 100).toFixed(2) + '%';
-      var output_width = 50;
-      var spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(" ");
+      let opponent_text = ' VS ' + defender.name + ': ';
+      let win_rate_text = (win_rate * 100).toFixed(2) + '%';
+      let output_width = 50;
+      let spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(' ');
       console.log(opponent_text + spaces + win_rate_text);
     });
   };
 
-  var testCombatants = [];
+  let testCombatants = [];
   testCombatants.push(Player.generateFullyTrainedPlayer(
     'Base',
     { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
@@ -56,13 +59,13 @@ function main() {
 
   console.log(testCombatants);
 
-  var combatants = [];
+  let combatants = [];
   combatants = combatants.concat(testCombatants);
   // combatants = combatants.concat(Player.generateReferencePlayers());
 
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
-    var combatant = Object.assign({}, testCombatant);
+    let combatant = Object.assign({}, testCombatant);
     combatResults(combatant, combatants);
   });
 }
@@ -78,7 +81,7 @@ function getRandom(min, max) {
 function ceil(num) {
   // Because of floating number arithmetic, subtract some epsilon first before
   // applying ceil. That way expressions like ceil(110 * 1.1) === 110.
-  var EPSILON = 0.0000000001;
+  let EPSILON = 0.0000000001;
   return Math.ceil(num - EPSILON);
 }
 
@@ -93,8 +96,8 @@ function idx(obj, key, def) {
 
 function assert(condition, message) {
   if (!condition) {
-    message = message || "Assertion failed";
-    if (typeof Error !== "undefined") {
+    message = message || 'Assertion failed';
+    if (typeof Error !== 'undefined') {
       throw new Error(message);
     }
     throw message; // Fallback
@@ -102,7 +105,7 @@ function assert(condition, message) {
 }
 
 function deepFreeze(o) {
-  var prop, propKey;
+  let prop, propKey;
   Object.freeze(o); // First freeze the object.
   for (propKey in o) {
     prop = o[propKey];
@@ -124,11 +127,11 @@ function deepFreeze(o) {
 function CombatSim() {}
 // Perform combat assuming each player is the attacker 50% of the time
 CombatSim.simulateCombat = function(player1, player2, fights) {
-  var player1_wins = 0;
-  var player2_wins = 0;
+  let player1_wins = 0;
+  let player2_wins = 0;
 
-  for (var i = 0; i < fights; i++) {
-    var r;
+  for (let i = 0; i < fights; i++) {
+    let r;
 
     if (player1.speed > player2.speed) {
       r = this.fight(player1, player2);
@@ -147,7 +150,7 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
     }
   }
 
-  var results = {
+  let results = {
     player1_wins: player1_wins,
     player2_wins: player2_wins,
   };
@@ -156,16 +159,14 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
 
 // Complete the fight
 CombatSim.fight = function(att, def) {
-  var att_hp = att.max_hp;
-  var def_hp = def.max_hp;
-  var rounds = 0;
+  let att_hp = att.max_hp;
+  let def_hp = def.max_hp;
 
   while (att_hp > 0 && def_hp > 0) {
     def_hp -= this.attemptHit(att, def, att.weapon1);
     def_hp -= this.attemptHit(att, def, att.weapon2);
     att_hp -= this.attemptHit(def, att, def.weapon1);
     att_hp -= this.attemptHit(def, att, def.weapon2);
-    rounds += 1;
   }
 
   return def_hp > 0 ? def : att;
@@ -179,14 +180,14 @@ CombatSim.attemptHit = function(att, def, weapon) {
   }
 
   // Roll to-damage
-  var weapon_skill = att[WEAPON_TYPE_TO_SKILL[weapon.type]];
+  let weapon_skill = att[WEAPON_TYPE_TO_SKILL[weapon.type]];
   if (!this.rollCombat(weapon_skill, def.def_skill)) {
     return 0;
   }
 
   // Calculate armor absorption
-  var damage = getRandom(weapon.min_damage, weapon.max_damage);
-  var absorb;
+  let damage = getRandom(weapon.min_damage, weapon.max_damage);
+  let absorb;
   if ((damage * 0.6) < def.armor) {
     absorb = Math.floor(damage * 0.6);
   } else {
@@ -201,8 +202,8 @@ CombatSim.attemptHit = function(att, def, weapon) {
 
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
-  var p1Roll = getRandom(stat1 / 4, stat1);
-  var p2Roll = getRandom(stat2 / 4, stat2);
+  let p1Roll = getRandom(stat1 / 4, stat1);
+  let p2Roll = getRandom(stat2 / 4, stat2);
 
   if (p1Roll === p2Roll) {
     return Math.random() > 0.5;
@@ -211,7 +212,7 @@ CombatSim.rollCombat = function(stat1, stat2) {
   }
 };
 
-var WEAPON_TYPE_TO_SKILL = Object.freeze({
+let WEAPON_TYPE_TO_SKILL = Object.freeze({
   melee:      'melee_skill',
   gun:        'gun_skill',
   projectile: 'proj_skill',
@@ -255,10 +256,10 @@ Player.fullyTrainedStats = function() {
 };
 
 Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
-  var hp_points       = stat_points.hp;
-  var speed_points    = stat_points.speed;
-  var dodge_points    = stat_points.dodge;
-  var accuracy_points = stat_points.accuracy;
+  let hp_points       = stat_points.hp;
+  let speed_points    = stat_points.speed;
+  let dodge_points    = stat_points.dodge;
+  let accuracy_points = stat_points.accuracy;
 
   if (hp_points < 2) {
     throw new Error('HP must be at least 10 (2 points)');
@@ -276,27 +277,27 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
     throw new Error('Accuracy must be at least 4 points');
   }
 
-  var MAX_STATS = 183; // 12 fixed + 3 base + 158 from leveling + 10 from 'Versatility' ability
-  var total_stats = hp_points + speed_points + dodge_points + accuracy_points;
+  let MAX_STATS = 183; // 12 fixed + 3 base + 158 from leveling + 10 from 'Versatility' ability
+  let total_stats = hp_points + speed_points + dodge_points + accuracy_points;
   if (total_stats !== MAX_STATS) {
     throw new Error('Stats dont add up to max. Total:' + total_stats + ' Expected:' + MAX_STATS + '.');
   }
 
-  var stats = this.fullyTrainedStats();
+  let stats = this.fullyTrainedStats();
   stats.max_hp   += hp_points * 5;
   stats.speed    += speed_points * 5;
   stats.dodge    += dodge_points;
   stats.accuracy += accuracy_points;
 
-  var player = this.generatePlayer(name, stats, items);
+  let player = this.generatePlayer(name, stats, items);
   return player;
 };
 
 Player.generatePlayer = function(name, raw_stats, items) {
-  var stats = Object.assign(this.emptyStats(), raw_stats);
+  let stats = Object.assign(this.emptyStats(), raw_stats);
   stats.name = name;
 
-  var equip_stats = Equipment.computeBonuses(items);
+  let equip_stats = Equipment.computeBonuses(items);
 
   // Player Stats
   stats.armor       += idx(equip_stats, 'armor',       0);
@@ -325,7 +326,7 @@ Player.generatePlayer = function(name, raw_stats, items) {
  * in simulations, we pin HP at 300 and speed at 255.
  */
 Player.generateReferencePlayers = function() {
-  var combatants = [];
+  let combatants = [];
 
   combatants.push(Player.generateFullyTrainedPlayer(
     'Dual C. Swords',
@@ -474,8 +475,8 @@ Player.generateReferencePlayers = function() {
 
   combatants.forEach(function(combatant) {
     // Equalize stats for all players so they don't factor into simulation.
-    var BASE_HP = 300;
-    var BASE_SPEED = 255;
+    let BASE_HP = 300;
+    let BASE_SPEED = 255;
 
     assert(combatant.max_hp === BASE_HP, combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP);
     assert(combatant.speed === BASE_SPEED, combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED);
@@ -493,25 +494,25 @@ function Equipment(stats) {
 }
 
 Equipment.computeBonuses = function(items) {
-  var stats = {};
+  let stats = {};
 
-  var weapon1 = items[1];
+  let weapon1 = items[1];
   stats.weapon1 = weapon1;
 
-  var weapon2 = items[2];
+  let weapon2 = items[2];
   stats.weapon2 = weapon2;
 
-  var mixed_weap_type = (weapon1 && weapon2) && (weapon1.type !== weapon2.type);
+  let mixed_weap_type = (weapon1 && weapon2) && (weapon1.type !== weapon2.type);
 
-  for (var i = 0; i < 5; i++) {
-    stat_mult = {};
+  for (let i = 0; i < 5; i++) {
+    let stat_mult = {};
     if ((i === 1 || i === 2) && mixed_weap_type) {
       // Weapon skill doubled on mixed types
       stat_mult[WEAPON_TYPE_TO_SKILL[items[i].type]] = 2;
     }
 
-    for (var stat in items[i]) {
-      var stat_bonus = idx(items[i], stat, null);
+    for (let stat in items[i]) {
+      let stat_bonus = idx(items[i], stat, null);
       if (stat_bonus !== null) {
         stats[stat] = idx(stats, stat, 0) + (stat_bonus * idx(stat_mult, stat, 1));
       }
@@ -527,29 +528,29 @@ Equipment.prototype.socket = function(crystals) {
     return this;
   }
 
-  var new_stats = Object.assign({}, this);
+  let new_stats = Object.assign({}, this);
   new_stats.crystals = crystals;
 
-  var stat_bonuses = {};
+  let stat_bonuses = {};
   crystals.forEach(function(c) {
-    for (var stat in new_stats) {
-      var stat_mult = idx(c, stat + '_mult', null);
+    for (let stat in new_stats) {
+      let stat_mult = idx(c, stat + '_mult', null);
       if (stat_mult !== null) {
         stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
       }
     }
   });
 
-  for (var stat in stat_bonuses) {
+  for (let stat in stat_bonuses) {
     // Apply ceiling function after we've calculated partial bonus from all crystals.
     new_stats[stat] += ceil(stat_bonuses[stat]);
   }
 
-  var new_item = new Equipment(new_stats);
+  let new_item = new Equipment(new_stats);
   return new_item;
 };
 
-var Item = deepFreeze({
+let Item = deepFreeze({
   none: {
     name:        'None',
   },
@@ -835,7 +836,7 @@ var Item = deepFreeze({
  * For convenience when socketing items, below are 4x crystal arrays for all
  * crystal types.
  */
-var Crystals = deepFreeze({
+let Crystals = deepFreeze({
   allPerfectAirs: [ Item.PerfectAir, Item.PerfectAir, Item.PerfectAir, Item.PerfectAir ],
   allPerfectWaters: [ Item.PerfectWater, Item.PerfectWater, Item.PerfectWater, Item.PerfectWater ],
   allPerfectFires: [ Item.PerfectFire, Item.PerfectFire, Item.PerfectFire, Item.PerfectFire ],
