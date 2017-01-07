@@ -21,7 +21,7 @@ function main() {
 
   var testCombatants = [];
   testCombatants.push(Player.generateFullyTrainedPlayer(
-    'Rod',
+    'Base',
     { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
     [
       Item.DarkLegionArmor
@@ -38,25 +38,27 @@ function main() {
   ));
 
   testCombatants.push(Player.generateFullyTrainedPlayer(
-    'Crystal Rod',
-    { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
+    'Experiment',
+    { hp: 90, speed: 3, accuracy: 86, dodge: 4 },
     [
       Item.DarkLegionArmor
-        .socket(Crystals.allAbyssCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
+        .socket(Crystals.allPerfectVoids),
+      Item.VoidBow
+        .socket(Crystals.allPerfectFires),
+      Item.VoidBow
+        .socket(Crystals.allPerfectFires),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectYellows),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectYellows),
     ]
   ));
 
+  console.log(testCombatants);
+
   var combatants = [];
   combatants = combatants.concat(testCombatants);
-  combatants = combatants.concat(Player.generateReferencePlayers());
+  // combatants = combatants.concat(Player.generateReferencePlayers());
 
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
@@ -608,6 +610,39 @@ var Item = deepFreeze({
     def_skill:   14
   }),
 
+  CBombsT2: new Equipment({
+    name:        'Crystal Bombs T2',
+    type:        'projectile',
+    min_damage:  66,
+    max_damage:  97,
+    accuracy:    38,
+    speed:       77,
+    proj_skill:  38,
+    def_skill:   14
+  }),
+
+  ConcentratedCBombsT2: new Equipment({
+    name:        'Concentrated Crystal Bombs T2',
+    type:        'projectile',
+    min_damage:  87,
+    max_damage:  112,
+    accuracy:    32,
+    speed:       65,
+    proj_skill:  9,
+    def_skill:   5
+  }),
+
+  SplitCBombsT2: new Equipment({
+    name:        'Split Crystal Bombs T2',
+    type:        'projectile',
+    min_damage:  55,
+    max_damage:  87,
+    accuracy:    23,
+    speed:       79,
+    proj_skill:  84,
+    def_skill:   83
+  }),
+
   Scythe: new Equipment({
     name:        'Scythe',
     type:        'melee',
@@ -639,6 +674,17 @@ var Item = deepFreeze({
     speed:       50,
     gun_skill:   85,
     def_skill:   5
+  }),
+
+  VoidBow: new Equipment({
+    name:        'Void Bow',
+    type:        'projectile',
+    min_damage:  5,
+    max_damage:  125,
+    accuracy:    48,
+    speed:       70,
+    proj_skill:  65,
+    def_skill:   20
   }),
 
   // === Misc ===
@@ -699,6 +745,16 @@ var Item = deepFreeze({
     def_skill:   -25,
     gun_skill:   50,
     melee_skill: 50,
+    proj_skill:  50,
+  }),
+
+  ScoutDrones: new Equipment({
+    name:        'Scout Drones',
+    accuracy:    32,
+    dodge:       5,
+    def_skill:   30,
+    gun_skill:   30,
+    melee_skill: 30,
     proj_skill:  50,
   }),
 
@@ -786,6 +842,7 @@ var Crystals = deepFreeze({
   allPerfectVoids: [ Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid, Item.PerfectVoid ],
   allPerfectGreens: [ Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen, Item.PerfectGreen ],
   allPerfectOranges: [ Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange, Item.PerfectOrange ],
+  allPerfectYellows: [ Item.PerfectYellow, Item.PerfectYellow, Item.PerfectYellow, Item.PerfectYellow ],
   allPerfectPinks: [ Item.PerfectPink, Item.PerfectPink, Item.PerfectPink, Item.PerfectPink ],
   allAbyssCrystals: [ Item.AbyssCrystal, Item.AbyssCrystal, Item.AbyssCrystal, Item.AbyssCrystal ],
   allAmuletCrystals: [ Item.AmuletCrystal, Item.AmuletCrystal, Item.AmuletCrystal, Item.AmuletCrystal ],
