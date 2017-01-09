@@ -75,7 +75,7 @@ function main() {
 // =============================================================================
 // Returns a random number between min and max
 function getRandom(min, max) {
-  return min + Math.round(Math.random() * (max - min));
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function ceil(num) {
@@ -202,14 +202,7 @@ CombatSim.attemptHit = function(att, def, weapon) {
 
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
-  let p1Roll = getRandom(stat1 / 4, stat1);
-  let p2Roll = getRandom(stat2 / 4, stat2);
-
-  if (p1Roll === p2Roll) {
-    return Math.random() > 0.5;
-  } else {
-    return p1Roll > p2Roll;
-  }
+  return getRandom(stat1 / 4, stat1) > getRandom(stat2 / 4, stat2);
 };
 
 let WEAPON_TYPE_TO_SKILL = Object.freeze({
