@@ -81,7 +81,7 @@ function getRandom(min, max) {
 function ceil(num) {
   // Because of floating number arithmetic, subtract some epsilon first before
   // applying ceil. That way expressions like ceil(110 * 1.1) === 110.
-  let EPSILON = 0.0000000001;
+  const EPSILON = 0.0000000001;
   return Math.ceil(num - EPSILON);
 }
 
