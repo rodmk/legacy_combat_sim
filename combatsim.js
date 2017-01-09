@@ -186,18 +186,11 @@ CombatSim.attemptHit = function(att, def, weapon) {
   }
 
   // Calculate armor absorption
-  let damage = getRandom(weapon.min_damage, weapon.max_damage);
-  let absorb;
-  if ((damage * 0.6) < def.armor) {
-    absorb = Math.floor(damage * 0.6);
-  } else {
-    absorb = def.armor;
-  }
+  let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
+  let absorb = Math.min(def.armor, Math.floor(base_damage * 0.6));
+  let net_damage = Math.max(base_damage - absorb, 1);
 
-  damage -= absorb;
-  damage = (damage < 1 ? 1 : damage);
-
-  return damage;
+  return net_damage;
 };
 
 // Rolls stats against each other
