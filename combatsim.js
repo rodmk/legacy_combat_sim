@@ -163,10 +163,12 @@ CombatSim.fight = function(att, def) {
   let def_hp = def.max_hp;
 
   while (att_hp > 0 && def_hp > 0) {
-    def_hp -= this.attemptHit(att, def, att.weapon1);
-    def_hp -= this.attemptHit(att, def, att.weapon2);
-    att_hp -= this.attemptHit(def, att, def.weapon1);
-    att_hp -= this.attemptHit(def, att, def.weapon2);
+    def_hp -=
+      this.attemptHit(att, def, att.weapon1) +
+      this.attemptHit(att, def, att.weapon2);
+    att_hp -=
+      this.attemptHit(def, att, def.weapon1) +
+      this.attemptHit(def, att, def.weapon2);
   }
 
   return def_hp > 0 ? def : att;
@@ -174,21 +176,16 @@ CombatSim.fight = function(att, def) {
 
 // Returns damage given to p2 by p1 in one hit
 CombatSim.attemptHit = function(att, def, weapon) {
-  // Roll to-hit
-  if (!this.rollCombat(att.accuracy, def.dodge)) {
-    return 0;
-  }
+  let net_damage = 0;
 
-  // Roll to-damage
-  let weapon_skill = att[WEAPON_TYPE_TO_SKILL[weapon.type]];
-  if (!this.rollCombat(weapon_skill, def.def_skill)) {
-    return 0;
+  // Roll to-hit and to-damage to see if any damage is applied.
+  if (this.rollCombat(att.accuracy, def.dodge) &&
+      this.rollCombat(att[weapon.skill], def.def_skill)) {
+    let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
+    // Damage absorbption is capped at 60% of base damage dealt.
+    let absorb = Math.min(def.armor, Math.floor(base_damage * 0.6));
+    net_damage = Math.max(base_damage - absorb, 1);
   }
-
-  // Calculate armor absorption
-  let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
-  let absorb = Math.min(def.armor, Math.floor(base_damage * 0.6));
-  let net_damage = Math.max(base_damage - absorb, 1);
 
   return net_damage;
 };
@@ -297,11 +294,13 @@ Player.generatePlayer = function(name, raw_stats, items) {
 
   // Weapon 1
   stats.weapon1.type = idx(equip_stats.weapon1, 'type', stats.weapon1.type);
+  stats.weapon1.skill = WEAPON_TYPE_TO_SKILL[stats.weapon1.type];
   stats.weapon1.min_damage += idx(equip_stats.weapon1, 'min_damage', 0);
   stats.weapon1.max_damage += idx(equip_stats.weapon1, 'max_damage', 0);
 
   // Weapon 2
   stats.weapon2.type = idx(equip_stats.weapon2, 'type', stats.weapon2.type);
+  stats.weapon2.skill = WEAPON_TYPE_TO_SKILL[stats.weapon2.type];
   stats.weapon2.min_damage += idx(equip_stats.weapon2, 'min_damage', 0);
   stats.weapon2.max_damage += idx(equip_stats.weapon2, 'max_damage', 0);
 
