@@ -662,6 +662,17 @@ let Item = deepFreeze({
     def_skill:   5
   }),
 
+  CoreStaff: new Equipment({
+    name:        'Core Staff',
+    type:        'melee',
+    min_damage:  45,
+    max_damage:  55,
+    accuracy:    55,
+    speed:       75,
+    melee_skill: 130,
+    def_skill:   50
+  }),
+
   VoidBow: new Equipment({
     name:        'Void Bow',
     type:        'projectile',
