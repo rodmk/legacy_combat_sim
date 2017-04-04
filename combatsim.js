@@ -16,7 +16,7 @@ function main() {
 
       let opponent_text = ' VS ' + defender.name + ': ';
       let win_rate_text = (win_rate * 100).toFixed(2) + '%';
-      let output_width = 50;
+      let output_width = 60;
       let spaces = Array(output_width - opponent_text.length - win_rate_text.length).join(' ');
       console.log(opponent_text + spaces + win_rate_text);
     });
@@ -24,36 +24,19 @@ function main() {
 
   let testCombatants = [];
   testCombatants.push(Player.generateFullyTrainedPlayer(
-    'Base',
-    { hp: 90, speed: 10, accuracy: 4, dodge: 79 },
+    'CStaff/VSword + Scouts',
+    { hp: 70, speed: 5, accuracy: 4, dodge: 104 },
     [
       Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  testCombatants.push(Player.generateFullyTrainedPlayer(
-    'Experiment',
-    { hp: 90, speed: 3, accuracy: 86, dodge: 4 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.VoidBow
-        .socket(Crystals.allPerfectFires),
-      Item.VoidBow
+        .socket(Crystals.allAbyssCrystals),
+      Item.CoreStaff
+        .socket(Crystals.allAmuletCrystals),
+      Item.VoidSword
         .socket(Crystals.allPerfectFires),
       Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
+        .socket(Crystals.allPerfectAirs),
       Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
+        .socket(Crystals.allPerfectAirs),
     ]
   ));
 
@@ -61,7 +44,23 @@ function main() {
 
   let combatants = [];
   combatants = combatants.concat(testCombatants);
-  // combatants = combatants.concat(Player.generateReferencePlayers());
+  combatants = combatants.concat(Player.generateReferencePlayers());
+
+  combatants.forEach(function(combatant) {
+    // Equalize stats for all players so they don't factor into simulation.
+    const BASE_HP = 350;
+    const BASE_SPEED = 300;
+
+    assert(
+      combatant.max_hp === BASE_HP,
+      combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP
+    );
+    assert(
+      combatant.speed >= BASE_SPEED && combatant.speed - BASE_SPEED < 5,
+      combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED + ' to ' + (BASE_SPEED + 4)
+    );
+    combatant.speed = BASE_SPEED;
+  });
 
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
@@ -206,6 +205,7 @@ let WEAPON_TYPE_TO_SKILL = Object.freeze({
 //                                    Player
 // =============================================================================
 function Player() {}
+
 Player.emptyStats = function() {
   return {
     max_hp:      0,
@@ -260,7 +260,7 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
     throw new Error('Accuracy must be at least 4 points');
   }
 
-  let MAX_STATS = 183; // 12 fixed + 3 base + 158 from leveling + 10 from 'Versatility' ability
+  const MAX_STATS = 183; // 12 fixed + 3 base + 158 from leveling + 10 from 'Versatility' ability
   let total_stats = hp_points + speed_points + dodge_points + accuracy_points;
   if (total_stats !== MAX_STATS) {
     throw new Error('Stats dont add up to max. Total:' + total_stats + ' Expected:' + MAX_STATS + '.');
@@ -306,166 +306,102 @@ Player.generatePlayer = function(name, raw_stats, items) {
 
   return stats;
 };
+
 /**
- * Generates a variety of different reference player loadouts. For consistency
- * in simulations, we pin HP at 300 and speed at 255.
+ * Generates a variety of different reference player loadouts.
  */
 Player.generateReferencePlayers = function() {
   let combatants = [];
 
+  // DL (+Voids) + Dual Rifts (+Fires) + Bios (+Pinks)
   combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual C. Swords',
-    { hp: 60, speed: 2, accuracy: 61, dodge: 60 },
-    [
-      Item.TitanGuard,
-      Item.CrystalSword,
-      Item.CrystalSword,
-      Item.Amulet,
-      Item.Amulet
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Scythes w/ Primes',
-    { hp: 60, speed: 6, accuracy: 61, dodge: 56 },
-    [
-      Item.TitanGuard,
-      Item.Scythe,
-      Item.Scythe,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Dual Scythes w/ Primes',
-    { hp: 60, speed: 6, accuracy: 61, dodge: 56 },
-    [
-      Item.TitanGuard
-        .socket(Crystals.allPerfectVoids),
-      Item.Scythe
-        .socket(Crystals.allPerfectFires),
-      Item.Scythe
-        .socket(Crystals.allPerfectFires),
-      Item.PrimeAmulet
-        .socket(Crystals.allPerfectPinks),
-      Item.PrimeAmulet
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Rift w/ Primes',
-    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
-    [
-      Item.TitanGuard,
-      Item.RiftGun,
-      Item.RiftGun,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Dual Rift /w Infernos',
-    { hp: 60, speed: 10, accuracy: 4, dodge: 109 },
-    [
-      Item.TitanGuard
-        .socket(Crystals.allPerfectVoids),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Void w/ Primes',
-    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
-    [
-      Item.TitanGuard,
-      Item.VoidSword,
-      Item.VoidSword,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Dual Void w/ Infernos',
-    { hp: 60, speed: 6, accuracy: 65, dodge: 52 },
-    [
-      Item.TitanGuard
-        .socket(Crystals.allPerfectWaters),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectOranges),
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Rift/Void w/ Primes',
-    { hp: 60, speed: 8, accuracy: 35, dodge: 80 },
-    [
-      Item.TitanGuard,
-      Item.RiftGun,
-      Item.VoidSword,
-      Item.PrimeAmulet,
-      Item.PrimeAmulet
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Rift/Void w/ Infernos',
-    { hp: 60, speed: 8, accuracy: 55, dodge: 60 },
-    [
-      Item.TitanGuard
-        .socket(Crystals.allPerfectWaters),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks),
-      Item.InfernoAmulet
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Maxed Rift/Void w/ Infernos/DL',
-    { hp: 60, speed: 6, accuracy: 77, dodge: 40 },
+    'Dual Rifts w/ Bios',
+    { hp: 70, speed: 17, accuracy: 4, dodge: 92 },
     [
       Item.DarkLegionArmor
         .socket(Crystals.allPerfectVoids),
       Item.RiftGun
         .socket(Crystals.allPerfectFires),
-      Item.VoidSword
+      Item.RiftGun
         .socket(Crystals.allPerfectFires),
-      Item.InfernoAmulet
+      Item.BioSpinalEnhancer
         .socket(Crystals.allPerfectPinks),
-      Item.InfernoAmulet
+      Item.BioSpinalEnhancer
         .socket(Crystals.allPerfectPinks),
     ]
   ));
 
-  combatants.forEach(function(combatant) {
-    // Equalize stats for all players so they don't factor into simulation.
-    let BASE_HP = 300;
-    let BASE_SPEED = 255;
+  // DL (+Abysses) + Dual Rifts (+Amulets) + Bios (+Pinks)
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual Rifts w/ Bios (Abyss/Ammy Cs)',
+    { hp: 70, speed: 12, accuracy: 4, dodge: 97 },
+    [
+      Item.DarkLegionArmor
+        .socket(Crystals.allAbyssCrystals),
+      Item.RiftGun
+        .socket(Crystals.allAmuletCrystals),
+      Item.RiftGun
+        .socket(Crystals.allAmuletCrystals),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+      Item.BioSpinalEnhancer
+        .socket(Crystals.allPerfectPinks),
+    ]
+  ));
 
-    assert(combatant.max_hp === BASE_HP, combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP);
-    assert(combatant.speed === BASE_SPEED, combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED);
-  });
+  // DL (+Voids) + Dual VBows (+Fires) + Scout Drones (+Yellows)
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'Dual VBows w/ Scouts',
+    { hp: 70, speed: 9, accuracy: 4, dodge: 100 },
+    [
+      Item.DarkLegionArmor
+        .socket(Crystals.allPerfectVoids),
+      Item.VoidBow
+        .socket(Crystals.allPerfectFires),
+      Item.VoidBow
+        .socket(Crystals.allPerfectFires),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectYellows),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectYellows),
+    ]
+  ));
+
+  // DL (+Voids) + CStaff (+Oranges) + VSword (+Fires) + Scouts (+Airs)
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'CStaff/VSword w/ Scouts',
+    { hp: 70, speed: 10, accuracy: 4, dodge: 99 },
+    [
+      Item.DarkLegionArmor
+        .socket(Crystals.allPerfectVoids),
+      Item.CoreStaff
+        .socket(Crystals.allPerfectOranges),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectAirs),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectAirs),
+    ]
+  ));
+
+  // DL (+Abysses) + CStaff (+Ammy) + VSword (+Fires) + Scouts (+Airs)
+  combatants.push(Player.generateFullyTrainedPlayer(
+    'CStaff/VSword w/ Scouts (Abyss/Ammy Cs)',
+    { hp: 70, speed: 5, accuracy: 4, dodge: 104 },
+    [
+      Item.DarkLegionArmor
+        .socket(Crystals.allAbyssCrystals),
+      Item.CoreStaff
+        .socket(Crystals.allAmuletCrystals),
+      Item.VoidSword
+        .socket(Crystals.allPerfectFires),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectAirs),
+      Item.ScoutDrones
+        .socket(Crystals.allPerfectAirs),
+    ]
+  ));
 
   return combatants;
 };
