@@ -1,15 +1,16 @@
-var src = require('../combatsim.js');
-var CombatSim = src.CombatSim;
-var Player = src.Player;
-var Equipment = src.Equipment;
-var Item = src.Item;
+/*eslint-env node*/
+'use strict';
 
-var _ = require('underscore');
-var jsondiffpatch = require('jsondiffpatch');
+let src = require('../combatsim.js');
+let Player = src.Player;
+let Equipment = src.Equipment;
+let Item = src.Item;
 
-var testDeepEqualWithDiff = function(test, a, b) {
-  var own_props_a = _.extend({}, a);
-  var own_props_b = _.extend({}, b);
+let jsondiffpatch = require('jsondiffpatch');
+
+let testDeepEqualWithDiff = function(test, a, b) {
+  let own_props_a = Object.assign({}, a);
+  let own_props_b = Object.assign({}, b);
 
   test.deepEqual(
     own_props_a,
@@ -19,7 +20,7 @@ var testDeepEqualWithDiff = function(test, a, b) {
 };
 
 exports.testPlayerGeneration = function(test) {
-  var test_player = Player.generatePlayer(
+  let test_player = Player.generatePlayer(
     'Test Player',
     {
       max_hp: 50,
@@ -35,7 +36,7 @@ exports.testPlayerGeneration = function(test) {
     [ Item.none, Item.none, Item.none, Item.none, Item.none ]
   );
 
-  var expected_stats = {
+  let expected_stats = {
     name: 'Test Player',
     max_hp: 50,
     armor: 10,
@@ -48,11 +49,13 @@ exports.testPlayerGeneration = function(test) {
     def_skill: 17,
     weapon1: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 0,
       max_damage: 0,
     },
     weapon2: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 0,
       max_damage: 0,
     },
@@ -64,13 +67,13 @@ exports.testPlayerGeneration = function(test) {
 };
 
 exports.testNullPlayerGeneration = function(test) {
-  var test_player = Player.generatePlayer(
+  let test_player = Player.generatePlayer(
     'Test Player',
     { },
     [ Item.none, Item.none, Item.none, Item.none, Item.none ]
   );
 
-  var expected_stats = {
+  let expected_stats = {
     name: 'Test Player',
     max_hp: 0,
     armor: 0,
@@ -83,11 +86,13 @@ exports.testNullPlayerGeneration = function(test) {
     def_skill: 0,
     weapon1: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 0,
       max_damage: 0,
     },
     weapon2: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 0,
       max_damage: 0,
     },
@@ -99,13 +104,13 @@ exports.testNullPlayerGeneration = function(test) {
 };
 
 exports.testFullyTrainedPlayerGeneration = function(test) {
-  var test_player = Player.generateFullyTrainedPlayer(
+  let test_player = Player.generateFullyTrainedPlayer(
     'Test Player',
     { hp: 70, speed: 10, accuracy: 53, dodge: 50 },
     [ Item.none, Item.none, Item.none, Item.none, Item.none ]
   );
 
-  var expected_stats = {
+  let expected_stats = {
     name: 'Test Player',
     max_hp: 350,
     armor: 5,
@@ -118,11 +123,13 @@ exports.testFullyTrainedPlayerGeneration = function(test) {
     def_skill: 450,
     weapon1: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 5,
       max_damage: 5,
     },
     weapon2: {
       type: 'unarmed',
+      skill: 'def_skill',
       min_damage: 5,
       max_damage: 5,
     },
@@ -134,12 +141,12 @@ exports.testFullyTrainedPlayerGeneration = function(test) {
 };
 
 exports.testPlayerGenerationWithItem = function(test) {
-  var armor = new Equipment({
+  let armor = new Equipment({
     armor:       10,
     dodge:       5,
   });
 
-  var amulet = new Equipment({
+  let amulet = new Equipment({
     accuracy:    5,
     dodge:       5,
     def_skill:   20,
@@ -148,7 +155,7 @@ exports.testPlayerGenerationWithItem = function(test) {
     proj_skill:  20
   });
 
-  var sword = new Equipment({
+  let sword = new Equipment({
     type:        'melee',
     min_damage:  10,
     max_damage:  20,
@@ -159,7 +166,7 @@ exports.testPlayerGenerationWithItem = function(test) {
     def_skill:   5
   });
 
-  var gun = new Equipment({
+  let gun = new Equipment({
     type:        'gun',
     min_damage:  20,
     max_damage:  30,
@@ -171,13 +178,13 @@ exports.testPlayerGenerationWithItem = function(test) {
   });
 
   // Same weapon
-  var test_player = Player.generatePlayer(
+  let test_player = Player.generatePlayer(
     'Test Player',
     { },
     [ armor, sword, sword, amulet, amulet ]
   );
 
-  var expected_stats = {
+  let expected_stats = {
     name: 'Test Player',
     max_hp: 0,
     armor: 10,
@@ -190,11 +197,13 @@ exports.testPlayerGenerationWithItem = function(test) {
     def_skill: 50,
     weapon1: {
       type: 'melee',
+      skill: 'melee_skill',
       min_damage: 10,
       max_damage: 20,
     },
     weapon2: {
       type: 'melee',
+      skill: 'melee_skill',
       min_damage: 10,
       max_damage: 20,
     },
@@ -230,11 +239,13 @@ exports.testPlayerGenerationWithItem = function(test) {
     def_skill: 10,
     weapon1: {
       type: 'melee',
+      skill: 'melee_skill',
       min_damage: 10,
       max_damage: 20,
     },
     weapon2: {
       type: 'gun',
+      skill: 'gun_skill',
       min_damage: 20,
       max_damage: 30,
     },
@@ -264,11 +275,13 @@ exports.testPlayerGenerationWithItem = function(test) {
     // Test that ability combat stat bonuses get added
     weapon1: {
       type: 'melee',
+      skill: 'melee_skill',
       min_damage: 15,
       max_damage: 25,
     },
     weapon2: {
       type: 'gun',
+      skill: 'gun_skill',
       min_damage: 25,
       max_damage: 35,
     },
@@ -280,7 +293,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 };
 
 exports.testCrystalSocketing = function(test) {
-  var item = new Equipment({
+  let item = new Equipment({
     name:        'item',
     min_damage:  100,
     max_damage:  200,
@@ -294,7 +307,7 @@ exports.testCrystalSocketing = function(test) {
     proj_skill:  1000,
   });
 
-  var crystal = new Equipment({
+  let crystal = new Equipment({
     name:             'crystal',
     min_damage_mult:  1.1,
     max_damage_mult:  1.2,
@@ -308,8 +321,8 @@ exports.testCrystalSocketing = function(test) {
     proj_skill_mult:  2.0,
   });
 
-  var socketed_item = item.socket([ crystal ]);
-  var expected_stats = new Equipment({
+  let socketed_item = item.socket([ crystal ]);
+  let expected_stats = new Equipment({
     name:        'item',
     min_damage:  110,
     max_damage:  240,
@@ -325,8 +338,8 @@ exports.testCrystalSocketing = function(test) {
   });
   testDeepEqualWithDiff(test, socketed_item, expected_stats);
 
-  var socketed_item_2 = item.socket([ crystal, crystal ]);
-  var expected_stats_2 = new Equipment({
+  let socketed_item_2 = item.socket([ crystal, crystal ]);
+  let expected_stats_2 = new Equipment({
     name:        'item',
     min_damage:  120,
     max_damage:  280,
