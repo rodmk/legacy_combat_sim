@@ -756,7 +756,7 @@ let Item = deepFreeze({
     name: 'Amulet Crystal',
     min_damage_mult: 1.06,
     max_damage_mult: 1.06,
-    accuracy_mult: 1.1,
+    accuracy_mult: 1.06,
     melee_skill_mult: 1.1,
     gun_skill_mult: 1.1,
     proj_skill_mult: 1.1,
