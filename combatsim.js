@@ -98,7 +98,7 @@ function deepFreeze(o) {
 //                                   CombatSim
 // =============================================================================
 function CombatSim() {}
-// Perform combat assuming each player is the attacker 50% of the time
+// Perform combat with player1 initiating each fight.
 CombatSim.simulateCombat = function(player1, player2, fights) {
   let player1_wins = 0;
   let player2_wins = 0;
@@ -106,14 +106,10 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
   for (let i = 0; i < fights; i++) {
     let r;
 
-    if (player1.speed > player2.speed) {
-      r = this.fight(player1, player2);
-    } else if (player2.speed > player1.speed) {
+    if (player2.speed > player1.speed) {
       r = this.fight(player2, player1);
-    } else if (i < (fights / 2)) {
-      r = this.fight(player1, player2);
     } else {
-      r = this.fight(player2, player1);
+      r = this.fight(player1, player2);
     }
 
     if (r === player1) {

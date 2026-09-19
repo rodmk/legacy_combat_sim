@@ -38,9 +38,13 @@ exports.testCombatInitiative = function(test) {
     test.deepEqual(attackers, [ faster, faster, faster, faster ]);
 
     attackers = [];
+    CombatSim.simulateCombat(faster, slower, 4);
+    test.deepEqual(attackers, [ faster, faster, faster, faster ]);
+
+    attackers = [];
     faster.speed = slower.speed;
     CombatSim.simulateCombat(slower, faster, 4);
-    test.deepEqual(attackers, [ slower, slower, faster, faster ]);
+    test.deepEqual(attackers, [ slower, slower, slower, slower ]);
   } finally {
     CombatSim.fight = originalFight;
   }
