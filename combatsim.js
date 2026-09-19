@@ -1440,7 +1440,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
 
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
   options = options || {};
-  let point_strides = options.pointStrides || [ 8, 4, 2, 1 ];
+  let point_strides = options.pointStrides || [ 11, 5, 2, 1 ];
   let minimum_survival_probability = options.minimumSurvivalProbability || 0;
   let allowed_hp_points = options.hpPoints ? new Set(options.hpPoints) : null;
   let groups_by_signature = new Map();
