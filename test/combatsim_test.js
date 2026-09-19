@@ -1296,6 +1296,17 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
       analysis.score_matrix[player].reduce(function(sum, score) { return sum + score; }, 0) /
         analysis.candidate_count - candidate.average_score
     ) < 1e-12);
+    let total_wins = analysis.win_probability_matrix[player].reduce(function(sum, wins) {
+      return sum + wins;
+    }, 0);
+    let expected_win_healing_cost = analysis.win_healing_cost_matrix[player].reduce(
+      function(sum, cost, opponent) {
+        return sum + (cost * analysis.win_probability_matrix[player][opponent]);
+      }, 0
+    ) / total_wins;
+    test.ok(Math.abs(
+      candidate.average_healing_cost_on_win - expected_win_healing_cost
+    ) < 1e-12);
   });
 
   test.done();

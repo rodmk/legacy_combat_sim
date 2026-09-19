@@ -1357,18 +1357,26 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     let average_hp_lost = hp_loss_matrix[player].reduce(function(sum, hp_loss) {
       return sum + hp_loss;
     }, 0) / hp_loss_matrix[player].length;
-    let meanDefined = function(values) {
-      let defined = values.filter(function(value) { return value !== null; });
-      return defined.length > 0 ? defined.reduce(function(sum, value) {
-        return sum + value;
-      }, 0) / defined.length : null;
+    let conditionalWinMean = function(values) {
+      let weighted_sum = 0;
+      let wins = 0;
+      values.forEach(function(value, opponent) {
+        if (value !== null) {
+          let win_probability = win_probability_matrix[player][opponent];
+          weighted_sum += value * win_probability;
+          wins += win_probability;
+        }
+      });
+      return wins > 0 ? weighted_sum / wins : null;
     };
-    let average_hp_lost_on_win = meanDefined(win_hp_loss_matrix[player]);
-    let average_zero_damage_win_probability = meanDefined(zero_damage_win_matrix[player]);
+    let average_hp_lost_on_win = conditionalWinMean(win_hp_loss_matrix[player]);
+    let average_zero_damage_win_probability = conditionalWinMean(
+      zero_damage_win_matrix[player]
+    );
     let average_healing_cost = healing_cost_matrix[player].reduce(function(sum, cost) {
       return sum + cost;
     }, 0) / healing_cost_matrix[player].length;
-    let average_healing_cost_on_win = meanDefined(win_healing_cost_matrix[player]);
+    let average_healing_cost_on_win = conditionalWinMean(win_healing_cost_matrix[player]);
     let best_response_score = Math.max.apply(null, score_matrix.map(function(row) {
       return row[player];
     }));
