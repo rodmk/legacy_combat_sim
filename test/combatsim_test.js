@@ -1158,6 +1158,55 @@ exports.testRestrictedMatchupGame = function(test) {
   test.done();
 };
 
+exports.testMatchupDominanceFrontier = function(test) {
+  let matrix = [
+    [ 0.5, 0.5, 0.8 ],
+    [ 0.5, 0.5, 0.6 ],
+    [ 0.2, 0.4, 0.5 ],
+  ];
+
+  test.deepEqual(MatchupGame.dominanceFrontier(matrix), {
+    players: [ 0 ],
+    dominated_by: [ [], [ 0 ], [ 0, 1 ] ],
+  });
+  test.done();
+};
+
+exports.testSeedBuildCatalogAnalysis = function(test) {
+  let analysis = MatchupGame.analyzeBuildCatalog(BuildCatalogs[1]);
+
+  test.equal(analysis.source_build_count, 15);
+  test.ok(analysis.candidate_count <= analysis.source_build_count);
+  test.deepEqual(analysis.frontier, [
+    'ShadowDojoArmorStackCores',
+    'ShadowDojoDLGunBuild3',
+    'ShadowDojoHFCoreVoid',
+    'ShadowDojoSG1SplitBombs',
+  ]);
+  test.deepEqual(analysis.pure_maximin, {
+    score: 0.5,
+    candidates: [ 'ShadowDojoDLGunBuild3' ],
+  });
+  test.equal(analysis.score_matrix.length, analysis.candidate_count);
+  test.deepEqual(
+    analysis.matrix_order,
+    analysis.candidates.map(function(candidate) { return candidate.id; })
+  );
+  analysis.candidates.forEach(function(candidate, player) {
+    test.equal(candidate.frontier, candidate.dominated_by.length === 0);
+    test.ok(candidate.worst_score <= candidate.average_score);
+    test.ok(candidate.average_draw_rate >= 0 && candidate.average_draw_rate <= 1);
+    test.ok(candidate.exploitability >= 0 && candidate.exploitability <= 0.5);
+    test.ok(candidate.limiting_opponents.length > 0);
+    test.ok(Math.abs(
+      analysis.score_matrix[player].reduce(function(sum, score) { return sum + score; }, 0) /
+        analysis.candidate_count - candidate.average_score
+    ) < 1e-12);
+  });
+
+  test.done();
+};
+
 exports.testCatalogIntegration = function(test) {
   let player = Player.generatePlayer(
     'Catalog Player',

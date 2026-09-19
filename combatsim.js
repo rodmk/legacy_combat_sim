@@ -1063,6 +1063,127 @@ MatchupGame.pureMaximin = function(matrix) {
   };
 };
 
+MatchupGame.dominanceFrontier = function(matrix) {
+  let tolerance = 1e-12;
+  let dominated_by = matrix.map(function() { return []; });
+
+  let dominates = function(left, right) {
+    let strictly_better = false;
+    for (let opponent = 0; opponent < left.length; opponent++) {
+      if (left[opponent] < right[opponent] - tolerance) {
+        return false;
+      }
+      strictly_better = strictly_better || left[opponent] > right[opponent] + tolerance;
+    }
+    return strictly_better;
+  };
+
+  for (let candidate = 0; candidate < matrix.length; candidate++) {
+    for (let other = 0; other < matrix.length; other++) {
+      if (candidate !== other && dominates(matrix[other], matrix[candidate])) {
+        dominated_by[candidate].push(other);
+      }
+    }
+  }
+
+  return {
+    players: dominated_by.map(function(dominators, player) {
+      return dominators.length === 0 ? player : null;
+    }).filter(function(player) { return player !== null; }),
+    dominated_by: dominated_by,
+  };
+};
+
+MatchupGame.analyzeBuildCatalog = function(catalog) {
+  let groups_by_signature = new Map();
+
+  Object.keys(catalog).sort().forEach(function(key) {
+    let build = catalog[key];
+    let player = Player.generateBuild(build);
+    let signature = CombatSim.combatSignature(player);
+    let group = groups_by_signature.get(signature);
+    if (!group) {
+      group = { build_keys: [], names: [], player: player };
+      groups_by_signature.set(signature, group);
+    }
+    group.build_keys.push(key);
+    if (!group.names.includes(build.name)) {
+      group.names.push(build.name);
+    }
+  });
+
+  let groups = Array.from(groups_by_signature.values());
+  let players = groups.map(function(group) { return group.player; });
+  let score_matrix = players.map(function() { return new Array(players.length).fill(0); });
+  let draw_matrix = players.map(function() { return new Array(players.length).fill(0); });
+
+  for (let i = 0; i < players.length; i++) {
+    let self_outcome = CombatSim.combatOutcomeDistribution(players[i], players[i]);
+    score_matrix[i][i] = 0.5;
+    draw_matrix[i][i] = self_outcome.draws;
+
+    for (let j = i + 1; j < players.length; j++) {
+      let forward = CombatSim.combatOutcomeDistribution(players[i], players[j]);
+      let reverse = CombatSim.combatOutcomeDistribution(players[j], players[i]);
+      let score = (
+        forward.player1_wins + (forward.draws / 2) +
+        reverse.player2_wins + (reverse.draws / 2)
+      ) / 2;
+      let draws = (forward.draws + reverse.draws) / 2;
+      score_matrix[i][j] = score;
+      score_matrix[j][i] = 1 - score;
+      draw_matrix[i][j] = draws;
+      draw_matrix[j][i] = draws;
+    }
+  }
+
+  let frontier = this.dominanceFrontier(score_matrix);
+  let maximin = this.pureMaximin(score_matrix);
+  let ids = groups.map(function(group) { return group.build_keys[0]; });
+  let candidates = groups.map(function(group, player) {
+    let worst_score = Math.min.apply(null, score_matrix[player]);
+    let average_score = score_matrix[player].reduce(function(sum, score) {
+      return sum + score;
+    }, 0) / score_matrix[player].length;
+    let average_draw_rate = draw_matrix[player].reduce(function(sum, draw_rate) {
+      return sum + draw_rate;
+    }, 0) / draw_matrix[player].length;
+    let best_response_score = Math.max.apply(null, score_matrix.map(function(row) {
+      return row[player];
+    }));
+    let limiting_opponents = score_matrix[player].map(function(score, opponent) {
+      return Math.abs(score - worst_score) <= 1e-12 ? ids[opponent] : null;
+    }).filter(function(opponent) { return opponent !== null; });
+
+    return {
+      id: ids[player],
+      build_keys: group.build_keys,
+      names: group.names,
+      frontier: frontier.dominated_by[player].length === 0,
+      dominated_by: frontier.dominated_by[player].map(function(other) { return ids[other]; }),
+      worst_score: worst_score,
+      average_score: average_score,
+      average_draw_rate: average_draw_rate,
+      exploitability: best_response_score - 0.5,
+      limiting_opponents: limiting_opponents,
+    };
+  });
+
+  return {
+    source_build_count: Object.keys(catalog).length,
+    candidate_count: candidates.length,
+    candidates: candidates,
+    frontier: frontier.players.map(function(player) { return ids[player]; }),
+    matrix_order: ids,
+    pure_maximin: {
+      score: maximin.score,
+      candidates: maximin.players.map(function(player) { return ids[player]; }),
+    },
+    score_matrix: score_matrix,
+    draw_matrix: draw_matrix,
+  };
+};
+
 // =============================================================================
 
 // Main entry point

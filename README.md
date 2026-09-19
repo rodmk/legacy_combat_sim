@@ -39,6 +39,17 @@ const builds = mergeBuildCatalogs(BuildCatalogs);
 const opponents = Player.generateReferencePlayers(BuildCatalogs);
 ```
 
+Seed frontier analysis
+======================
+
+Analyze the imported game-simulator builds with exact, initiative-neutral matchups:
+
+```sh
+yarn analyze:seed > seed-analysis.json
+```
+
+The report groups combat-equivalent builds, identifies the matchup-vector frontier and pure maximin candidates, and includes scores, draw rates, exploitability, limiting opponents, and the restricted payoff matrices.
+
 Development
 ===========
 
