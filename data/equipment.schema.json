@@ -53,6 +53,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "type": { "enum": ["melee", "gun", "projectile"] },
+        "mod_slots": { "type": "integer", "minimum": 1, "maximum": 2 },
         "min_damage": { "$ref": "#/$defs/stat" },
         "max_damage": { "$ref": "#/$defs/stat" },
         "armor": { "$ref": "#/$defs/stat" },

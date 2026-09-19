@@ -24,6 +24,7 @@ export type EquipmentDefinition = { name: string } & EquipmentStats;
 
 export type WeaponDefinition = EquipmentDefinition & {
   type: string;
+  mod_slots?: number;
   min_damage: number;
   max_damage: number;
 };

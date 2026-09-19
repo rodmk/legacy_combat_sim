@@ -46,6 +46,7 @@
     "BioGunMk4": {
       "name": "Bio Gun Mk4",
       "type": "gun",
+      "mod_slots": 2,
       "min_damage": 76,
       "max_damage": 91,
       "accuracy": 47,
@@ -56,6 +57,7 @@
     "ChainBladeT2": {
       "name": "Chain Blade T2",
       "type": "melee",
+      "mod_slots": 1,
       "min_damage": 82,
       "max_damage": 98,
       "accuracy": 48,
@@ -93,6 +95,7 @@
     "CrystalCrossbow": {
       "name": "Crystal Crossbow",
       "type": "projectile",
+      "mod_slots": 1,
       "min_damage": 70,
       "max_damage": 89,
       "accuracy": 57,
@@ -137,6 +140,7 @@
     "GunBladeMk4": {
       "name": "Gun Blade Mk4",
       "type": "gun",
+      "mod_slots": 2,
       "min_damage": 73,
       "max_damage": 87,
       "accuracy": 50,
@@ -187,6 +191,7 @@
     "ScytheT2": {
       "name": "Scythe T2",
       "type": "melee",
+      "mod_slots": 1,
       "min_damage": 80,
       "max_damage": 101,
       "accuracy": 42,
@@ -217,6 +222,7 @@
     "VoidBow": {
       "name": "Void Bow",
       "type": "projectile",
+      "mod_slots": 1,
       "min_damage": 10,
       "max_damage": 125,
       "accuracy": 48,
@@ -227,6 +233,7 @@
     "VoidSword": {
       "name": "Void Sword",
       "type": "melee",
+      "mod_slots": 1,
       "min_damage": 90,
       "max_damage": 120,
       "accuracy": 35,

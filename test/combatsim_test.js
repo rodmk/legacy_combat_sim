@@ -391,6 +391,15 @@ exports.testWeaponMods = function(test) {
     },
     /Weapon mod slot 1 is already occupied/
   );
+  test.throws(
+    function() {
+      Item.VoidBow.applyMods([
+        WeaponMod.LaserSight,
+        WeaponMod.PoisonedTip,
+      ]);
+    },
+    /Void Bow supports at most 1 weapon mod/
+  );
 
   test.done();
 };

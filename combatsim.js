@@ -425,8 +425,17 @@ Equipment.prototype.applyMods = function(mods) {
     throw new Error('Weapon mods have already been applied to ' + this.name + '.');
   }
 
+  let modSlots = idx(this, 'mod_slots', 0);
+  if (mods.length > modSlots) {
+    let label = modSlots === 1 ? 'weapon mod' : 'weapon mods';
+    throw new Error(this.name + ' supports at most ' + modSlots + ' ' + label + '.');
+  }
+
   let occupiedSlots = {};
   mods.forEach(function(mod) {
+    if (mod.slot > modSlots) {
+      throw new Error(this.name + ' does not have weapon mod slot ' + mod.slot + '.');
+    }
     if (!mod.compatible.includes(this.catalogKey)) {
       throw new Error(mod.name + ' is not compatible with ' + this.name + '.');
     }

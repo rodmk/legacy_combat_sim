@@ -32,8 +32,12 @@ function dominates(left, right) {
 
 Object.keys(weaponMods).forEach(function(key) {
   weaponMods[key].compatible.forEach(function(weaponKey) {
-    if (!equipment.weapons[weaponKey]) {
+    let weapon = equipment.weapons[weaponKey];
+    if (!weapon) {
       throw new Error(key + ' references unknown weapon ' + weaponKey + '.');
+    }
+    if ((weapon.mod_slots || 0) < weaponMods[key].slot) {
+      throw new Error(key + ' exceeds the mod slot capacity of ' + weaponKey + '.');
     }
   });
 });
@@ -68,6 +72,10 @@ function validateBuildSlot(buildKey, slotName, slot, group) {
 
   let occupiedSlots = new Set();
   let weaponSlot = /** @type {import('../types').BuildWeaponDefinition} */ (slot);
+  let modCapacity = equipment.weapons[slot.item] ? equipment.weapons[slot.item].mod_slots || 0 : 0;
+  if ((weaponSlot.mods || []).length > modCapacity) {
+    throw new Error(buildKey + '.' + slotName + ' exceeds its weapon mod capacity.');
+  }
   (weaponSlot.mods || []).forEach(function(modKey) {
     let mod = weaponMods[modKey];
     if (!mod) {
