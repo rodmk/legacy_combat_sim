@@ -1232,6 +1232,25 @@ exports.testMatchupDominanceFrontier = function(test) {
     players: [ 0 ],
     dominated_by: [ [], [ 0 ], [ 0, 1 ] ],
   });
+
+  let iterated_matrix = [
+    [ 0.5, 0.6, 0.7 ],
+    [ 0.4, 0.5, 0.8 ],
+    [ 0.3, 0.2, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.iteratedDominanceKernel(iterated_matrix), {
+    players: [ 0 ],
+    rounds: [
+      {
+        active_players: [ 0, 1, 2 ],
+        eliminated: [ { player: 2, dominated_by: [ 0, 1 ] } ],
+      },
+      {
+        active_players: [ 0, 1 ],
+        eliminated: [ { player: 1, dominated_by: [ 0 ] } ],
+      },
+    ],
+  });
   test.done();
 };
 
@@ -1250,6 +1269,10 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
     score: 0.5,
     candidates: [ 'ShadowDojoDLGunBuild3' ],
   });
+  test.deepEqual(analysis.strategic_kernel, [
+    'ShadowDojoDLGunBuild3',
+  ]);
+  test.equal(analysis.elimination_rounds.length, 3);
   test.equal(analysis.score_matrix.length, analysis.candidate_count);
   test.deepEqual(
     analysis.matrix_order,

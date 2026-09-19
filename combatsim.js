@@ -1180,6 +1180,38 @@ MatchupGame.dominanceFrontier = function(matrix) {
   };
 };
 
+MatchupGame.iteratedDominanceKernel = function(matrix) {
+  let active = matrix.map(function(unused, player) { return player; });
+  let rounds = [];
+
+  while (active.length > 1) {
+    let restricted_matrix = active.map(function(player) {
+      return active.map(function(opponent) { return matrix[player][opponent]; });
+    });
+    let frontier = this.dominanceFrontier(restricted_matrix);
+    let survivors = frontier.players.map(function(player) { return active[player]; });
+    let eliminated = active.map(function(player, restricted_player) {
+      let dominators = frontier.dominated_by[restricted_player];
+      return dominators.length === 0 ? null : {
+        player: player,
+        dominated_by: dominators.map(function(other) { return active[other]; }),
+      };
+    }).filter(function(elimination) { return elimination !== null; });
+
+    if (eliminated.length === 0) {
+      break;
+    }
+
+    rounds.push({
+      active_players: active,
+      eliminated: eliminated,
+    });
+    active = survivors;
+  }
+
+  return { players: active, rounds: rounds };
+};
+
 MatchupGame.analyzeBuildCatalog = function(catalog) {
   let groups_by_signature = new Map();
 
@@ -1308,6 +1340,7 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
   }
 
   let frontier = this.dominanceFrontier(score_matrix);
+  let kernel = this.iteratedDominanceKernel(score_matrix);
   let maximin = this.pureMaximin(score_matrix);
   let ids = groups.map(function(group) { return group.build_keys[0]; });
   let candidates = groups.map(function(group, player) {
@@ -1370,6 +1403,18 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     candidate_count: candidates.length,
     candidates: candidates,
     frontier: frontier.players.map(function(player) { return ids[player]; }),
+    strategic_kernel: kernel.players.map(function(player) { return ids[player]; }),
+    elimination_rounds: kernel.rounds.map(function(round) {
+      return {
+        active_candidates: round.active_players.map(function(player) { return ids[player]; }),
+        eliminated: round.eliminated.map(function(elimination) {
+          return {
+            candidate: ids[elimination.player],
+            dominated_by: elimination.dominated_by.map(function(player) { return ids[player]; }),
+          };
+        }),
+      };
+    }),
     matrix_order: ids,
     pure_maximin: {
       score: maximin.score,
