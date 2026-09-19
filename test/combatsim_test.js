@@ -485,6 +485,57 @@ exports.testCurrentArmorDamageFormula = function(test) {
   test.done();
 };
 
+exports.testWeaponDamageDistribution = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 100,
+    gun_skill: 100,
+  };
+  let defender = {
+    armor: 0,
+    dodge: 100,
+    def_skill: 100,
+  };
+  let weapon = {
+    skill: 'gun_skill',
+    min_damage: 100,
+    max_damage: 100,
+  };
+
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 0.75 ], [ 100, 0.25 ] ]
+  );
+
+  attacker.accuracy = 500;
+  attacker.gun_skill = 500;
+  defender.armor = 280;
+  weapon.min_damage = 100;
+  weapon.max_damage = 102;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 50, 1 / 3 ], [ 51, 2 / 3 ] ]
+  );
+
+  attacker.accuracy = 100;
+  defender.dodge = 500;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 1 ] ]
+  );
+
+  attacker.accuracy = 500;
+  defender.armor = 100000;
+  weapon.min_damage = 1;
+  weapon.max_damage = 1;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 1 ] ]
+  );
+
+  test.done();
+};
+
 exports.testAttackTypes = function(test) {
   let raw_stats = {
     speed: 101,

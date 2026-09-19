@@ -167,13 +167,39 @@ CombatSim.attemptHit = function(att, def, weapon) {
   if (this.rollCombat(att.accuracy, def.dodge) &&
       this.rollCombat(att[weapon.skill], def.def_skill)) {
     let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
-    let level_modifier = Math.min(att.level, 80) * 7 / 2;
-    // The current formula does not specify how to handle fractional final damage;
-    // assume it is rounded to the nearest integer.
-    net_damage = Math.round(base_damage * (level_modifier / (level_modifier + def.armor)));
+    net_damage = this.damageAfterArmor(att.level, def.armor, base_damage);
   }
 
   return net_damage;
+};
+
+CombatSim.damageAfterArmor = function(attacker_level, defender_armor, base_damage) {
+  let level_modifier = Math.min(attacker_level, 80) * 7 / 2;
+  // The current formula does not specify how to handle fractional final damage;
+  // assume it is rounded to the nearest integer.
+  return Math.round(base_damage * (level_modifier / (level_modifier + defender_armor)));
+};
+
+CombatSim.weaponDamageDistribution = function(att, def, weapon) {
+  let accuracy_probability = this.combatProbability(att.accuracy, def.dodge);
+  let skill_probability = this.combatProbability(att[weapon.skill], def.def_skill);
+  let damaging_hit_probability = accuracy_probability * skill_probability;
+  let distribution = new Map();
+
+  if (damaging_hit_probability < 1) {
+    distribution.set(0, 1 - damaging_hit_probability);
+  }
+
+  let base_damage_outcomes = weapon.max_damage - weapon.min_damage + 1;
+  let outcome_probability = damaging_hit_probability / base_damage_outcomes;
+  if (outcome_probability > 0) {
+    for (let base_damage = weapon.min_damage; base_damage <= weapon.max_damage; base_damage++) {
+      let damage = this.damageAfterArmor(att.level, def.armor, base_damage);
+      distribution.set(damage, (distribution.get(damage) || 0) + outcome_probability);
+    }
+  }
+
+  return distribution;
 };
 
 // Rolls stats against each other
