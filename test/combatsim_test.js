@@ -6,6 +6,7 @@ let Player = src.Player;
 let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
+let Build = src.Build;
 
 let jsondiffpatch = require('jsondiffpatch');
 
@@ -390,6 +391,23 @@ exports.testWeaponMods = function(test) {
     },
     /Weapon mod slot 1 is already occupied/
   );
+
+  test.done();
+};
+
+exports.testJsonBuild = function(test) {
+  let player = Player.generateBuild(Build.DualVoidBowsWithScouts);
+
+  test.equal(player.name, 'Dual VBows w/ Scouts');
+  test.equal(player.max_hp, 350);
+  test.equal(player.speed, 300);
+  test.equal(player.accuracy, 188);
+  test.deepEqual(player.weapon1, {
+    type: 'projectile',
+    skill: 'proj_skill',
+    min_damage: 19,
+    max_damage: 180,
+  });
 
   test.done();
 };

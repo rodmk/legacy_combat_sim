@@ -9,10 +9,11 @@
     "test-eslint": "node_modules/eslint/bin/eslint.js combatsim.js test/*",
     "test-unittest": "node_modules/nodeunit/bin/nodeunit test/*",
     "typecheck": "tsc --noEmit",
-    "validate:data": "yarn validate:crystals && yarn validate:equipment && yarn validate:weapon-mods && yarn validate:catalog-relations",
+    "validate:data": "yarn validate:crystals && yarn validate:equipment && yarn validate:weapon-mods && yarn validate:builds && yarn validate:catalog-relations",
     "validate:crystals": "ajv validate --spec=draft2020 -s data/crystals.schema.json -d data/crystals.json",
     "validate:equipment": "ajv validate --spec=draft2020 -s data/equipment.schema.json -d data/equipment.json",
     "validate:weapon-mods": "ajv validate --spec=draft2020 -s data/weapon-mods.schema.json -d data/weapon-mods.json",
+    "validate:builds": "ajv validate --spec=draft2020 -s data/builds.schema.json -d data/builds.json",
     "validate:catalog-relations": "node data/validate-relations.js"
   },
   "devDependencies": {

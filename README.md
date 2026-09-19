@@ -19,6 +19,17 @@ const bioGun = Item.BioGunMk4.applyMods([
 ]);
 ```
 
+Builds
+======
+
+Complete stat allocations and loadouts are defined in `data/builds.json`:
+
+```js
+const { Build, Player } = require('./combatsim');
+
+const player = Player.generateBuild(Build.DualVoidBowsWithScouts);
+```
+
 Development
 ===========
 

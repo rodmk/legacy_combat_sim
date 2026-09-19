@@ -42,3 +42,31 @@ export interface WeaponModDefinition {
 }
 
 export type WeaponModCatalog = Readonly<Record<string, WeaponModDefinition>>;
+
+export interface BuildItemDefinition {
+  item: string;
+  crystals?: readonly string[];
+}
+
+export interface BuildWeaponDefinition extends BuildItemDefinition {
+  mods?: readonly string[];
+}
+
+export interface BuildDefinition {
+  name: string;
+  stats: {
+    hp: number;
+    speed: number;
+    accuracy: number;
+    dodge: number;
+  };
+  equipment: {
+    armor: BuildItemDefinition;
+    weapon1: BuildWeaponDefinition;
+    weapon2: BuildWeaponDefinition;
+    misc1: BuildItemDefinition;
+    misc2: BuildItemDefinition;
+  };
+}
+
+export type BuildCatalog = Readonly<Record<string, BuildDefinition>>;

@@ -307,103 +307,36 @@ Player.generatePlayer = function(name, raw_stats, items) {
   return stats;
 };
 
-/**
- * Generates a variety of different reference player loadouts.
- */
+Player.generateBuild = function(build) {
+  let slots = [
+    build.equipment.armor,
+    build.equipment.weapon1,
+    build.equipment.weapon2,
+    build.equipment.misc1,
+    build.equipment.misc2,
+  ];
+  let items = slots.map(function(slot) {
+    let item = Item[slot.item];
+    if (slot.mods) {
+      item = item.applyMods(slot.mods.map(function(key) {
+        return WeaponMod[key];
+      }));
+    }
+    if (slot.crystals) {
+      item = item.socket(slot.crystals.map(function(key) {
+        return Item[key];
+      }));
+    }
+    return item;
+  });
+
+  return Player.generateFullyTrainedPlayer(build.name, build.stats, items);
+};
+
 Player.generateReferencePlayers = function() {
-  let combatants = [];
-
-  // DL (+Voids) + Dual Rifts (+Fires) + Bios (+Pinks)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Rifts w/ Bios',
-    { hp: 70, speed: 17, accuracy: 4, dodge: 92 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  // DL (+Abysses) + Dual Rifts (+Amulets) + Bios (+Pinks)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Rifts w/ Bios (Abyss/Ammy Cs)',
-    { hp: 70, speed: 12, accuracy: 4, dodge: 97 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allAbyssCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  // DL (+Voids) + Dual VBows (+Fires) + Scout Drones (+Yellows)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual VBows w/ Scouts',
-    { hp: 70, speed: 9, accuracy: 4, dodge: 100 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.VoidBow
-        .socket(Crystals.allPerfectFires),
-      Item.VoidBow
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
-    ]
-  ));
-
-  // DL (+Voids) + CStaff (+Oranges) + VSword (+Fires) + Scouts (+Airs)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'CStaff/VSword w/ Scouts',
-    { hp: 70, speed: 10, accuracy: 4, dodge: 99 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.CoreStaff
-        .socket(Crystals.allPerfectOranges),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-    ]
-  ));
-
-  // DL (+Abysses) + CStaff (+Ammy) + VSword (+Fires) + Scouts (+Airs)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'CStaff/VSword w/ Scouts (Abyss/Ammy Cs)',
-    { hp: 70, speed: 5, accuracy: 4, dodge: 104 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allAbyssCrystals),
-      Item.CoreStaff
-        .socket(Crystals.allAmuletCrystals),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-    ]
-  ));
-
-  return combatants;
+  return Object.keys(Build).map(function(key) {
+    return Player.generateBuild(Build[key]);
+  });
 };
 
 // =============================================================================
@@ -538,6 +471,8 @@ Object.keys(weaponModDefinitions).forEach(function(key) {
 });
 let WeaponMod = deepFreeze(weaponModDefinitions);
 
+let Build = deepFreeze(require('./data/builds'));
+
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all
  * crystal types.
@@ -569,5 +504,6 @@ if (typeof module !== 'undefined') {
     Equipment: Equipment,
     Item: Item,
     WeaponMod: WeaponMod,
+    Build: Build,
   };
 }

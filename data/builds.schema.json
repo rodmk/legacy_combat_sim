@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rodmk/legacy_combat_sim/data/builds.schema.json",
+  "title": "Legacy combat simulator builds",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": { "$ref": "#/$defs/build" },
+  "$defs": {
+    "build": {
+      "type": "object",
+      "required": ["name", "stats", "equipment"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "stats": { "$ref": "#/$defs/stats" },
+        "equipment": { "$ref": "#/$defs/loadout" }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["hp", "speed", "accuracy", "dodge"],
+      "additionalProperties": false,
+      "properties": {
+        "hp": { "type": "integer", "minimum": 2 },
+        "speed": { "type": "integer", "minimum": 2 },
+        "accuracy": { "type": "integer", "minimum": 4 },
+        "dodge": { "type": "integer", "minimum": 4 }
+      }
+    },
+    "loadout": {
+      "type": "object",
+      "required": ["armor", "weapon1", "weapon2", "misc1", "misc2"],
+      "additionalProperties": false,
+      "properties": {
+        "armor": { "$ref": "#/$defs/item" },
+        "weapon1": { "$ref": "#/$defs/weapon" },
+        "weapon2": { "$ref": "#/$defs/weapon" },
+        "misc1": { "$ref": "#/$defs/item" },
+        "misc2": { "$ref": "#/$defs/item" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["item"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "crystals": { "$ref": "#/$defs/crystals" }
+      }
+    },
+    "weapon": {
+      "type": "object",
+      "required": ["item"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "crystals": { "$ref": "#/$defs/crystals" },
+        "mods": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "crystals": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
