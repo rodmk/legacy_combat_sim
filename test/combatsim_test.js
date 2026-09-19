@@ -699,6 +699,57 @@ exports.testCombatOutcomeDistribution = function(test) {
   test.done();
 };
 
+exports.testCombatHealthLossDistribution = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1);
+  let result = CombatSim.combatResultDistribution(player1, player2);
+
+  test.deepEqual(result.outcome, { player1_wins: 1, player2_wins: 0, draws: 0 });
+  test.deepEqual(result.player1, {
+    wins: 1,
+    expected_hp_remaining: 10,
+    expected_hp_lost_on_win: 0,
+    zero_damage_win_probability: 1,
+    expected_hp_lost: 0,
+  });
+  test.deepEqual(result.player2, {
+    wins: 0,
+    expected_hp_remaining: 0,
+    expected_hp_lost_on_win: null,
+    zero_damage_win_probability: null,
+    expected_hp_lost: 10,
+  });
+
+  player2.speed = 101;
+  result = CombatSim.combatResultDistribution(player1, player2);
+  test.deepEqual(result.outcome, { player1_wins: 0, player2_wins: 1, draws: 0 });
+  test.equal(result.player1.expected_hp_lost, 10);
+  test.equal(result.player2.expected_hp_lost_on_win, 0);
+  test.equal(result.player2.zero_damage_win_probability, 1);
+
+  player2.speed = 100;
+  player1.weapon1 = { skill: 'gun_skill', min_damage: 5, max_damage: 5 };
+  player2.weapon1 = { skill: 'gun_skill', min_damage: 3, max_damage: 3 };
+  result = CombatSim.combatResultDistribution(player1, player2);
+  test.deepEqual(result.outcome, { player1_wins: 1, player2_wins: 0, draws: 0 });
+  test.equal(result.player1.expected_hp_remaining, 7);
+  test.equal(result.player1.expected_hp_lost, 3);
+  test.equal(result.player1.expected_hp_lost_on_win, 3);
+  test.equal(result.player1.zero_damage_win_probability, 0);
+  test.done();
+};
+
 exports.testCombatOutcomeDistributionMatchesMonteCarlo = function(test) {
   let player1 = {
     max_hp: 60,
@@ -1196,6 +1247,10 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
     test.equal(candidate.frontier, candidate.dominated_by.length === 0);
     test.ok(candidate.worst_score <= candidate.average_score);
     test.ok(candidate.average_draw_rate >= 0 && candidate.average_draw_rate <= 1);
+    test.ok(candidate.average_hp_lost >= 0);
+    test.ok(candidate.average_hp_lost_on_win >= 0);
+    test.ok(candidate.average_zero_damage_win_probability >= 0 &&
+      candidate.average_zero_damage_win_probability <= 1);
     test.ok(candidate.exploitability >= 0 && candidate.exploitability <= 0.5);
     test.ok(candidate.limiting_opponents.length > 0);
     test.ok(Math.abs(

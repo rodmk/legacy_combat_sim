@@ -249,6 +249,8 @@ CombatSim.defeatRoundDistribution = function(att, def) {
   let lethal_probability = new Float64Array(def.max_hp + 1);
   let remaining_hp = new Float64Array(def.max_hp + 1);
   let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
+  let surviving_hp_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
+  let full_hp_probability_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   attack.sort(function(a, b) { return a[0] - b[0]; });
 
   for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
@@ -260,9 +262,13 @@ CombatSim.defeatRoundDistribution = function(att, def) {
   }
 
   remaining_hp[def.max_hp] = 1;
+  surviving_hp_by_round[0] = def.max_hp;
+  full_hp_probability_by_round[0] = 1;
 
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     let next_remaining_hp = new Float64Array(def.max_hp + 1);
+    let next_surviving_hp = 0;
+    let next_full_hp_probability = 0;
     let has_survivors = false;
 
     for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
@@ -279,12 +285,19 @@ CombatSim.defeatRoundDistribution = function(att, def) {
         }
 
         let probability = state_probability * attack[outcome][1];
-        next_remaining_hp[hit_points - damage] += probability;
+        let next_hit_points = hit_points - damage;
+        next_remaining_hp[next_hit_points] += probability;
+        next_surviving_hp += next_hit_points * probability;
+        if (next_hit_points === def.max_hp) {
+          next_full_hp_probability += probability;
+        }
         has_survivors = true;
       }
     }
 
     remaining_hp = next_remaining_hp;
+    surviving_hp_by_round[round] = next_surviving_hp;
+    full_hp_probability_by_round[round] = next_full_hp_probability;
     if (!has_survivors) {
       break;
     }
@@ -295,10 +308,15 @@ CombatSim.defeatRoundDistribution = function(att, def) {
     survives += remaining_hp[hit_points];
   }
 
-  return { defeat_rounds: defeat_rounds, survives: survives };
+  return {
+    defeat_rounds: defeat_rounds,
+    survives: survives,
+    surviving_hp_by_round: surviving_hp_by_round,
+    full_hp_probability_by_round: full_hp_probability_by_round,
+  };
 };
 
-CombatSim.combatOutcomeDistribution = function(player1, player2) {
+CombatSim.combatResultDistribution = function(player1, player2) {
   let first = player1;
   let second = player2;
   let first_is_player1 = true;
@@ -313,22 +331,61 @@ CombatSim.combatOutcomeDistribution = function(player1, player2) {
   let second_defeats_first = this.defeatRoundDistribution(second, first);
   let first_wins = 0;
   let second_wins = 0;
+  let first_win_hp = 0;
+  let second_win_hp = 0;
+  let first_zero_damage_wins = 0;
+  let second_zero_damage_wins = 0;
   let first_survival_probability = 1;
   let second_survival_probability = 1;
 
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     first_wins += first_defeats_second.defeat_rounds[round] * second_survival_probability;
+    first_win_hp += first_defeats_second.defeat_rounds[round] *
+      second_defeats_first.surviving_hp_by_round[round - 1];
+    first_zero_damage_wins += first_defeats_second.defeat_rounds[round] *
+      second_defeats_first.full_hp_probability_by_round[round - 1];
     first_survival_probability -= first_defeats_second.defeat_rounds[round];
     second_wins += second_defeats_first.defeat_rounds[round] * first_survival_probability;
+    second_win_hp += second_defeats_first.defeat_rounds[round] *
+      first_defeats_second.surviving_hp_by_round[round];
+    second_zero_damage_wins += second_defeats_first.defeat_rounds[round] *
+      first_defeats_second.full_hp_probability_by_round[round];
     second_survival_probability -= second_defeats_first.defeat_rounds[round];
   }
 
   let draws = first_defeats_second.survives * second_defeats_first.survives;
-  return {
-    player1_wins: first_is_player1 ? first_wins : second_wins,
-    player2_wins: first_is_player1 ? second_wins : first_wins,
-    draws: draws,
+  let first_draw_hp = second_defeats_first.surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] *
+    first_defeats_second.survives;
+  let second_draw_hp = first_defeats_second.surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] *
+    second_defeats_first.survives;
+  let first_result = {
+    wins: first_wins,
+    expected_hp_remaining: first_win_hp + first_draw_hp,
+    expected_hp_lost_on_win: first_wins > 0 ? first.max_hp - (first_win_hp / first_wins) : null,
+    zero_damage_win_probability: first_wins > 0 ? first_zero_damage_wins / first_wins : null,
   };
+  let second_result = {
+    wins: second_wins,
+    expected_hp_remaining: second_win_hp + second_draw_hp,
+    expected_hp_lost_on_win: second_wins > 0 ? second.max_hp - (second_win_hp / second_wins) : null,
+    zero_damage_win_probability: second_wins > 0 ? second_zero_damage_wins / second_wins : null,
+  };
+  first_result.expected_hp_lost = first.max_hp - first_result.expected_hp_remaining;
+  second_result.expected_hp_lost = second.max_hp - second_result.expected_hp_remaining;
+
+  return {
+    outcome: {
+      player1_wins: first_is_player1 ? first_wins : second_wins,
+      player2_wins: first_is_player1 ? second_wins : first_wins,
+      draws: draws,
+    },
+    player1: first_is_player1 ? first_result : second_result,
+    player2: first_is_player1 ? second_result : first_result,
+  };
+};
+
+CombatSim.combatOutcomeDistribution = function(player1, player2) {
+  return this.combatResultDistribution(player1, player2).outcome;
 };
 
 // Rolls stats against each other
@@ -1116,15 +1173,41 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
   let players = groups.map(function(group) { return group.player; });
   let score_matrix = players.map(function() { return new Array(players.length).fill(0); });
   let draw_matrix = players.map(function() { return new Array(players.length).fill(0); });
+  let hp_loss_matrix = players.map(function() { return new Array(players.length).fill(0); });
+  let win_hp_loss_matrix = players.map(function() { return new Array(players.length).fill(null); });
+  let zero_damage_win_matrix = players.map(function() { return new Array(players.length).fill(null); });
+  let average = function(left, right) { return (left + right) / 2; };
+  let combinedWinMetric = function(left, right, metric) {
+    let wins = left.wins + right.wins;
+    if (wins === 0) {
+      return null;
+    }
+    return (
+      (left.wins * (left[metric] || 0)) +
+      (right.wins * (right[metric] || 0))
+    ) / wins;
+  };
 
   for (let i = 0; i < players.length; i++) {
-    let self_outcome = CombatSim.combatOutcomeDistribution(players[i], players[i]);
+    let self_result = CombatSim.combatResultDistribution(players[i], players[i]);
     score_matrix[i][i] = 0.5;
-    draw_matrix[i][i] = self_outcome.draws;
+    draw_matrix[i][i] = self_result.outcome.draws;
+    hp_loss_matrix[i][i] = average(
+      self_result.player1.expected_hp_lost,
+      self_result.player2.expected_hp_lost
+    );
+    win_hp_loss_matrix[i][i] = combinedWinMetric(
+      self_result.player1, self_result.player2, 'expected_hp_lost_on_win'
+    );
+    zero_damage_win_matrix[i][i] = combinedWinMetric(
+      self_result.player1, self_result.player2, 'zero_damage_win_probability'
+    );
 
     for (let j = i + 1; j < players.length; j++) {
-      let forward = CombatSim.combatOutcomeDistribution(players[i], players[j]);
-      let reverse = CombatSim.combatOutcomeDistribution(players[j], players[i]);
+      let forward_result = CombatSim.combatResultDistribution(players[i], players[j]);
+      let reverse_result = CombatSim.combatResultDistribution(players[j], players[i]);
+      let forward = forward_result.outcome;
+      let reverse = reverse_result.outcome;
       let score = (
         forward.player1_wins + (forward.draws / 2) +
         reverse.player2_wins + (reverse.draws / 2)
@@ -1134,6 +1217,26 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       score_matrix[j][i] = 1 - score;
       draw_matrix[i][j] = draws;
       draw_matrix[j][i] = draws;
+      hp_loss_matrix[i][j] = average(
+        forward_result.player1.expected_hp_lost,
+        reverse_result.player2.expected_hp_lost
+      );
+      hp_loss_matrix[j][i] = average(
+        forward_result.player2.expected_hp_lost,
+        reverse_result.player1.expected_hp_lost
+      );
+      win_hp_loss_matrix[i][j] = combinedWinMetric(
+        forward_result.player1, reverse_result.player2, 'expected_hp_lost_on_win'
+      );
+      win_hp_loss_matrix[j][i] = combinedWinMetric(
+        forward_result.player2, reverse_result.player1, 'expected_hp_lost_on_win'
+      );
+      zero_damage_win_matrix[i][j] = combinedWinMetric(
+        forward_result.player1, reverse_result.player2, 'zero_damage_win_probability'
+      );
+      zero_damage_win_matrix[j][i] = combinedWinMetric(
+        forward_result.player2, reverse_result.player1, 'zero_damage_win_probability'
+      );
     }
   }
 
@@ -1148,6 +1251,17 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     let average_draw_rate = draw_matrix[player].reduce(function(sum, draw_rate) {
       return sum + draw_rate;
     }, 0) / draw_matrix[player].length;
+    let average_hp_lost = hp_loss_matrix[player].reduce(function(sum, hp_loss) {
+      return sum + hp_loss;
+    }, 0) / hp_loss_matrix[player].length;
+    let meanDefined = function(values) {
+      let defined = values.filter(function(value) { return value !== null; });
+      return defined.length > 0 ? defined.reduce(function(sum, value) {
+        return sum + value;
+      }, 0) / defined.length : null;
+    };
+    let average_hp_lost_on_win = meanDefined(win_hp_loss_matrix[player]);
+    let average_zero_damage_win_probability = meanDefined(zero_damage_win_matrix[player]);
     let best_response_score = Math.max.apply(null, score_matrix.map(function(row) {
       return row[player];
     }));
@@ -1164,6 +1278,9 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       worst_score: worst_score,
       average_score: average_score,
       average_draw_rate: average_draw_rate,
+      average_hp_lost: average_hp_lost,
+      average_hp_lost_on_win: average_hp_lost_on_win,
+      average_zero_damage_win_probability: average_zero_damage_win_probability,
       exploitability: best_response_score - 0.5,
       limiting_opponents: limiting_opponents,
     };
@@ -1181,6 +1298,9 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     },
     score_matrix: score_matrix,
     draw_matrix: draw_matrix,
+    hp_loss_matrix: hp_loss_matrix,
+    win_hp_loss_matrix: win_hp_loss_matrix,
+    zero_damage_win_matrix: zero_damage_win_matrix,
   };
 };
 
