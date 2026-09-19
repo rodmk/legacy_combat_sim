@@ -699,6 +699,69 @@ exports.testCombatOutcomeDistribution = function(test) {
   test.done();
 };
 
+exports.testCombatHealthLossDistribution = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1);
+  let result = CombatSim.combatResultDistribution(player1, player2);
+
+  test.equal(CombatSim.healingCost(0, 10), 7);
+  test.equal(CombatSim.healingCost(0, 20), 8);
+  test.equal(CombatSim.healingCost(20, 100), 13);
+  test.equal(CombatSim.healingCost(20, 815), 133);
+  test.equal(CombatSim.healingCost(0, 815), 141);
+
+  test.deepEqual(result.outcome, { player1_wins: 1, player2_wins: 0, draws: 0 });
+  test.deepEqual(result.player1, {
+    wins: 1,
+    expected_hp_remaining: 10,
+    expected_hp_lost_on_win: 0,
+    zero_damage_win_probability: 1,
+    expected_healing_cost_on_win: 0,
+    expected_healing_cost: 0,
+    expected_hp_lost: 0,
+  });
+  test.deepEqual(result.player2, {
+    wins: 0,
+    expected_hp_remaining: 0,
+    expected_hp_lost_on_win: null,
+    zero_damage_win_probability: null,
+    expected_healing_cost_on_win: null,
+    expected_healing_cost: 7,
+    expected_hp_lost: 10,
+  });
+
+  player2.speed = 101;
+  result = CombatSim.combatResultDistribution(player1, player2);
+  test.deepEqual(result.outcome, { player1_wins: 0, player2_wins: 1, draws: 0 });
+  test.equal(result.player1.expected_hp_lost, 10);
+  test.equal(result.player2.expected_hp_lost_on_win, 0);
+  test.equal(result.player2.zero_damage_win_probability, 1);
+
+  player2.speed = 100;
+  player1.weapon1 = { skill: 'gun_skill', min_damage: 5, max_damage: 5 };
+  player2.weapon1 = { skill: 'gun_skill', min_damage: 3, max_damage: 3 };
+  result = CombatSim.combatResultDistribution(player1, player2);
+  test.deepEqual(result.outcome, { player1_wins: 1, player2_wins: 0, draws: 0 });
+  test.equal(result.player1.expected_hp_remaining, 7);
+  test.equal(result.player1.expected_hp_lost, 3);
+  test.equal(result.player1.expected_hp_lost_on_win, 3);
+  test.equal(result.player1.zero_damage_win_probability, 0);
+  test.equal(result.player1.expected_healing_cost_on_win, 1);
+  test.equal(result.player1.expected_healing_cost, 1);
+  test.done();
+};
+
 exports.testCombatOutcomeDistributionMatchesMonteCarlo = function(test) {
   let player1 = {
     max_hp: 60,
@@ -1153,6 +1216,97 @@ exports.testRestrictedMatchupGame = function(test) {
   test.deepEqual(MatchupGame.pureMaximin(cyclic_matrix), {
     score: 0,
     players: [ 0, 1, 2 ],
+  });
+
+  test.done();
+};
+
+exports.testMatchupDominanceFrontier = function(test) {
+  let matrix = [
+    [ 0.5, 0.5, 0.8 ],
+    [ 0.5, 0.5, 0.6 ],
+    [ 0.2, 0.4, 0.5 ],
+  ];
+
+  test.deepEqual(MatchupGame.dominanceFrontier(matrix), {
+    players: [ 0 ],
+    dominated_by: [ [], [ 0 ], [ 0, 1 ] ],
+  });
+
+  let iterated_matrix = [
+    [ 0.5, 0.6, 0.7 ],
+    [ 0.4, 0.5, 0.8 ],
+    [ 0.3, 0.2, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.iteratedDominanceKernel(iterated_matrix), {
+    players: [ 0 ],
+    rounds: [
+      {
+        active_players: [ 0, 1, 2 ],
+        eliminated: [ { player: 2, dominated_by: [ 0, 1 ] } ],
+      },
+      {
+        active_players: [ 0, 1 ],
+        eliminated: [ { player: 1, dominated_by: [ 0 ] } ],
+      },
+    ],
+  });
+  test.done();
+};
+
+exports.testSeedBuildCatalogAnalysis = function(test) {
+  let analysis = MatchupGame.analyzeBuildCatalog(BuildCatalogs[1]);
+
+  test.equal(analysis.source_build_count, 15);
+  test.ok(analysis.candidate_count <= analysis.source_build_count);
+  test.deepEqual(analysis.frontier, [
+    'ShadowDojoArmorStackCores',
+    'ShadowDojoDLGunBuild3',
+    'ShadowDojoHFCoreVoid',
+    'ShadowDojoSG1SplitBombs',
+  ]);
+  test.deepEqual(analysis.pure_maximin, {
+    score: 0.5,
+    candidates: [ 'ShadowDojoDLGunBuild3' ],
+  });
+  test.deepEqual(analysis.strategic_kernel, [
+    'ShadowDojoDLGunBuild3',
+  ]);
+  test.equal(analysis.elimination_rounds.length, 3);
+  test.equal(analysis.score_matrix.length, analysis.candidate_count);
+  test.deepEqual(
+    analysis.matrix_order,
+    analysis.candidates.map(function(candidate) { return candidate.id; })
+  );
+  analysis.candidates.forEach(function(candidate, player) {
+    test.equal(candidate.frontier, candidate.dominated_by.length === 0);
+    test.ok(candidate.worst_score <= candidate.average_score);
+    test.ok(candidate.average_win_probability >= 0 && candidate.average_win_probability <= 1);
+    test.ok(candidate.average_draw_rate >= 0 && candidate.average_draw_rate <= 1);
+    test.ok(candidate.average_hp_lost >= 0);
+    test.ok(candidate.average_hp_lost_on_win >= 0);
+    test.ok(candidate.average_zero_damage_win_probability >= 0 &&
+      candidate.average_zero_damage_win_probability <= 1);
+    test.ok(candidate.average_healing_cost >= 0);
+    test.ok(candidate.average_healing_cost_on_win >= 0);
+    test.ok(candidate.healing_credits_per_win >= candidate.average_healing_cost);
+    test.ok(candidate.exploitability >= 0 && candidate.exploitability <= 0.5);
+    test.ok(candidate.limiting_opponents.length > 0);
+    test.ok(Math.abs(
+      analysis.score_matrix[player].reduce(function(sum, score) { return sum + score; }, 0) /
+        analysis.candidate_count - candidate.average_score
+    ) < 1e-12);
+    let total_wins = analysis.win_probability_matrix[player].reduce(function(sum, wins) {
+      return sum + wins;
+    }, 0);
+    let expected_win_healing_cost = analysis.win_healing_cost_matrix[player].reduce(
+      function(sum, cost, opponent) {
+        return sum + (cost * analysis.win_probability_matrix[player][opponent]);
+      }, 0
+    ) / total_wins;
+    test.ok(Math.abs(
+      candidate.average_healing_cost_on_win - expected_win_healing_cost
+    ) < 1e-12);
   });
 
   test.done();
