@@ -251,7 +251,12 @@ Player.fullyTrainedStats = function() {
   };
 };
 
-Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type) {
+Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type, level) {
+  level = typeof level === 'undefined' ? 80 : level;
+  if (level !== 80) {
+    throw new Error('Fully trained builds require level 80.');
+  }
+
   let hp_points       = stat_points.hp;
   let speed_points    = stat_points.speed;
   let dodge_points    = stat_points.dodge;
@@ -280,6 +285,7 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_ty
   }
 
   let stats = this.fullyTrainedStats();
+  stats.level = level;
   stats.max_hp   += hp_points * 5;
   stats.speed    += speed_points * 5;
   stats.dodge    += dodge_points;
@@ -332,6 +338,10 @@ Player.generatePlayer = function(name, raw_stats, items, attack_type) {
 };
 
 Player.generateBuild = function(build) {
+  if (build.level !== 80) {
+    throw new Error('Builds require level 80.');
+  }
+
   let slots = [
     build.equipment.armor,
     build.equipment.weapon1,
@@ -354,7 +364,13 @@ Player.generateBuild = function(build) {
     return item;
   });
 
-  return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
+  return Player.generateFullyTrainedPlayer(
+    build.name,
+    build.stats,
+    items,
+    build.attack_type,
+    build.level
+  );
 };
 
 Player.generateReferencePlayers = function() {

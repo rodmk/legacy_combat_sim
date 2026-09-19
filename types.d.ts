@@ -57,6 +57,7 @@ export type AttackType = 'normal' | 'quick' | 'aimed' | 'cover';
 
 export interface BuildDefinition {
   name: string;
+  level: number;
   reference?: boolean;
   attack_type?: AttackType;
   stats: {

@@ -636,6 +636,11 @@ exports.testJsonBuild = function(test) {
   test.equal(quickPlayer.speed, 360);
   test.equal(quickPlayer.accuracy, 170);
 
+  quickBuild.level = 79;
+  test.throws(function() {
+    Player.generateBuild(quickBuild);
+  }, /Builds require level 80/);
+
   let livePlayer = Player.generateBuild(Build.DualRiftsWithBiosAbyss);
   test.equal(livePlayer.max_hp, 750);
   test.equal(livePlayer.armor, 83);
