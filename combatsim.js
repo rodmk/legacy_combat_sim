@@ -171,7 +171,24 @@ CombatSim.attemptHit = function(att, def, weapon) {
 
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
-  return getRandom(stat1 / 4, stat1) > getRandom(stat2 / 4, stat2);
+  return Math.random() < this.combatProbability(stat1, stat2);
+};
+
+CombatSim.combatProbability = function(offense, defense) {
+  // Assume PHP division preserves the fractional offense / 4 and defense / 4
+  // values used by the documented combat-percentage formula.
+  let offense_range = (offense + 1) - (offense / 4);
+  let defense_range = (defense + 1) - (defense / 4);
+  let combinations = offense_range * defense_range;
+  let overlap;
+
+  if (defense > offense) {
+    overlap = Math.max((offense + 1) - (defense / 4), 0);
+    return (overlap * (overlap / 2)) / combinations;
+  }
+
+  overlap = Math.max((defense + 1) - (offense / 4), 0);
+  return (combinations - (overlap * (overlap / 2))) / combinations;
 };
 
 let WEAPON_TYPE_TO_SKILL = Object.freeze({

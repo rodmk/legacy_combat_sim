@@ -430,6 +430,36 @@ exports.testCurrentArmorDamageFormula = function(test) {
   test.done();
 };
 
+exports.testCombatProbability = function(test) {
+  test.equal(CombatSim.combatProbability(100, 100), 0.5);
+  test.equal(CombatSim.combatProbability(101, 101), 0.5);
+
+  let expected = ((51 * (51 / 2)) / (151 * 76));
+  test.equal(CombatSim.combatProbability(100, 200), expected);
+  test.equal(CombatSim.combatProbability(200, 100), 1 - expected);
+
+  test.equal(CombatSim.combatProbability(100, 500), 0);
+  test.equal(CombatSim.combatProbability(500, 100), 1);
+
+  test.done();
+};
+
+exports.testCombatRollUsesDocumentedProbability = function(test) {
+  let originalRandom = Math.random;
+
+  try {
+    Math.random = function() { return 0.499; };
+    test.equal(CombatSim.rollCombat(100, 100), true);
+
+    Math.random = function() { return 0.5; };
+    test.equal(CombatSim.rollCombat(100, 100), false);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  test.done();
+};
+
 exports.testCrystalSocketing = function(test) {
   let item = new Equipment({
     name:        'item',
