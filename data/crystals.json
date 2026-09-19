@@ -1,63 +1,145 @@
 {
-  "PerfectFire": {
-    "name": "Perfect Fire",
-    "mult": { "min_damage": 1.1, "max_damage": 1.1 }
-  },
-  "GiantFire": {
-    "name": "Giant Fire",
-    "mult": { "min_damage": 1.08, "max_damage": 1.08 }
-  },
-  "PerfectVoid": {
-    "name": "Perfect Void",
-    "mult": { "armor": 1.1 }
-  },
-  "PerfectWater": {
-    "name": "Perfect Water",
-    "mult": { "dodge": 1.05 }
+  "PerfectNull": {
+    "name": "Perfect Null Crystal",
+    "mult": {
+      "speed": 1.2
+    }
   },
   "PerfectAir": {
-    "name": "Perfect Air",
-    "mult": { "accuracy": 1.05 }
+    "name": "Perfect Air Crystal",
+    "mult": {
+      "accuracy": 1.1
+    }
   },
-  "PerfectPink": {
-    "name": "Perfect Pink",
-    "mult": { "def_skill": 1.2 }
+  "PerfectVoid": {
+    "name": "Perfect Void Crystal",
+    "mult": {
+      "armor": 1.1
+    }
   },
-  "PerfectOrange": {
-    "name": "Perfect Orange",
-    "mult": { "melee_skill": 1.2 }
+  "PerfectFire": {
+    "name": "Perfect Fire Crystal",
+    "mult": {
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
   },
   "PerfectGreen": {
-    "name": "Perfect Green",
-    "mult": { "gun_skill": 1.2 }
+    "name": "Perfect Green Crystal",
+    "mult": {
+      "gun_skill": 1.2
+    }
+  },
+  "PerfectOrange": {
+    "name": "Perfect Orange Crystal",
+    "mult": {
+      "melee_skill": 1.2
+    }
   },
   "PerfectYellow": {
-    "name": "Perfect Yellow",
-    "mult": { "proj_skill": 1.2 }
+    "name": "Perfect Yellow Crystal",
+    "mult": {
+      "proj_skill": 1.2
+    }
   },
-  "PerfectNull": {
-    "name": "Perfect Null",
-    "mult": { "speed": 1.2 }
+  "PerfectPink": {
+    "name": "Perfect Pink Crystal",
+    "mult": {
+      "def_skill": 1.2
+    }
+  },
+  "PerfectWater": {
+    "name": "Perfect Water Crystal",
+    "mult": {
+      "dodge": 1.05
+    }
+  },
+  "GreenInferno": {
+    "name": "Green Inferno Crystal",
+    "mult": {
+      "gun_skill": 1.25
+    }
+  },
+  "OrangeInferno": {
+    "name": "Orange Inferno Crystal",
+    "mult": {
+      "melee_skill": 1.25
+    }
+  },
+  "YellowInferno": {
+    "name": "Yellow Inferno Crystal",
+    "mult": {
+      "proj_skill": 1.25
+    }
+  },
+  "CorruptedPink": {
+    "name": "Corrupted Pink Crystal",
+    "mult": {
+      "def_skill": 1.24
+    }
+  },
+  "CorruptedWater": {
+    "name": "Corrupted Water Crystal",
+    "mult": {
+      "dodge": 1.1
+    }
+  },
+  "PrimeCrystal": {
+    "name": "Prime Crystal",
+    "mult": {
+      "min_damage": 1.05,
+      "max_damage": 1.05,
+      "accuracy": 1.05
+    }
+  },
+  "AeonCrystal": {
+    "name": "Aeon Crystal",
+    "mult": {
+      "def_skill": 1.03,
+      "dodge": 1.06
+    }
   },
   "AbyssCrystal": {
     "name": "Abyss Crystal",
     "mult": {
-      "armor": 1.05,
-      "dodge": 1.04,
       "speed": 1.1,
-      "def_skill": 1.05
+      "def_skill": 1.05,
+      "dodge": 1.04,
+      "armor": 1.05
     }
   },
   "AmuletCrystal": {
     "name": "Amulet Crystal",
     "mult": {
-      "min_damage": 1.06,
-      "max_damage": 1.06,
-      "accuracy": 1.06,
-      "melee_skill": 1.1,
-      "gun_skill": 1.1,
       "proj_skill": 1.1,
-      "def_skill": 1.1
+      "gun_skill": 1.1,
+      "melee_skill": 1.1,
+      "def_skill": 1.1,
+      "accuracy": 1.06,
+      "min_damage": 1.06,
+      "max_damage": 1.06
+    }
+  },
+  "CabrusionCrystal": {
+    "name": "Cabrusion Crystal",
+    "mult": {
+      "speed": 1.09,
+      "def_skill": 1.07,
+      "armor": 1.09,
+      "min_damage": 1.07,
+      "max_damage": 1.07
+    }
+  },
+  "BerserkerCrystal": {
+    "name": "Berserker Crystal",
+    "mult": {
+      "speed": 1.1,
+      "proj_skill": 1.02,
+      "gun_skill": 1.02,
+      "melee_skill": 1.02,
+      "def_skill": 1.07,
+      "min_damage": 1.12,
+      "max_damage": 1.12
     }
   }
 }

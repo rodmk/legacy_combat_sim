@@ -362,6 +362,30 @@ exports.testCrystalSocketing = function(test) {
 
 exports.testCrystalCatalog = function(test) {
   let crystalDefinitions = require('../data/crystals');
+  let expectedCrystals = [
+    'PerfectNull',
+    'PerfectAir',
+    'PerfectVoid',
+    'PerfectFire',
+    'PerfectGreen',
+    'PerfectOrange',
+    'PerfectYellow',
+    'PerfectPink',
+    'PerfectWater',
+    'GreenInferno',
+    'OrangeInferno',
+    'YellowInferno',
+    'CorruptedPink',
+    'CorruptedWater',
+    'PrimeCrystal',
+    'AeonCrystal',
+    'AbyssCrystal',
+    'AmuletCrystal',
+    'CabrusionCrystal',
+    'BerserkerCrystal',
+  ];
+
+  test.deepEqual(Object.keys(crystalDefinitions), expectedCrystals);
 
   Object.keys(crystalDefinitions).forEach(function(key) {
     test.ok(Item[key] instanceof Equipment, key + ' should be equipment');
