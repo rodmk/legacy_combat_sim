@@ -7,6 +7,7 @@
     "analyze:allocations": "node scripts/analyze-stat-allocations.js",
     "search:min-hp": "node scripts/search-minimum-hp.js",
     "search:stats": "node scripts/search-stat-allocations.js",
+    "search:equipment": "node scripts/search-equipment-response.js",
     "verify": "yarn test && yarn validate:data && yarn typecheck",
     "prepare": "husky",
     "test": "yarn test-eslint && yarn test-unittest",

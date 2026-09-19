@@ -1211,6 +1211,61 @@ exports.testSlotVariantFrontier = function(test) {
   test.done();
 };
 
+exports.testEquipmentNeighborhood = function(test) {
+  let build = Build.ShadowDojoDLGunBuild3;
+  let neighborhood = BuildSearch.equipmentNeighborhood(build, {
+    slots: [ 'weapon1', 'misc1' ],
+    itemKeysBySlot: {
+      weapon1: [ 'RiftGun', 'AlienRifle' ],
+      misc1: [ 'ScoutDrones' ],
+    },
+    crystalKeys: [ 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+
+  test.ok(neighborhood.counts.slot_variants >= neighborhood.groups.length);
+  test.ok(neighborhood.groups.length > 0);
+  neighborhood.groups.forEach(function(group) {
+    test.ok(group.sources.length > 0);
+    group.sources.forEach(function(source) {
+      test.ok(source.slot === 'weapon1' || source.slot === 'misc1');
+      test.ok(source.equipment.crystals.length <= 1);
+    });
+  });
+  test.throws(function() {
+    BuildSearch.equipmentNeighborhood(build, { slots: [ 'unknown' ] });
+  }, /Unknown equipment slot/);
+
+  let opponent = Player.generateBuild(build);
+  let response = MatchupGame.equipmentBestResponse(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      socketCapacity: 1,
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.equal(response.candidate_count, response.evaluated_matchups);
+  test.ok(response.best_response.weighted_score >= 0 &&
+    response.best_response.weighted_score <= 1);
+  test.equal(response.best_response.sources[0].slot, 'weapon1');
+  let adaptive_response = MatchupGame.adaptiveEquipmentBestResponse(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      socketCapacity: 1,
+      minimumSurvivalProbability: 1e-6,
+      maxIterations: 3,
+    }
+  );
+  test.ok(adaptive_response.converged);
+  test.ok(adaptive_response.iterations.length <= 3);
+
+  test.done();
+};
+
 exports.testStatAllocationGeneration = function(test) {
   let build = Build.ShadowDojoDLGunBuild3;
   let opponent_keys = [
