@@ -114,6 +114,57 @@ exports.testSurvivingPlayerCounterattacksWithBothWeapons = function(test) {
   test.done();
 };
 
+exports.testCombatRoundLimitProducesDraw = function(test) {
+  let player1 = {
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let player2 = {
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attempts = 0;
+
+  CombatSim.attemptHit = function() {
+    attempts++;
+    return 0;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(player1, player2), null);
+    test.equal(attempts, CombatSim.MAX_COMBAT_ROUNDS * 4);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
+exports.testCombatResultsIncludeDraws = function(test) {
+  let player1 = { speed: 1 };
+  let player2 = { speed: 1 };
+  let originalFight = CombatSim.fight;
+
+  CombatSim.fight = function() {
+    return null;
+  };
+
+  try {
+    test.deepEqual(CombatSim.simulateCombat(player1, player2, 3), {
+      player1_wins: 0,
+      player2_wins: 0,
+      draws: 3,
+    });
+  } finally {
+    CombatSim.fight = originalFight;
+  }
+
+  test.done();
+};
+
 exports.testPlayerGeneration = function(test) {
   let test_player = Player.generatePlayer(
     'Test Player',

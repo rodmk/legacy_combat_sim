@@ -98,10 +98,15 @@ function deepFreeze(o) {
 //                                   CombatSim
 // =============================================================================
 function CombatSim() {}
+// Assume fights end in a draw after the 1,500 rounds funded by the maximum
+// 7,500 stored energy at 5 energy per round, including in free-combat contexts.
+CombatSim.MAX_COMBAT_ROUNDS = 1500;
+
 // Perform combat with player1 initiating each fight.
 CombatSim.simulateCombat = function(player1, player2, fights) {
   let player1_wins = 0;
   let player2_wins = 0;
+  let draws = 0;
 
   for (let i = 0; i < fights; i++) {
     let r;
@@ -114,14 +119,17 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
 
     if (r === player1) {
       player1_wins++;
-    } else {
+    } else if (r === player2) {
       player2_wins++;
+    } else {
+      draws++;
     }
   }
 
   let results = {
     player1_wins: player1_wins,
     player2_wins: player2_wins,
+    draws: draws,
   };
   return results;
 };
@@ -131,7 +139,7 @@ CombatSim.fight = function(att, def) {
   let att_hp = att.max_hp;
   let def_hp = def.max_hp;
 
-  while (att_hp > 0 && def_hp > 0) {
+  for (let round = 0; round < this.MAX_COMBAT_ROUNDS; round++) {
     def_hp -=
       this.attemptHit(att, def, att.weapon1) +
       this.attemptHit(att, def, att.weapon2);
@@ -143,9 +151,13 @@ CombatSim.fight = function(att, def) {
     att_hp -=
       this.attemptHit(def, att, def.weapon1) +
       this.attemptHit(def, att, def.weapon2);
+
+    if (att_hp <= 0) {
+      return def;
+    }
   }
 
-  return def;
+  return null;
 };
 
 // Returns damage given to p2 by p1 in one hit
