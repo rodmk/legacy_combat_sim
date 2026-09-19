@@ -8,6 +8,7 @@ let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
 let BuildSearch = src.BuildSearch;
+let MatchupGame = src.MatchupGame;
 let CombatSim = src.CombatSim;
 
 let jsondiffpatch = require('jsondiffpatch');
@@ -1087,6 +1088,50 @@ exports.testSlotVariantFrontier = function(test) {
   test.throws(function() {
     BuildSearch.slotVariantFrontier('unknown', {});
   }, /Unknown equipment slot/);
+
+  test.done();
+};
+
+exports.testRestrictedMatchupGame = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+  let matrix = MatchupGame.payoffMatrix([ player1, player2 ]);
+
+  test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
+
+  let cyclic_matrix = [
+    [ 0.5, 0, 1 ],
+    [ 1, 0.5, 0 ],
+    [ 0, 1, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.strategyScores(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), [
+    0.5, 0.5, 0.5,
+  ]);
+  test.equal(MatchupGame.worstCaseScore(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), 0.5);
+  test.deepEqual(MatchupGame.bestResponse(cyclic_matrix, [ 1, 0, 0 ]), {
+    score: 1,
+    players: [ 1 ],
+  });
+  test.equal(MatchupGame.exploitability(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), 0);
+  test.equal(MatchupGame.exploitability(cyclic_matrix, [ 1, 0, 0 ]), 0.5);
+  test.deepEqual(MatchupGame.pureMaximin(cyclic_matrix), {
+    score: 0,
+    players: [ 0, 1, 2 ],
+  });
 
   test.done();
 };

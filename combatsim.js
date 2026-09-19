@@ -972,6 +972,82 @@ BuildSearch.slotVariantFrontier = function(slot, options) {
 };
 
 // =============================================================================
+//                                  MatchupGame
+// =============================================================================
+function MatchupGame() {}
+
+MatchupGame.symmetrizedScore = function(player, opponent) {
+  let forward = CombatSim.combatOutcomeDistribution(player, opponent);
+  let reverse = CombatSim.combatOutcomeDistribution(opponent, player);
+  let forward_score = forward.player1_wins + (forward.draws / 2);
+  let reverse_score = reverse.player2_wins + (reverse.draws / 2);
+  return (forward_score + reverse_score) / 2;
+};
+
+MatchupGame.payoffMatrix = function(players) {
+  let matrix = players.map(function() {
+    return new Array(players.length).fill(0);
+  });
+
+  for (let i = 0; i < players.length; i++) {
+    matrix[i][i] = 0.5;
+    for (let j = i + 1; j < players.length; j++) {
+      let score = this.symmetrizedScore(players[i], players[j]);
+      matrix[i][j] = score;
+      matrix[j][i] = 1 - score;
+    }
+  }
+
+  return matrix;
+};
+
+MatchupGame.strategyScores = function(matrix, strategy) {
+  return matrix[0].map(function(unused, opponent) {
+    return strategy.reduce(function(score, probability, player) {
+      return score + (probability * matrix[player][opponent]);
+    }, 0);
+  });
+};
+
+MatchupGame.worstCaseScore = function(matrix, strategy) {
+  return Math.min.apply(null, this.strategyScores(matrix, strategy));
+};
+
+MatchupGame.bestResponse = function(matrix, opponent_strategy) {
+  let scores = matrix.map(function(row) {
+    return row.reduce(function(score, payoff, opponent) {
+      return score + (payoff * opponent_strategy[opponent]);
+    }, 0);
+  });
+  let best_score = Math.max.apply(null, scores);
+  let tolerance = 1e-12;
+  return {
+    score: best_score,
+    players: scores.map(function(score, player) {
+      return Math.abs(score - best_score) <= tolerance ? player : null;
+    }).filter(function(player) { return player !== null; }),
+  };
+};
+
+MatchupGame.exploitability = function(matrix, strategy) {
+  return this.bestResponse(matrix, strategy).score - 0.5;
+};
+
+MatchupGame.pureMaximin = function(matrix) {
+  let worst_case_scores = matrix.map(function(row) {
+    return Math.min.apply(null, row);
+  });
+  let best_score = Math.max.apply(null, worst_case_scores);
+  let tolerance = 1e-12;
+  return {
+    score: best_score,
+    players: worst_case_scores.map(function(score, player) {
+      return Math.abs(score - best_score) <= tolerance ? player : null;
+    }).filter(function(player) { return player !== null; }),
+  };
+};
+
+// =============================================================================
 
 // Main entry point
 if (typeof require === 'undefined' || require.main === module) {
@@ -987,5 +1063,6 @@ if (typeof module !== 'undefined') {
     WeaponMod: WeaponMod,
     Build: Build,
     BuildSearch: BuildSearch,
+    MatchupGame: MatchupGame,
   };
 }
