@@ -56,6 +56,12 @@ Inspect the legal stat-allocation space for the seed-kernel loadout with speed c
 yarn analyze:allocations > allocation-analysis.json
 ```
 
+Run the exact minimum-HP allocation search for the seed-kernel loadout:
+
+```sh
+yarn search:min-hp > minimum-hp-search.json
+```
+
 Development
 ===========
 

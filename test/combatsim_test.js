@@ -1216,6 +1216,14 @@ exports.testStatAllocationGeneration = function(test) {
   test.equal(report.length, 1);
   test.deepEqual(report[0].speed_points, [ 2, 3, 16, 19, 24 ]);
   test.ok(report[0].unique_combat_signatures <= report[0].allocations);
+
+  let groups = BuildSearch.statAllocationGroups(
+    build, opponents, [ 'normal', 'quick', 'aimed', 'cover' ], { hpPoints: [ 2 ] }
+  );
+  test.equal(groups.length, 3310);
+  test.ok(groups.every(function(group) {
+    return group.representative.max_hp === 10 && group.sources.length > 0;
+  }));
   test.done();
 };
 
@@ -1239,6 +1247,11 @@ exports.testRestrictedMatchupGame = function(test) {
   let matrix = MatchupGame.payoffMatrix([ player1, player2 ]);
 
   test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
+  test.deepEqual(MatchupGame.candidateMatchup(player1, player2), {
+    score: 0.5,
+    win_probability: 0.5,
+    expected_healing_cost: 3.5,
+  });
 
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],

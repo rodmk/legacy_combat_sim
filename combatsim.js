@@ -1151,6 +1151,30 @@ BuildSearch.statAllocationReport = function(build, opponents, attack_types, opti
   });
 };
 
+BuildSearch.statAllocationGroups = function(build, opponents, attack_types, options) {
+  let groups_by_signature = new Map();
+
+  attack_types.forEach(function(attack_type) {
+    let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
+    BuildSearch.forEachStatAllocation(speed_points, options, function(stats) {
+      let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+      let player = Player.generateBuild(candidate);
+      let signature = CombatSim.combatSignature(player);
+      let group = groups_by_signature.get(signature);
+      if (!group) {
+        group = { signature: signature, representative: player, sources: [] };
+        groups_by_signature.set(signature, group);
+      }
+      group.sources.push({
+        attack_type: attack_type,
+        stats: Object.assign({}, stats),
+      });
+    });
+  });
+
+  return Array.from(groups_by_signature.values());
+};
+
 // =============================================================================
 //                                  MatchupGame
 // =============================================================================
@@ -1224,6 +1248,118 @@ MatchupGame.pureMaximin = function(matrix) {
     players: worst_case_scores.map(function(score, player) {
       return Math.abs(score - best_score) <= tolerance ? player : null;
     }).filter(function(player) { return player !== null; }),
+  };
+};
+
+MatchupGame.candidateMatchup = function(player, opponent) {
+  let forward = CombatSim.combatResultDistribution(player, opponent);
+  let results = [ forward.player1 ];
+  let outcomes = [ forward.outcome ];
+
+  if (player.speed === opponent.speed) {
+    let reverse = CombatSim.combatResultDistribution(opponent, player);
+    results.push(reverse.player2);
+    outcomes.push({
+      player1_wins: reverse.outcome.player2_wins,
+      player2_wins: reverse.outcome.player1_wins,
+      draws: reverse.outcome.draws,
+    });
+  }
+
+  let total_wins = results.reduce(function(sum, result) { return sum + result.wins; }, 0);
+  return {
+    score: outcomes.reduce(function(sum, outcome) {
+      return sum + outcome.player1_wins + (outcome.draws / 2);
+    }, 0) / outcomes.length,
+    win_probability: total_wins / results.length,
+    expected_healing_cost: results.reduce(function(sum, result) {
+      return sum + result.expected_healing_cost;
+    }, 0) / results.length,
+  };
+};
+
+MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
+  let combat_frontier = [];
+  let economy_frontier = [];
+  let evaluated_matchups = 0;
+  let dominates = function(left, right, include_economy) {
+    let strictly_better = false;
+    for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
+      if (left.matchup_scores[opponent] < right.matchup_scores[opponent] - 1e-12) {
+        return false;
+      }
+      strictly_better = strictly_better ||
+        left.matchup_scores[opponent] > right.matchup_scores[opponent] + 1e-12;
+    }
+    if (include_economy) {
+      if (left.healing_credits_per_win > right.healing_credits_per_win + 1e-12) {
+        return false;
+      }
+      strictly_better = strictly_better ||
+        left.healing_credits_per_win < right.healing_credits_per_win - 1e-12;
+    }
+    return strictly_better;
+  };
+  let addToFrontier = function(frontier, candidate, include_economy) {
+    if (frontier.some(function(entry) { return dominates(entry, candidate, include_economy); })) {
+      return frontier;
+    }
+    return frontier.filter(function(entry) {
+      return !dominates(candidate, entry, include_economy);
+    }).concat([ candidate ]);
+  };
+
+  let candidates = groups.map(function(group) {
+    let matchups = opponents.map(function(opponent) {
+      evaluated_matchups++;
+      return MatchupGame.candidateMatchup(group.representative, opponent);
+    });
+    let matchup_scores = matchups.map(function(matchup) { return matchup.score; });
+    let total_wins = matchups.reduce(function(sum, matchup) {
+      return sum + matchup.win_probability;
+    }, 0);
+    let total_healing_cost = matchups.reduce(function(sum, matchup) {
+      return sum + matchup.expected_healing_cost;
+    }, 0);
+    let candidate = {
+      sources: group.sources,
+      matchup_scores: matchup_scores,
+      worst_score: Math.min.apply(null, matchup_scores),
+      average_score: matchup_scores.reduce(function(sum, score) {
+        return sum + score;
+      }, 0) / matchup_scores.length,
+      average_win_probability: total_wins / matchups.length,
+      average_healing_cost: total_healing_cost / matchups.length,
+      healing_credits_per_win: total_wins > 0 ? total_healing_cost / total_wins : null,
+    };
+    combat_frontier = addToFrontier(combat_frontier, candidate, false);
+    economy_frontier = addToFrontier(economy_frontier, candidate, true);
+    return candidate;
+  });
+  let select = function(compare, filter) {
+    return candidates.filter(filter || function() { return true; }).reduce(function(best, candidate) {
+      return !best || compare(candidate, best) < 0 ? candidate : best;
+    }, null);
+  };
+
+  return {
+    opponent_ids: opponent_ids,
+    candidate_count: candidates.length,
+    evaluated_matchups: evaluated_matchups,
+    combat_frontier: combat_frontier,
+    combat_economy_frontier: economy_frontier,
+    best_worst_case: select(function(left, right) {
+      return right.worst_score - left.worst_score;
+    }),
+    best_average: select(function(left, right) {
+      return right.average_score - left.average_score;
+    }),
+    cheapest_per_win: select(function(left, right) {
+      return left.healing_credits_per_win - right.healing_credits_per_win;
+    }),
+    cheapest_average_winner: select(function(left, right) {
+      return left.healing_credits_per_win - right.healing_credits_per_win;
+    }, function(candidate) { return candidate.average_score >= 0.5; }),
   };
 };
 
