@@ -161,6 +161,8 @@ CombatSim.attemptHit = function(att, def, weapon) {
       this.rollCombat(att[weapon.skill], def.def_skill)) {
     let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
     let level_modifier = Math.min(att.level, 80) * 7 / 2;
+    // The current formula does not specify how to handle fractional final damage;
+    // assume it is rounded to the nearest integer.
     net_damage = Math.round(base_damage * (level_modifier / (level_modifier + def.armor)));
   }
 
