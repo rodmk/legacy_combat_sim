@@ -307,112 +307,75 @@ Player.generatePlayer = function(name, raw_stats, items) {
   return stats;
 };
 
-/**
- * Generates a variety of different reference player loadouts.
- */
+Player.generateBuild = function(build) {
+  let slots = [
+    build.equipment.armor,
+    build.equipment.weapon1,
+    build.equipment.weapon2,
+    build.equipment.misc1,
+    build.equipment.misc2,
+  ];
+  let items = slots.map(function(slot) {
+    let item = Item[slot.item];
+    if (slot.mods) {
+      item = item.applyMods(slot.mods.map(function(key) {
+        return WeaponMod[key];
+      }));
+    }
+    if (slot.crystals) {
+      item = item.socket(slot.crystals.map(function(key) {
+        return Item[key];
+      }));
+    }
+    return item;
+  });
+
+  return Player.generateFullyTrainedPlayer(build.name, build.stats, items);
+};
+
 Player.generateReferencePlayers = function() {
-  let combatants = [];
-
-  // DL (+Voids) + Dual Rifts (+Fires) + Bios (+Pinks)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Rifts w/ Bios',
-    { hp: 70, speed: 17, accuracy: 4, dodge: 92 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.RiftGun
-        .socket(Crystals.allPerfectFires),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  // DL (+Abysses) + Dual Rifts (+Amulets) + Bios (+Pinks)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual Rifts w/ Bios (Abyss/Ammy Cs)',
-    { hp: 70, speed: 12, accuracy: 4, dodge: 97 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allAbyssCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.RiftGun
-        .socket(Crystals.allAmuletCrystals),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-      Item.BioSpinalEnhancer
-        .socket(Crystals.allPerfectPinks),
-    ]
-  ));
-
-  // DL (+Voids) + Dual VBows (+Fires) + Scout Drones (+Yellows)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'Dual VBows w/ Scouts',
-    { hp: 70, speed: 9, accuracy: 4, dodge: 100 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.VoidBow
-        .socket(Crystals.allPerfectFires),
-      Item.VoidBow
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectYellows),
-    ]
-  ));
-
-  // DL (+Voids) + CStaff (+Oranges) + VSword (+Fires) + Scouts (+Airs)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'CStaff/VSword w/ Scouts',
-    { hp: 70, speed: 10, accuracy: 4, dodge: 99 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allPerfectVoids),
-      Item.CoreStaff
-        .socket(Crystals.allPerfectOranges),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-    ]
-  ));
-
-  // DL (+Abysses) + CStaff (+Ammy) + VSword (+Fires) + Scouts (+Airs)
-  combatants.push(Player.generateFullyTrainedPlayer(
-    'CStaff/VSword w/ Scouts (Abyss/Ammy Cs)',
-    { hp: 70, speed: 5, accuracy: 4, dodge: 104 },
-    [
-      Item.DarkLegionArmor
-        .socket(Crystals.allAbyssCrystals),
-      Item.CoreStaff
-        .socket(Crystals.allAmuletCrystals),
-      Item.VoidSword
-        .socket(Crystals.allPerfectFires),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-      Item.ScoutDrones
-        .socket(Crystals.allPerfectAirs),
-    ]
-  ));
-
-  return combatants;
+  return Object.keys(Build)
+    .filter(function(key) {
+      return Build[key].reference !== false;
+    })
+    .map(function(key) {
+      return Player.generateBuild(Build[key]);
+    });
 };
 
 // =============================================================================
 //                                   Equipment
 // =============================================================================
-function Equipment(stats) {
+function Equipment(stats, catalogKey) {
   Object.assign(this, stats);
+  if (catalogKey) {
+    Object.defineProperty(this, 'catalogKey', {
+      value: catalogKey,
+      enumerable: false,
+    });
+  }
   deepFreeze(this);
 }
+
+Equipment.applyMultipliers = function(item, modifiers) {
+  let new_stats = Object.assign({}, item);
+  let stat_bonuses = {};
+
+  modifiers.forEach(function(modifier) {
+    for (let stat in new_stats) {
+      let stat_mult = idx(modifier.mult, stat, null);
+      if (stat_mult !== null) {
+        stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
+      }
+    }
+  });
+
+  for (let stat in stat_bonuses) {
+    new_stats[stat] += ceil(stat_bonuses[stat]);
+  }
+
+  return new_stats;
+};
 
 Equipment.computeBonuses = function(items) {
   let stats = {};
@@ -445,324 +408,83 @@ Equipment.computeBonuses = function(items) {
 
 
 Equipment.prototype.socket = function(crystals) {
-  if (!crystals || crystals.size <= 0) {
+  if (!crystals || crystals.length === 0) {
     return this;
   }
 
-  let new_stats = Object.assign({}, this);
+  let new_stats = Equipment.applyMultipliers(this, crystals);
   new_stats.crystals = crystals;
-
-  let stat_bonuses = {};
-  crystals.forEach(function(c) {
-    for (let stat in new_stats) {
-      let stat_mult = idx(c, stat + '_mult', null);
-      if (stat_mult !== null) {
-        stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
-      }
-    }
-  });
-
-  for (let stat in stat_bonuses) {
-    // Apply ceiling function after we've calculated partial bonus from all crystals.
-    new_stats[stat] += ceil(stat_bonuses[stat]);
-  }
-
-  let new_item = new Equipment(new_stats);
+  let new_item = new Equipment(new_stats, this.catalogKey);
   return new_item;
 };
 
-let Item = deepFreeze({
+Equipment.prototype.applyMods = function(mods) {
+  if (!mods || mods.length === 0) {
+    return this;
+  }
+  if (!this.type || !this.catalogKey) {
+    throw new Error('Weapon mods can only be applied to catalog weapons.');
+  }
+  if (this.mods) {
+    throw new Error('Weapon mods have already been applied to ' + this.name + '.');
+  }
+
+  let modSlots = idx(this, 'mod_slots', 0);
+  if (mods.length > modSlots) {
+    let label = modSlots === 1 ? 'weapon mod' : 'weapon mods';
+    throw new Error(this.name + ' supports at most ' + modSlots + ' ' + label + '.');
+  }
+
+  let occupiedSlots = {};
+  mods.forEach(function(mod) {
+    if (mod.slot > modSlots) {
+      throw new Error(this.name + ' does not have weapon mod slot ' + mod.slot + '.');
+    }
+    if (!mod.compatible.includes(this.catalogKey)) {
+      throw new Error(mod.name + ' is not compatible with ' + this.name + '.');
+    }
+    if (occupiedSlots[mod.slot]) {
+      throw new Error('Weapon mod slot ' + mod.slot + ' is already occupied.');
+    }
+    occupiedSlots[mod.slot] = true;
+  }, this);
+
+  let new_stats = Equipment.applyMultipliers(this, mods);
+  new_stats.mods = mods;
+  return new Equipment(new_stats, this.catalogKey);
+};
+
+let itemDefinitions = {
   none: {
-    name:        'None',
+    name: 'None',
   },
+};
 
-  // === Armor ===
-  TitanGuard: new Equipment({
-    name:        'Titan Guard',
-    armor:       24,
-    dodge:       68,
-    speed:       55,
-    def_skill:   40,
-  }),
-
-  HellforgedArmor: new Equipment({
-    name:        'Hellforged Armor',
-    armor:       30,
-    dodge:       75,
-    speed:       65,
-    def_skill:   50,
-  }),
-
-  DarkLegionArmor: new Equipment({
-    name:        'Dark Legion Armor',
-    armor:       28,
-    dodge:       82,
-    speed:       65,
-    def_skill:   50,
-  }),
-
-  SG1Armor: new Equipment({
-    name:        'SG1 Armor',
-    armor:       26,
-    dodge:       72,
-    speed:       65,
-    def_skill:   80,
-  }),
-
-  // === Weapons ===
-  RailGun: new Equipment({
-    name:        'Rail Gun',
-    type:        'gun',
-    min_damage:  56,
-    max_damage:  88,
-    accuracy:    36,
-    speed:       70,
-    gun_skill:   26,
-    def_skill:   14
-  }),
-
-  CrystalSword: new Equipment({
-    name:        'Crystal Sword',
-    type:        'melee',
-    min_damage:  68,
-    max_damage:  84,
-    accuracy:    34,
-    speed:       70,
-    melee_skill: 26,
-    def_skill:   14
-  }),
-
-  CBombsT2: new Equipment({
-    name:        'Crystal Bombs T2',
-    type:        'projectile',
-    min_damage:  66,
-    max_damage:  97,
-    accuracy:    38,
-    speed:       77,
-    proj_skill:  38,
-    def_skill:   14
-  }),
-
-  ConcentratedCBombsT2: new Equipment({
-    name:        'Concentrated Crystal Bombs T2',
-    type:        'projectile',
-    min_damage:  87,
-    max_damage:  112,
-    accuracy:    32,
-    speed:       65,
-    proj_skill:  9,
-    def_skill:   5
-  }),
-
-  SplitCBombsT2: new Equipment({
-    name:        'Split Crystal Bombs T2',
-    type:        'projectile',
-    min_damage:  55,
-    max_damage:  87,
-    accuracy:    23,
-    speed:       79,
-    proj_skill:  84,
-    def_skill:   83
-  }),
-
-  Scythe: new Equipment({
-    name:        'Scythe',
-    type:        'melee',
-    min_damage:  76,
-    max_damage:  92,
-    accuracy:    31,
-    speed:       60,
-    melee_skill: 40,
-    def_skill:   10
-  }),
-
-  VoidSword: new Equipment({
-    name:        'Void Sword',
-    type:        'melee',
-    min_damage:  90,
-    max_damage:  120,
-    accuracy:    28,
-    speed:       60,
-    melee_skill: 20,
-    def_skill:   5
-  }),
-
-  RiftGun: new Equipment({
-    name:        'Rift Gun',
-    type:        'gun',
-    min_damage:  60,
-    max_damage:  65,
-    accuracy:    85,
-    speed:       50,
-    gun_skill:   85,
-    def_skill:   5
-  }),
-
-  CoreStaff: new Equipment({
-    name:        'Core Staff',
-    type:        'melee',
-    min_damage:  45,
-    max_damage:  55,
-    accuracy:    55,
-    speed:       75,
-    melee_skill: 130,
-    def_skill:   50
-  }),
-
-  VoidBow: new Equipment({
-    name:        'Void Bow',
-    type:        'projectile',
-    min_damage:  5,
-    max_damage:  125,
-    accuracy:    48,
-    speed:       70,
-    proj_skill:  65,
-    def_skill:   20
-  }),
-
-  // === Misc ===
-  Amulet: new Equipment({
-    name:        'Amulet',
-    accuracy:    5,
-    dodge:       5,
-    def_skill:   14,
-    gun_skill:   12,
-    melee_skill: 12,
-    proj_skill:  12
-  }),
-
-  PrimeAmulet: new Equipment({
-    name:        'Prime Amulet',
-    accuracy:    4,
-    dodge:       4,
-    def_skill:   30,
-    gun_skill:   30,
-    melee_skill: 30,
-    proj_skill:  30
-  }),
-
-  InfernoAmulet: new Equipment({
-    name:        'Inferno Amulet',
-    accuracy:    8,
-    dodge:       8,
-    def_skill:   40,
-    gun_skill:   40,
-    melee_skill: 40,
-    proj_skill:  40
-  }),
-
-  NerveGauntlet: new Equipment({
-    name:        'Nerve Gauntlet',
-    accuracy:    6,
-    dodge:       6,
-    def_skill:   25,
-    gun_skill:   40,
-    melee_skill: 40,
-    proj_skill:  50,
-  }),
-
-  BioSpinalEnhancer: new Equipment({
-    name:        'Bio Spinal Enhancer',
-    accuracy:    1,
-    dodge:       1,
-    def_skill:   65,
-    gun_skill:   65,
-    melee_skill: 65,
-    proj_skill:  65,
-  }),
-
-  OrphicAmulet: new Equipment({
-    name:        'Orphic Amulet',
-    accuracy:    10,
-    dodge:       10,
-    def_skill:   -25,
-    gun_skill:   50,
-    melee_skill: 50,
-    proj_skill:  50,
-  }),
-
-  ScoutDrones: new Equipment({
-    name:        'Scout Drones',
-    accuracy:    32,
-    dodge:       5,
-    def_skill:   30,
-    gun_skill:   30,
-    melee_skill: 30,
-    proj_skill:  50,
-  }),
-
-  // === Crystals ===
-  PerfectFire: {
-    name: 'Perfect Fire',
-    min_damage_mult: 1.1,
-    max_damage_mult: 1.1,
-  },
-
-  GiantFire: {
-    name: 'Giant Fire',
-    min_damage_mult: 1.08,
-    max_damage_mult: 1.08,
-  },
-
-  PerfectVoid: {
-    name: 'Perfect Void',
-    armor_mult: 1.1,
-  },
-
-  PerfectWater: {
-    name: 'Perfect Water',
-    dodge_mult: 1.05,
-  },
-
-  PerfectAir: {
-    name: 'Perfect Air',
-    accuracy_mult: 1.05,
-  },
-
-  PerfectPink: {
-    name: 'Perfect Pink',
-    def_skill_mult: 1.2,
-  },
-
-  PerfectOrange: {
-    name: 'Perfect Orange',
-    melee_skill_mult: 1.2,
-  },
-
-  PerfectGreen: {
-    name: 'Perfect Green',
-    gun_skill_mult: 1.2,
-  },
-
-  PerfectYellow: {
-    name: 'Perfect Yellow',
-    proj_skill_mult: 1.2,
-  },
-
-  PerfectNull: {
-    name: 'Perfect Null',
-    speed_mult: 1.2,
-  },
-
-  AbyssCrystal: {
-    name: 'Abyss Crystal',
-    armor_mult: 1.05,
-    dodge_mult: 1.04,
-    speed_mult: 1.1,
-    def_skill_mult: 1.05,
-  },
-
-  AmuletCrystal: {
-    name: 'Amulet Crystal',
-    min_damage_mult: 1.06,
-    max_damage_mult: 1.06,
-    accuracy_mult: 1.06,
-    melee_skill_mult: 1.1,
-    gun_skill_mult: 1.1,
-    proj_skill_mult: 1.1,
-    def_skill_mult: 1.1,
-  },
+let equipmentCatalog = require('./data/equipment');
+Object.keys(equipmentCatalog).forEach(function(category) {
+  Object.keys(equipmentCatalog[category]).forEach(function(key) {
+    itemDefinitions[key] = new Equipment(equipmentCatalog[category][key], key);
+  });
 });
+
+let crystalDefinitions = require('./data/crystals');
+Object.keys(crystalDefinitions).forEach(function(key) {
+  itemDefinitions[key] = new Equipment(crystalDefinitions[key]);
+});
+
+let Item = deepFreeze(itemDefinitions);
+
+let weaponModDefinitions = require('./data/weapon-mods');
+Object.keys(weaponModDefinitions).forEach(function(key) {
+  weaponModDefinitions[key].compatible.forEach(function(weaponKey) {
+    if (!equipmentCatalog.weapons[weaponKey]) {
+      throw new Error(key + ' references unknown weapon ' + weaponKey + '.');
+    }
+  });
+});
+let WeaponMod = deepFreeze(weaponModDefinitions);
+
+let Build = deepFreeze(require('./data/builds'));
 
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all
@@ -794,5 +516,7 @@ if (typeof module !== 'undefined') {
     Player: Player,
     Equipment: Equipment,
     Item: Item,
+    WeaponMod: WeaponMod,
+    Build: Build,
   };
 }

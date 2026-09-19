@@ -1,9 +1,41 @@
 Legacy Combat Simulator
 =======================
 
-[![Build Status](https://travis-ci.org/rodmk/legacy_combat_sim.svg?branch=master)](https://travis-ci.org/rodmk/legacy_combat_sim)
+[![CI](https://github.com/rodmk/legacy_combat_sim/actions/workflows/ci.yml/badge.svg)](https://github.com/rodmk/legacy_combat_sim/actions/workflows/ci.yml)
 
 Combat simulator for Legacy (http://www.legacy-game.net).
+
+Weapon Mods
+===========
+
+Weapon mods enforce their compatible weapons and upgrade slots when applied:
+
+```js
+const { Item, WeaponMod } = require('./combatsim');
+
+const bioGun = Item.BioGunMk4.applyMods([
+  WeaponMod.FasterReload4,
+  WeaponMod.FasterAmmo4,
+]);
+```
+
+Builds
+======
+
+Complete stat allocations and loadouts are defined in `data/builds.json`:
+
+```js
+const { Build, Player } = require('./combatsim');
+
+const player = Player.generateBuild(Build.DualVoidBowsWithScouts);
+```
+
+Development
+===========
+
+Install dependencies with `yarn install`. Run linting, tests, catalog schema
+validation, and static type checks with `yarn verify`. The same checks run
+before each commit and in CI.
 
 License
 =======

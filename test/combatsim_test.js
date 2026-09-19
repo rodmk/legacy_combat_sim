@@ -5,6 +5,8 @@ let src = require('../combatsim.js');
 let Player = src.Player;
 let Equipment = src.Equipment;
 let Item = src.Item;
+let WeaponMod = src.WeaponMod;
+let Build = src.Build;
 
 let jsondiffpatch = require('jsondiffpatch');
 
@@ -308,17 +310,19 @@ exports.testCrystalSocketing = function(test) {
   });
 
   let crystal = new Equipment({
-    name:             'crystal',
-    min_damage_mult:  1.1,
-    max_damage_mult:  1.2,
-    armor_mult:       1.3,
-    dodge_mult:       1.4,
-    accuracy_mult:    1.5,
-    speed_mult:       1.6,
-    def_skill_mult:   1.7,
-    melee_skill_mult: 1.8,
-    gun_skill_mult:   1.9,
-    proj_skill_mult:  2.0,
+    name: 'crystal',
+    mult: {
+      min_damage:  1.1,
+      max_damage:  1.2,
+      armor:       1.3,
+      dodge:       1.4,
+      accuracy:    1.5,
+      speed:       1.6,
+      def_skill:   1.7,
+      melee_skill: 1.8,
+      gun_skill:   1.9,
+      proj_skill:  2.0,
+    },
   });
 
   let socketed_item = item.socket([ crystal ]);
@@ -355,5 +359,122 @@ exports.testCrystalSocketing = function(test) {
   });
   testDeepEqualWithDiff(test, socketed_item_2, expected_stats_2);
 
+  test.done();
+};
+
+exports.testWeaponMods = function(test) {
+  let upgraded = Item.BioGunMk4.applyMods([
+    WeaponMod.FasterReload4,
+    WeaponMod.FasterAmmo4,
+  ]);
+
+  test.equal(upgraded.min_damage, 95);
+  test.equal(upgraded.max_damage, 114);
+  test.equal(upgraded.accuracy, 50);
+  test.deepEqual(upgraded.mods, [
+    WeaponMod.FasterReload4,
+    WeaponMod.FasterAmmo4,
+  ]);
+
+  test.throws(
+    function() {
+      Item.VoidSword.applyMods([ WeaponMod.LaserSight ]);
+    },
+    /Laser Sight is not compatible with Void Sword/
+  );
+  test.throws(
+    function() {
+      Item.BioGunMk4.applyMods([
+        WeaponMod.FasterReload4,
+        WeaponMod.EnhancedScope4,
+      ]);
+    },
+    /Weapon mod slot 1 is already occupied/
+  );
+  test.throws(
+    function() {
+      Item.VoidBow.applyMods([
+        WeaponMod.LaserSight,
+        WeaponMod.PoisonedTip,
+      ]);
+    },
+    /Void Bow supports at most 1 weapon mod/
+  );
+
+  let dagger = Item.RitualDaggerIV.applyMods([
+    WeaponMod.EnhancedPoison2,
+    WeaponMod.SharpenedBlade2,
+  ]);
+  test.equal(dagger.min_damage, 99);
+  test.equal(dagger.max_damage, 123);
+
+  test.done();
+};
+
+exports.testJsonBuild = function(test) {
+  let player = Player.generateBuild(Build.DualVoidBowsWithScouts);
+
+  test.equal(player.name, 'Dual VBows w/ Scouts');
+  test.equal(player.max_hp, 350);
+  test.equal(player.speed, 300);
+  test.equal(player.accuracy, 188);
+  test.deepEqual(player.weapon1, {
+    type: 'projectile',
+    skill: 'proj_skill',
+    min_damage: 19,
+    max_damage: 180,
+  });
+
+  let livePlayer = Player.generateBuild(Build.DualRiftsWithBiosAbyss);
+  test.equal(livePlayer.max_hp, 750);
+  test.equal(livePlayer.armor, 83);
+  test.equal(livePlayer.speed, 256);
+  test.equal(livePlayer.accuracy, 228);
+  test.equal(livePlayer.dodge, 143);
+  test.equal(livePlayer.gun_skill, 818);
+  test.equal(livePlayer.def_skill, 778);
+
+  test.done();
+};
+
+exports.testCatalogIntegration = function(test) {
+  let player = Player.generatePlayer(
+    'Catalog Player',
+    {},
+    [
+      Item.DarkLegionArmor.socket([ Item.AbyssCrystal ]),
+      Item.RiftGun.socket([ Item.PerfectFire ]),
+      Item.CoreStaff.socket([ Item.PerfectAir ]),
+      Item.BioSpinalEnhancer.socket([ Item.CorruptedPink ]),
+      Item.ScoutDrones.socket([ Item.YellowInferno ]),
+    ]
+  );
+
+  let expectedStats = {
+    name: 'Catalog Player',
+    max_hp: 0,
+    armor: 69,
+    speed: 197,
+    accuracy: 179,
+    dodge: 100,
+    melee_skill: 315,
+    gun_skill: 265,
+    proj_skill: 128,
+    def_skill: 229,
+    weapon1: {
+      type: 'gun',
+      skill: 'gun_skill',
+      min_damage: 66,
+      max_damage: 72,
+    },
+    weapon2: {
+      type: 'melee',
+      skill: 'melee_skill',
+      min_damage: 50,
+      max_damage: 60,
+    },
+  };
+
+  testDeepEqualWithDiff(test, player, expectedStats);
   test.done();
 };
