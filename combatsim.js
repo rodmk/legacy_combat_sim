@@ -761,7 +761,6 @@ BuildSearch.modCombinations = function(item) {
     let next_combinations = [];
 
     combinations.forEach(function(combination) {
-      next_combinations.push(combination.slice());
       compatible_mods.forEach(function(key) {
         next_combinations.push(combination.concat([ key ]));
       });
@@ -770,6 +769,25 @@ BuildSearch.modCombinations = function(item) {
   }
 
   return combinations;
+};
+
+BuildSearch.itemCombatStats = function(item, active_weapon_types) {
+  let active_skills = new Set(active_weapon_types.map(function(type) {
+    return WEAPON_TYPE_TO_SKILL[type];
+  }));
+  let combat_stats = [
+    'min_damage',
+    'max_damage',
+    'armor',
+    'dodge',
+    'accuracy',
+    'speed',
+    'def_skill',
+  ].concat(Array.from(active_skills).sort());
+
+  return combat_stats.map(function(stat) {
+    return [ stat, idx(item, stat, 0) ];
+  });
 };
 
 BuildSearch.usefulCrystalKeys = function(item, crystal_keys, active_weapon_types) {
@@ -788,17 +806,42 @@ BuildSearch.usefulCrystalKeys = function(item, crystal_keys, active_weapon_types
 };
 
 BuildSearch.itemVariantSignature = function(item, active_weapon_types) {
-  let active_skills = new Set(active_weapon_types.map(function(type) {
-    return WEAPON_TYPE_TO_SKILL[type];
-  }));
-  let stats = Object.keys(item).filter(function(stat) {
-    let is_weapon_skill = stat === 'melee_skill' || stat === 'gun_skill' ||
-      stat === 'proj_skill';
-    return typeof item[stat] === 'number' && (!is_weapon_skill || active_skills.has(stat));
-  }).sort().map(function(stat) {
-    return [ stat, item[stat] ];
+  return JSON.stringify([
+    idx(item, 'type', null),
+    this.itemCombatStats(item, active_weapon_types),
+  ]);
+};
+
+BuildSearch.pruneDominatedItemVariants = function(groups, active_weapon_types) {
+  let frontier = [];
+  let stats = function(group) {
+    return BuildSearch.itemCombatStats(group.representative, active_weapon_types)
+      .map(function(stat) { return stat[1]; });
+  };
+  let dominates = function(left, right) {
+    let strictly_better = false;
+    for (let i = 0; i < left.length; i++) {
+      if (left[i] < right[i]) {
+        return false;
+      }
+      strictly_better = strictly_better || left[i] > right[i];
+    }
+    return strictly_better;
+  };
+
+  groups.forEach(function(group) {
+    let candidate_stats = stats(group);
+    if (frontier.some(function(entry) { return dominates(entry.stats, candidate_stats); })) {
+      return;
+    }
+
+    frontier = frontier.filter(function(entry) {
+      return !dominates(candidate_stats, entry.stats);
+    });
+    frontier.push({ group: group, stats: candidate_stats });
   });
-  return JSON.stringify([ idx(item, 'type', null), stats ]);
+
+  return frontier.map(function(entry) { return entry.group; });
 };
 
 BuildSearch.generateItemVariants = function(item_key, options) {
@@ -853,17 +896,20 @@ BuildSearch.itemVariantReport = function(item_key, options) {
   let useful_crystals = this.usefulCrystalKeys(item, crystal_keys, active_weapon_types);
   let mod_count = this.modCombinations(item).length;
   let groups = this.generateItemVariants(item_key, settings);
+  let nondominated_groups = this.pruneDominatedItemVariants(groups, active_weapon_types);
   let orderedCount = function(crystal_count) {
     return (crystal_count === 0 ? 1 : Math.pow(crystal_count, socket_capacity)) * mod_count;
   };
 
   return {
     groups: groups,
+    nondominated_groups: nondominated_groups,
     counts: {
       unfiltered_ordered: orderedCount(crystal_keys.length),
       filtered_ordered: orderedCount(useful_crystals.length),
       canonical: groups.reduce(function(sum, group) { return sum + group.sources.length; }, 0),
       unique_effective: groups.length,
+      nondominated: nondominated_groups.length,
     },
     useful_crystals: useful_crystals,
   };

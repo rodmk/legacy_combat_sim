@@ -1034,15 +1034,27 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
     filtered_ordered: 2,
     canonical: 2,
     unique_effective: 2,
+    nondominated: 2,
   });
   test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
 
   let mod_combinations = BuildSearch.modCombinations(Item.BioGunMk4);
-  test.equal(mod_combinations.length, 9);
+  test.equal(mod_combinations.length, 4);
   mod_combinations.forEach(function(mods) {
     let occupied_slots = mods.map(function(key) { return WeaponMod[key].slot; });
+    test.equal(mods.length, 2);
     test.equal(new Set(occupied_slots).size, occupied_slots.length);
   });
+
+  let frontier = BuildSearch.pruneDominatedItemVariants([
+    { representative: { armor: 10, speed: 5 } },
+    { representative: { armor: 10, speed: 4 } },
+    { representative: { armor: 9, speed: 6 } },
+  ], [ 'gun' ]);
+  test.deepEqual(frontier.map(function(group) { return group.representative; }), [
+    { armor: 10, speed: 5 },
+    { armor: 9, speed: 6 },
+  ]);
 
   test.done();
 };
