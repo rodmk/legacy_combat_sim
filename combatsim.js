@@ -218,6 +218,60 @@ CombatSim.attackDamageDistribution = function(att, def) {
   return distribution;
 };
 
+CombatSim.defeatRoundDistribution = function(att, def) {
+  let attack = Array.from(this.attackDamageDistribution(att, def));
+  let lethal_probability = new Float64Array(def.max_hp + 1);
+  let remaining_hp = new Float64Array(def.max_hp + 1);
+  let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
+  attack.sort(function(a, b) { return a[0] - b[0]; });
+
+  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+    for (let outcome = 0; outcome < attack.length; outcome++) {
+      if (attack[outcome][0] >= hit_points) {
+        lethal_probability[hit_points] += attack[outcome][1];
+      }
+    }
+  }
+
+  remaining_hp[def.max_hp] = 1;
+
+  for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
+    let next_remaining_hp = new Float64Array(def.max_hp + 1);
+    let has_survivors = false;
+
+    for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+      let state_probability = remaining_hp[hit_points];
+      if (state_probability === 0) {
+        continue;
+      }
+
+      defeat_rounds[round] += state_probability * lethal_probability[hit_points];
+      for (let outcome = 0; outcome < attack.length; outcome++) {
+        let damage = attack[outcome][0];
+        if (damage >= hit_points) {
+          break;
+        }
+
+        let probability = state_probability * attack[outcome][1];
+        next_remaining_hp[hit_points - damage] += probability;
+        has_survivors = true;
+      }
+    }
+
+    remaining_hp = next_remaining_hp;
+    if (!has_survivors) {
+      break;
+    }
+  }
+
+  let survives = 0;
+  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+    survives += remaining_hp[hit_points];
+  }
+
+  return { defeat_rounds: defeat_rounds, survives: survives };
+};
+
 CombatSim.combatOutcomeDistribution = function(player1, player2) {
   let first = player1;
   let second = player2;
@@ -229,60 +283,21 @@ CombatSim.combatOutcomeDistribution = function(player1, player2) {
     first_is_player1 = false;
   }
 
-  let first_attack = this.attackDamageDistribution(first, second);
-  let second_attack = this.attackDamageDistribution(second, first);
-  let states = new Map();
+  let first_defeats_second = this.defeatRoundDistribution(first, second);
+  let second_defeats_first = this.defeatRoundDistribution(second, first);
   let first_wins = 0;
   let second_wins = 0;
-  states.set(first.max_hp + ',' + second.max_hp, 1);
+  let first_survival_probability = 1;
+  let second_survival_probability = 1;
 
-  for (let round = 0; round < this.MAX_COMBAT_ROUNDS; round++) {
-    let after_round = new Map();
-
-    states.forEach(function(state_probability, state) {
-      let hit_points = state.split(',').map(Number);
-      let first_hp = hit_points[0];
-      let second_hp = hit_points[1];
-
-      first_attack.forEach(function(first_attack_probability, first_damage) {
-        let probability_after_first_attack = state_probability * first_attack_probability;
-        let remaining_second_hp = second_hp - first_damage;
-
-        if (remaining_second_hp <= 0) {
-          first_wins += probability_after_first_attack;
-          return;
-        }
-
-        second_attack.forEach(function(second_attack_probability, second_damage) {
-          let probability_after_second_attack =
-            probability_after_first_attack * second_attack_probability;
-          let remaining_first_hp = first_hp - second_damage;
-
-          if (remaining_first_hp <= 0) {
-            second_wins += probability_after_second_attack;
-            return;
-          }
-
-          let next_state = remaining_first_hp + ',' + remaining_second_hp;
-          after_round.set(
-            next_state,
-            (after_round.get(next_state) || 0) + probability_after_second_attack
-          );
-        });
-      });
-    });
-
-    states = after_round;
-    if (states.size === 0) {
-      break;
-    }
+  for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
+    first_wins += first_defeats_second.defeat_rounds[round] * second_survival_probability;
+    first_survival_probability -= first_defeats_second.defeat_rounds[round];
+    second_wins += second_defeats_first.defeat_rounds[round] * first_survival_probability;
+    second_survival_probability -= second_defeats_first.defeat_rounds[round];
   }
 
-  let draws = 0;
-  states.forEach(function(probability) {
-    draws += probability;
-  });
-
+  let draws = first_defeats_second.survives * second_defeats_first.survives;
   return {
     player1_wins: first_is_player1 ? first_wins : second_wins,
     player2_wins: first_is_player1 ? second_wins : first_wins,
