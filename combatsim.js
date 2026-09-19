@@ -282,7 +282,6 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
     cache.misses++;
   }
   let attack = Array.from(this.attackDamageDistribution(att, def));
-  let lethal_probability = new Float64Array(def.max_hp + 1);
   let healing_cost = new Uint32Array(def.max_hp + 1);
   let remaining_hp = new Float64Array(def.max_hp + 1);
   let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
@@ -290,19 +289,21 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
   let surviving_healing_cost_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   let full_hp_probability_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   attack.sort(function(a, b) { return a[0] - b[0]; });
+  let attack_damage = new Uint32Array(attack.length);
+  let attack_probability = new Float64Array(attack.length);
+  for (let outcome = 0; outcome < attack.length; outcome++) {
+    attack_damage[outcome] = attack[outcome][0];
+    attack_probability[outcome] = attack[outcome][1];
+  }
 
   for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
     healing_cost[hit_points] = this.healingCost(hit_points, def.max_hp);
-    for (let outcome = 0; outcome < attack.length; outcome++) {
-      if (attack[outcome][0] >= hit_points) {
-        lethal_probability[hit_points] += attack[outcome][1];
-      }
-    }
   }
 
   remaining_hp[def.max_hp] = 1;
   surviving_hp_by_round[0] = def.max_hp;
   full_hp_probability_by_round[0] = 1;
+  let survives = 1;
 
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     let next_remaining_hp = new Float64Array(def.max_hp + 1);
@@ -317,24 +318,29 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
         continue;
       }
 
-      defeat_rounds[round] += state_probability * lethal_probability[hit_points];
       for (let outcome = 0; outcome < attack.length; outcome++) {
-        let damage = attack[outcome][0];
+        let damage = attack_damage[outcome];
         if (damage >= hit_points) {
           break;
         }
 
-        let probability = state_probability * attack[outcome][1];
+        let probability = state_probability * attack_probability[outcome];
         let next_hit_points = hit_points - damage;
         next_remaining_hp[next_hit_points] += probability;
-        next_surviving_hp += next_hit_points * probability;
-        next_surviving_healing_cost += healing_cost[next_hit_points] * probability;
-        if (next_hit_points === def.max_hp) {
-          next_full_hp_probability += probability;
-        }
-        has_survivors = true;
       }
     }
+
+    let next_survives = 0;
+    for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+      let state_probability = next_remaining_hp[hit_points];
+      next_survives += state_probability;
+      next_surviving_hp += hit_points * state_probability;
+      next_surviving_healing_cost += healing_cost[hit_points] * state_probability;
+    }
+    defeat_rounds[round] = survives - next_survives;
+    survives = next_survives;
+    next_full_hp_probability = next_remaining_hp[def.max_hp];
+    has_survivors = next_survives > 0;
 
     remaining_hp = next_remaining_hp;
     surviving_hp_by_round[round] = next_surviving_hp;
@@ -343,11 +349,6 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
     if (!has_survivors) {
       break;
     }
-  }
-
-  let survives = 0;
-  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
-    survives += remaining_hp[hit_points];
   }
 
   let result = {
