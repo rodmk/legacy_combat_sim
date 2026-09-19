@@ -33,3 +33,12 @@ export interface EquipmentCatalog {
   weapons: Readonly<Record<string, WeaponDefinition>>;
   miscs: Readonly<Record<string, EquipmentDefinition>>;
 }
+
+export interface WeaponModDefinition {
+  name: string;
+  slot: number;
+  compatible: readonly string[];
+  mult: Partial<Record<keyof GearStats, number>>;
+}
+
+export type WeaponModCatalog = Readonly<Record<string, WeaponModDefinition>>;

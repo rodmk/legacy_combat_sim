@@ -409,10 +409,36 @@ Player.generateReferencePlayers = function() {
 // =============================================================================
 //                                   Equipment
 // =============================================================================
-function Equipment(stats) {
+function Equipment(stats, catalogKey) {
   Object.assign(this, stats);
+  if (catalogKey) {
+    Object.defineProperty(this, 'catalogKey', {
+      value: catalogKey,
+      enumerable: false,
+    });
+  }
   deepFreeze(this);
 }
+
+Equipment.applyMultipliers = function(item, modifiers) {
+  let new_stats = Object.assign({}, item);
+  let stat_bonuses = {};
+
+  modifiers.forEach(function(modifier) {
+    for (let stat in new_stats) {
+      let stat_mult = idx(modifier.mult, stat, null);
+      if (stat_mult !== null) {
+        stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
+      }
+    }
+  });
+
+  for (let stat in stat_bonuses) {
+    new_stats[stat] += ceil(stat_bonuses[stat]);
+  }
+
+  return new_stats;
+};
 
 Equipment.computeBonuses = function(items) {
   let stats = {};
@@ -445,30 +471,41 @@ Equipment.computeBonuses = function(items) {
 
 
 Equipment.prototype.socket = function(crystals) {
-  if (!crystals || crystals.size <= 0) {
+  if (!crystals || crystals.length === 0) {
     return this;
   }
 
-  let new_stats = Object.assign({}, this);
+  let new_stats = Equipment.applyMultipliers(this, crystals);
   new_stats.crystals = crystals;
+  let new_item = new Equipment(new_stats, this.catalogKey);
+  return new_item;
+};
 
-  let stat_bonuses = {};
-  crystals.forEach(function(c) {
-    for (let stat in new_stats) {
-      let stat_mult = idx(c.mult, stat, null);
-      if (stat_mult !== null) {
-        stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
-      }
-    }
-  });
-
-  for (let stat in stat_bonuses) {
-    // Apply ceiling function after we've calculated partial bonus from all crystals.
-    new_stats[stat] += ceil(stat_bonuses[stat]);
+Equipment.prototype.applyMods = function(mods) {
+  if (!mods || mods.length === 0) {
+    return this;
+  }
+  if (!this.type || !this.catalogKey) {
+    throw new Error('Weapon mods can only be applied to catalog weapons.');
+  }
+  if (this.mods) {
+    throw new Error('Weapon mods have already been applied to ' + this.name + '.');
   }
 
-  let new_item = new Equipment(new_stats);
-  return new_item;
+  let occupiedSlots = {};
+  mods.forEach(function(mod) {
+    if (!mod.compatible.includes(this.catalogKey)) {
+      throw new Error(mod.name + ' is not compatible with ' + this.name + '.');
+    }
+    if (occupiedSlots[mod.slot]) {
+      throw new Error('Weapon mod slot ' + mod.slot + ' is already occupied.');
+    }
+    occupiedSlots[mod.slot] = true;
+  }, this);
+
+  let new_stats = Equipment.applyMultipliers(this, mods);
+  new_stats.mods = mods;
+  return new Equipment(new_stats, this.catalogKey);
 };
 
 let itemDefinitions = {
@@ -480,7 +517,7 @@ let itemDefinitions = {
 let equipmentCatalog = require('./data/equipment');
 Object.keys(equipmentCatalog).forEach(function(category) {
   Object.keys(equipmentCatalog[category]).forEach(function(key) {
-    itemDefinitions[key] = new Equipment(equipmentCatalog[category][key]);
+    itemDefinitions[key] = new Equipment(equipmentCatalog[category][key], key);
   });
 });
 
@@ -490,6 +527,16 @@ Object.keys(crystalDefinitions).forEach(function(key) {
 });
 
 let Item = deepFreeze(itemDefinitions);
+
+let weaponModDefinitions = require('./data/weapon-mods');
+Object.keys(weaponModDefinitions).forEach(function(key) {
+  weaponModDefinitions[key].compatible.forEach(function(weaponKey) {
+    if (!equipmentCatalog.weapons[weaponKey]) {
+      throw new Error(key + ' references unknown weapon ' + weaponKey + '.');
+    }
+  });
+});
+let WeaponMod = deepFreeze(weaponModDefinitions);
 
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all
@@ -521,5 +568,6 @@ if (typeof module !== 'undefined') {
     Player: Player,
     Equipment: Equipment,
     Item: Item,
+    WeaponMod: WeaponMod,
   };
 }

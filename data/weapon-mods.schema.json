@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rodmk/legacy_combat_sim/data/weapon-mods.schema.json",
+  "title": "Legacy combat simulator weapon mods",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "$ref": "#/$defs/weaponMod"
+  },
+  "$defs": {
+    "weaponMod": {
+      "type": "object",
+      "required": ["name", "slot", "compatible", "mult"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "slot": { "enum": [1, 2] },
+        "compatible": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "mult": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "min_damage": { "$ref": "#/$defs/multiplier" },
+            "max_damage": { "$ref": "#/$defs/multiplier" },
+            "accuracy": { "$ref": "#/$defs/multiplier" },
+            "def_skill": { "$ref": "#/$defs/multiplier" },
+            "melee_skill": { "$ref": "#/$defs/multiplier" },
+            "gun_skill": { "$ref": "#/$defs/multiplier" },
+            "proj_skill": { "$ref": "#/$defs/multiplier" }
+          }
+        }
+      }
+    },
+    "multiplier": {
+      "type": "number",
+      "exclusiveMinimum": 1
+    }
+  }
+}

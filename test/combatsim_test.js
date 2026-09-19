@@ -5,6 +5,7 @@ let src = require('../combatsim.js');
 let Player = src.Player;
 let Equipment = src.Equipment;
 let Item = src.Item;
+let WeaponMod = src.WeaponMod;
 
 let jsondiffpatch = require('jsondiffpatch');
 
@@ -356,6 +357,39 @@ exports.testCrystalSocketing = function(test) {
     crystals:    [ crystal, crystal ]
   });
   testDeepEqualWithDiff(test, socketed_item_2, expected_stats_2);
+
+  test.done();
+};
+
+exports.testWeaponMods = function(test) {
+  let upgraded = Item.BioGunMk4.applyMods([
+    WeaponMod.FasterReload4,
+    WeaponMod.FasterAmmo4,
+  ]);
+
+  test.equal(upgraded.min_damage, 95);
+  test.equal(upgraded.max_damage, 114);
+  test.equal(upgraded.accuracy, 50);
+  test.deepEqual(upgraded.mods, [
+    WeaponMod.FasterReload4,
+    WeaponMod.FasterAmmo4,
+  ]);
+
+  test.throws(
+    function() {
+      Item.VoidSword.applyMods([ WeaponMod.LaserSight ]);
+    },
+    /Laser Sight is not compatible with Void Sword/
+  );
+  test.throws(
+    function() {
+      Item.BioGunMk4.applyMods([
+        WeaponMod.FasterReload4,
+        WeaponMod.EnhancedScope4,
+      ]);
+    },
+    /Weapon mod slot 1 is already occupied/
+  );
 
   test.done();
 };

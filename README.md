@@ -5,12 +5,26 @@ Legacy Combat Simulator
 
 Combat simulator for Legacy (http://www.legacy-game.net).
 
+Weapon Mods
+===========
+
+Weapon mods enforce their compatible weapons and upgrade slots when applied:
+
+```js
+const { Item, WeaponMod } = require('./combatsim');
+
+const bioGun = Item.BioGunMk4.applyMods([
+  WeaponMod.FasterReload4,
+  WeaponMod.FasterAmmo4,
+]);
+```
+
 Development
 ===========
 
-Install dependencies with `yarn install`. Run linting, tests, equipment and
-crystal data schema validation, and static type checks with `yarn verify`. The
-same checks run before each commit and in CI.
+Install dependencies with `yarn install`. Run linting, tests, catalog schema
+validation, and static type checks with `yarn verify`. The same checks run
+before each commit and in CI.
 
 License
 =======

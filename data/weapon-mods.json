@@ -1,0 +1,142 @@
+{
+  "LaserSight": {
+    "name": "Laser Sight",
+    "slot": 1,
+    "compatible": ["VoidBow"],
+    "mult": {
+      "accuracy": 1.14
+    }
+  },
+  "PoisonedTip": {
+    "name": "Poisoned Tip",
+    "slot": 1,
+    "compatible": ["VoidBow"],
+    "mult": {
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
+  },
+  "AmuletTip": {
+    "name": "Amulet Tip",
+    "slot": 1,
+    "compatible": ["CrystalCrossbow", "VoidBow"],
+    "mult": {
+      "accuracy": 1.15,
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
+  },
+  "AirTip": {
+    "name": "Air Tip",
+    "slot": 1,
+    "compatible": ["CrystalCrossbow"],
+    "mult": {
+      "accuracy": 1.2
+    }
+  },
+  "FireTip": {
+    "name": "Fire Tip",
+    "slot": 1,
+    "compatible": ["CrystalCrossbow"],
+    "mult": {
+      "min_damage": 1.15,
+      "max_damage": 1.15
+    }
+  },
+  "VoidCore": {
+    "name": "Void Core",
+    "slot": 1,
+    "compatible": ["VoidSword"],
+    "mult": {
+      "accuracy": 1.15,
+      "min_damage": 1.05,
+      "max_damage": 1.05,
+      "melee_skill": 1.3
+    }
+  },
+  "BloodCore": {
+    "name": "Blood Core",
+    "slot": 1,
+    "compatible": ["ChainBladeT2", "ScytheT2"],
+    "mult": {
+      "accuracy": 1.05,
+      "min_damage": 1.05,
+      "max_damage": 1.05,
+      "melee_skill": 1.1,
+      "def_skill": 1.2
+    }
+  },
+  "FasterReload4": {
+    "name": "Faster Reload 4",
+    "slot": 1,
+    "compatible": ["BioGunMk4"],
+    "mult": {
+      "accuracy": 1.05,
+      "min_damage": 1.05,
+      "max_damage": 1.05
+    }
+  },
+  "EnhancedScope4": {
+    "name": "Enhanced Scope 4",
+    "slot": 1,
+    "compatible": ["BioGunMk4"],
+    "mult": {
+      "accuracy": 1.1
+    }
+  },
+  "FasterAmmo4": {
+    "name": "Faster Ammo 4",
+    "slot": 2,
+    "compatible": ["BioGunMk4"],
+    "mult": {
+      "min_damage": 1.2,
+      "max_damage": 1.2
+    }
+  },
+  "TracerRounds4": {
+    "name": "Tracer Rounds 4",
+    "slot": 2,
+    "compatible": ["BioGunMk4"],
+    "mult": {
+      "accuracy": 1.15,
+      "min_damage": 1.05,
+      "max_damage": 1.05
+    }
+  },
+  "SharpenedBlade1": {
+    "name": "Sharpened Blade 1",
+    "slot": 1,
+    "compatible": ["GunBladeMk4"],
+    "mult": {
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
+  },
+  "FasterReload1": {
+    "name": "Faster Reload 1",
+    "slot": 1,
+    "compatible": ["GunBladeMk4"],
+    "mult": {
+      "accuracy": 1.05,
+      "min_damage": 1.05,
+      "max_damage": 1.05
+    }
+  },
+  "MagneticBlade1": {
+    "name": "Magnetic Blade 1",
+    "slot": 2,
+    "compatible": ["GunBladeMk4"],
+    "mult": {
+      "accuracy": 1.2
+    }
+  },
+  "FasterAmmo1": {
+    "name": "Faster Ammo 1",
+    "slot": 2,
+    "compatible": ["GunBladeMk4"],
+    "mult": {
+      "min_damage": 1.2,
+      "max_damage": 1.2
+    }
+  }
+}
