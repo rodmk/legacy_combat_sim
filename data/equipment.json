@@ -158,6 +158,16 @@
       "def_skill": 82,
       "gun_skill": 60
     },
+    "Q15Gun": {
+      "name": "Q15 Gun",
+      "type": "gun",
+      "min_damage": 82,
+      "max_damage": 95,
+      "accuracy": 42,
+      "speed": 120,
+      "def_skill": 31,
+      "gun_skill": 48
+    },
     "RailGunT2": {
       "name": "Rail Gun T2",
       "type": "gun",

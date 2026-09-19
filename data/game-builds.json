@@ -1,0 +1,182 @@
+{
+  "ShadowDojoDLGunBuild1": {
+    "name": "DL Gun Build",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "DoubleBarrelSniperRifle", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoDLGunBuild2": {
+    "name": "DL Gun Build 2",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "Q15Gun", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoDLGunBuild3": {
+    "name": "DL Gun Build 3",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "DoubleBarrelSniperRifle", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "BioSpinalEnhancer", "crystals": ["PerfectGreen", "PerfectGreen", "PerfectGreen", "PerfectGreen"] },
+      "misc2": { "item": "BioSpinalEnhancer", "crystals": ["PerfectGreen", "PerfectGreen", "PerfectGreen", "PerfectGreen"] }
+    }
+  },
+  "ShadowDojoDLGunBuild4": {
+    "name": "DL Gun Build 4",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "Q15Gun", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] },
+      "misc2": { "item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] }
+    }
+  },
+  "ShadowDojoDLGunBuild5": {
+    "name": "DL Gun Build 5",
+    "level": 80,
+    "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "DoubleBarrelSniperRifle", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoDLGunBuild6": {
+    "name": "DL Gun Build 6",
+    "level": 80,
+    "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "Q15Gun", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoDLGunBuild7": {
+    "name": "DL Gun Build 7",
+    "level": 80,
+    "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "DoubleBarrelSniperRifle", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "BioSpinalEnhancer", "crystals": ["PerfectGreen", "PerfectGreen", "PerfectGreen", "PerfectGreen"] },
+      "misc2": { "item": "BioSpinalEnhancer", "crystals": ["PerfectGreen", "PerfectGreen", "PerfectGreen", "PerfectGreen"] }
+    }
+  },
+  "ShadowDojoDLGunBuild8": {
+    "name": "DL Gun Build 8",
+    "level": 80,
+    "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "Q15Gun", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] },
+      "misc2": { "item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] }
+    }
+  },
+  "ShadowDojoCoreVoidBuild1": {
+    "name": "Core/Void Build 1",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "VoidSword", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoDualBowBuild1": {
+    "name": "Dual Bow Build 1",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "VoidBow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "VoidBow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoRiftBowBuild1": {
+    "name": "Rift Bow Build 1",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "VoidBow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoT2ScytheBuild": {
+    "name": "T2 Scythe Build",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "ScytheT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "ScytheT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "BioSpinalEnhancer", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoSG1SplitBombs": {
+    "name": "SG1 Split bombs",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "SG1Armor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
+      "weapon1": { "item": "SplitCBombsT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "SplitCBombsT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoHFCoreVoid": {
+    "name": "HF Core/Void",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "HellforgedArmor", "crystals": ["CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal"] },
+      "weapon1": { "item": "VoidSword", "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"] },
+      "weapon2": { "item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] }
+    }
+  },
+  "ShadowDojoArmorStackCores": {
+    "name": "Armour stack Cores",
+    "level": 80,
+    "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
+    "equipment": {
+      "armor": { "item": "HellforgedArmor", "crystals": ["CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal"] },
+      "weapon1": { "item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "weapon2": { "item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"] },
+      "misc1": { "item": "ScoutDrones", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] },
+      "misc2": { "item": "ScoutDrones", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"] }
+    }
+  }
+}

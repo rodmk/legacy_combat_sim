@@ -22,12 +22,21 @@ const bioGun = Item.BioGunMk4.applyMods([
 Builds
 ======
 
-Complete stat allocations and loadouts are defined in `data/builds.json`:
+Complete stat allocations and loadouts are split across schema-compatible JSON catalogs. `Build` merges the configured catalogs for direct lookup:
 
 ```js
 const { Build, Player } = require('./combatsim');
 
 const player = Player.generateBuild(Build.DualVoidBowsWithScouts);
+```
+
+`BuildCatalogs` preserves the individual catalogs, and callers can supply any catalog list when generating an opponent set:
+
+```js
+const { BuildCatalogs, Player, mergeBuildCatalogs } = require('./combatsim');
+
+const builds = mergeBuildCatalogs(BuildCatalogs);
+const opponents = Player.generateReferencePlayers(BuildCatalogs);
 ```
 
 Development

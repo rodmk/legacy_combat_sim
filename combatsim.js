@@ -167,13 +167,168 @@ CombatSim.attemptHit = function(att, def, weapon) {
   if (this.rollCombat(att.accuracy, def.dodge) &&
       this.rollCombat(att[weapon.skill], def.def_skill)) {
     let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
-    let level_modifier = Math.min(att.level, 80) * 7 / 2;
-    // The current formula does not specify how to handle fractional final damage;
-    // assume it is rounded to the nearest integer.
-    net_damage = Math.round(base_damage * (level_modifier / (level_modifier + def.armor)));
+    net_damage = this.damageAfterArmor(att.level, def.armor, base_damage);
   }
 
   return net_damage;
+};
+
+CombatSim.damageAfterArmor = function(attacker_level, defender_armor, base_damage) {
+  let level_modifier = Math.min(attacker_level, 80) * 7 / 2;
+  // The current formula does not specify how to handle fractional final damage;
+  // assume it is rounded to the nearest integer.
+  return Math.round(base_damage * (level_modifier / (level_modifier + defender_armor)));
+};
+
+CombatSim.weaponDamageDistribution = function(att, def, weapon) {
+  let accuracy_probability = this.combatProbability(att.accuracy, def.dodge);
+  let skill_probability = this.combatProbability(att[weapon.skill], def.def_skill);
+  let damaging_hit_probability = accuracy_probability * skill_probability;
+  let distribution = new Map();
+
+  if (damaging_hit_probability < 1) {
+    distribution.set(0, 1 - damaging_hit_probability);
+  }
+
+  let base_damage_outcomes = weapon.max_damage - weapon.min_damage + 1;
+  let outcome_probability = damaging_hit_probability / base_damage_outcomes;
+  if (outcome_probability > 0) {
+    for (let base_damage = weapon.min_damage; base_damage <= weapon.max_damage; base_damage++) {
+      let damage = this.damageAfterArmor(att.level, def.armor, base_damage);
+      distribution.set(damage, (distribution.get(damage) || 0) + outcome_probability);
+    }
+  }
+
+  return distribution;
+};
+
+CombatSim.attackDamageDistribution = function(att, def) {
+  let weapon1_distribution = this.weaponDamageDistribution(att, def, att.weapon1);
+  let weapon2_distribution = this.weaponDamageDistribution(att, def, att.weapon2);
+  let distribution = new Map();
+
+  weapon1_distribution.forEach(function(weapon1_probability, weapon1_damage) {
+    weapon2_distribution.forEach(function(weapon2_probability, weapon2_damage) {
+      let damage = weapon1_damage + weapon2_damage;
+      let probability = weapon1_probability * weapon2_probability;
+      distribution.set(damage, (distribution.get(damage) || 0) + probability);
+    });
+  });
+
+  return distribution;
+};
+
+CombatSim.combatSignature = function(player) {
+  let weapons = [ player.weapon1, player.weapon2 ].map(function(weapon) {
+    return [ weapon.skill, weapon.min_damage, weapon.max_damage ];
+  });
+  let active_skills = Array.from(new Set(weapons.map(function(weapon) {
+    return weapon[0];
+  }))).sort().map(function(skill) {
+    return [ skill, player[skill] ];
+  });
+  weapons.sort(function(a, b) {
+    return JSON.stringify(a).localeCompare(JSON.stringify(b));
+  });
+
+  return JSON.stringify([
+    player.level,
+    player.max_hp,
+    player.armor,
+    player.speed,
+    player.accuracy,
+    player.dodge,
+    player.def_skill,
+    active_skills,
+    weapons,
+  ]);
+};
+
+CombatSim.defeatRoundDistribution = function(att, def) {
+  let attack = Array.from(this.attackDamageDistribution(att, def));
+  let lethal_probability = new Float64Array(def.max_hp + 1);
+  let remaining_hp = new Float64Array(def.max_hp + 1);
+  let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
+  attack.sort(function(a, b) { return a[0] - b[0]; });
+
+  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+    for (let outcome = 0; outcome < attack.length; outcome++) {
+      if (attack[outcome][0] >= hit_points) {
+        lethal_probability[hit_points] += attack[outcome][1];
+      }
+    }
+  }
+
+  remaining_hp[def.max_hp] = 1;
+
+  for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
+    let next_remaining_hp = new Float64Array(def.max_hp + 1);
+    let has_survivors = false;
+
+    for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+      let state_probability = remaining_hp[hit_points];
+      if (state_probability === 0) {
+        continue;
+      }
+
+      defeat_rounds[round] += state_probability * lethal_probability[hit_points];
+      for (let outcome = 0; outcome < attack.length; outcome++) {
+        let damage = attack[outcome][0];
+        if (damage >= hit_points) {
+          break;
+        }
+
+        let probability = state_probability * attack[outcome][1];
+        next_remaining_hp[hit_points - damage] += probability;
+        has_survivors = true;
+      }
+    }
+
+    remaining_hp = next_remaining_hp;
+    if (!has_survivors) {
+      break;
+    }
+  }
+
+  let survives = 0;
+  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+    survives += remaining_hp[hit_points];
+  }
+
+  return { defeat_rounds: defeat_rounds, survives: survives };
+};
+
+CombatSim.combatOutcomeDistribution = function(player1, player2) {
+  let first = player1;
+  let second = player2;
+  let first_is_player1 = true;
+
+  if (player2.speed > player1.speed) {
+    first = player2;
+    second = player1;
+    first_is_player1 = false;
+  }
+
+  let first_defeats_second = this.defeatRoundDistribution(first, second);
+  let second_defeats_first = this.defeatRoundDistribution(second, first);
+  let first_wins = 0;
+  let second_wins = 0;
+  let first_survival_probability = 1;
+  let second_survival_probability = 1;
+
+  for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
+    first_wins += first_defeats_second.defeat_rounds[round] * second_survival_probability;
+    first_survival_probability -= first_defeats_second.defeat_rounds[round];
+    second_wins += second_defeats_first.defeat_rounds[round] * first_survival_probability;
+    second_survival_probability -= second_defeats_first.defeat_rounds[round];
+  }
+
+  let draws = first_defeats_second.survives * second_defeats_first.survives;
+  return {
+    player1_wins: first_is_player1 ? first_wins : second_wins,
+    player2_wins: first_is_player1 ? second_wins : first_wins,
+    draws: draws,
+  };
 };
 
 // Rolls stats against each other
@@ -373,13 +528,37 @@ Player.generateBuild = function(build) {
   return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
 };
 
-Player.generateReferencePlayers = function() {
-  return Object.keys(Build)
+Player.groupEquivalentBuilds = function(builds) {
+  let groups_by_signature = new Map();
+
+  builds.forEach(function(build) {
+    let player = Player.generateBuild(build);
+    let signature = CombatSim.combatSignature(player);
+    let group = groups_by_signature.get(signature);
+
+    if (!group) {
+      group = {
+        signature: signature,
+        representative: player,
+        builds: [],
+      };
+      groups_by_signature.set(signature, group);
+    }
+
+    group.builds.push(build);
+  });
+
+  return Array.from(groups_by_signature.values());
+};
+
+Player.generateReferencePlayers = function(catalogs) {
+  let builds = catalogs ? mergeBuildCatalogs(catalogs) : Build;
+  return Object.keys(builds)
     .filter(function(key) {
-      return Build[key].reference !== false;
+      return builds[key].reference !== false;
     })
     .map(function(key) {
-      return Player.generateBuild(Build[key]);
+      return Player.generateBuild(builds[key]);
     });
 };
 
@@ -524,7 +703,22 @@ Object.keys(weaponModDefinitions).forEach(function(key) {
 });
 let WeaponMod = deepFreeze(weaponModDefinitions);
 
-let Build = deepFreeze(require('./data/builds'));
+let BuildCatalogs = deepFreeze(require('./data/build-catalogs'));
+
+let mergeBuildCatalogs = function(catalogs) {
+  let merged = {};
+  catalogs.forEach(function(catalog) {
+    Object.keys(catalog).forEach(function(key) {
+      if (merged[key]) {
+        throw new Error('Duplicate build key: ' + key + '.');
+      }
+      merged[key] = catalog[key];
+    });
+  });
+  return merged;
+};
+
+let Build = deepFreeze(mergeBuildCatalogs(BuildCatalogs));
 
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all
@@ -544,6 +738,332 @@ let Crystals = deepFreeze({
 });
 
 // =============================================================================
+//                                  BuildSearch
+// =============================================================================
+function BuildSearch() {}
+
+BuildSearch.activeWeaponSkills = function(active_weapon_types) {
+  return Array.from(new Set(active_weapon_types.map(function(type) {
+    return WEAPON_TYPE_TO_SKILL[type];
+  }))).sort();
+};
+
+BuildSearch.crystalMultisets = function(crystal_keys, socket_capacity) {
+  let multisets = [];
+
+  if (crystal_keys.length === 0) {
+    return [ [] ];
+  }
+
+  let addMultisets = function(start, remaining, selected) {
+    if (remaining === 0) {
+      multisets.push(selected.slice());
+      return;
+    }
+
+    for (let i = start; i < crystal_keys.length; i++) {
+      selected.push(crystal_keys[i]);
+      addMultisets(i, remaining - 1, selected);
+      selected.pop();
+    }
+  };
+
+  addMultisets(0, socket_capacity, []);
+  return multisets;
+};
+
+BuildSearch.modCombinations = function(item) {
+  let mod_slots = idx(item, 'mod_slots', 0);
+  let combinations = [ [] ];
+
+  for (let slot = 1; slot <= mod_slots; slot++) {
+    let compatible_mods = Object.keys(WeaponMod).filter(function(key) {
+      return WeaponMod[key].slot === slot && WeaponMod[key].compatible.includes(item.catalogKey);
+    });
+    let next_combinations = [];
+
+    combinations.forEach(function(combination) {
+      compatible_mods.forEach(function(key) {
+        next_combinations.push(combination.concat([ key ]));
+      });
+    });
+    combinations = next_combinations;
+  }
+
+  return combinations;
+};
+
+BuildSearch.itemCombatStats = function(item, active_weapon_types) {
+  let combat_stats = [
+    'min_damage',
+    'max_damage',
+    'armor',
+    'dodge',
+    'accuracy',
+    'speed',
+    'def_skill',
+  ].concat(this.activeWeaponSkills(active_weapon_types));
+
+  return combat_stats.map(function(stat) {
+    return [ stat, idx(item, stat, 0) ];
+  });
+};
+
+BuildSearch.usefulCrystalKeys = function(item, crystal_keys, active_weapon_types) {
+  let active_skills = new Set(this.activeWeaponSkills(active_weapon_types));
+
+  return crystal_keys.filter(function(key) {
+    return Object.keys(Item[key].mult).some(function(stat) {
+      let is_weapon_skill = stat === 'melee_skill' || stat === 'gun_skill' ||
+        stat === 'proj_skill';
+      let is_relevant_skill = !is_weapon_skill || active_skills.has(stat);
+      return is_relevant_skill && typeof item[stat] === 'number' && item[stat] !== 0;
+    });
+  });
+};
+
+BuildSearch.itemVariantSignature = function(item, active_weapon_types) {
+  return JSON.stringify([
+    idx(item, 'type', null),
+    this.itemCombatStats(item, active_weapon_types),
+  ]);
+};
+
+BuildSearch.pruneDominatedItemVariants = function(groups, active_weapon_types) {
+  let frontier = [];
+  let stats = function(group) {
+    return BuildSearch.itemCombatStats(group.representative, active_weapon_types)
+      .map(function(stat) { return stat[1]; });
+  };
+  let dominates = function(left, right) {
+    let strictly_better = false;
+    for (let i = 0; i < left.length; i++) {
+      if (left[i] < right[i]) {
+        return false;
+      }
+      strictly_better = strictly_better || left[i] > right[i];
+    }
+    return strictly_better;
+  };
+
+  groups.forEach(function(group) {
+    let candidate_stats = stats(group);
+    if (frontier.some(function(entry) { return dominates(entry.stats, candidate_stats); })) {
+      return;
+    }
+
+    frontier = frontier.filter(function(entry) {
+      return !dominates(candidate_stats, entry.stats);
+    });
+    frontier.push({ group: group, stats: candidate_stats });
+  });
+
+  return frontier.map(function(entry) { return entry.group; });
+};
+
+BuildSearch.generateItemVariants = function(item_key, options) {
+  let item = Item[item_key];
+  let settings = options || {};
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let crystal_keys = settings.crystalKeys || Object.keys(crystalDefinitions);
+  let socket_capacity = idx(settings, 'socketCapacity', 4);
+  let useful_crystals = this.usefulCrystalKeys(item, crystal_keys, active_weapon_types);
+  let crystal_multisets = this.crystalMultisets(useful_crystals, socket_capacity);
+  let mod_combinations = this.modCombinations(item);
+  let groups_by_signature = new Map();
+
+  mod_combinations.forEach(function(mod_keys) {
+    let modded_item = item.applyMods(mod_keys.map(function(key) { return WeaponMod[key]; }));
+
+    crystal_multisets.forEach(function(selected_crystals) {
+      let variant = modded_item.socket(selected_crystals.map(function(key) { return Item[key]; }));
+      let signature = BuildSearch.itemVariantSignature(variant, active_weapon_types);
+      let group = groups_by_signature.get(signature);
+
+      if (!group) {
+        group = { signature: signature, representative: variant, sources: [] };
+        groups_by_signature.set(signature, group);
+      }
+
+      group.sources.push({
+        item: item_key,
+        mods: mod_keys.slice(),
+        crystals: selected_crystals.slice(),
+      });
+    });
+  });
+
+  return Array.from(groups_by_signature.values());
+};
+
+BuildSearch.generateItemVariantsForWeapons = function(item_key, weapon_keys, options) {
+  let active_weapon_types = Array.from(new Set(weapon_keys.map(function(key) {
+    return Item[key].type;
+  })));
+  let settings = Object.assign({}, options, { activeWeaponTypes: active_weapon_types });
+  return this.generateItemVariants(item_key, settings);
+};
+
+BuildSearch.itemVariantReport = function(item_key, options) {
+  let item = Item[item_key];
+  let settings = options || {};
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let crystal_keys = settings.crystalKeys || Object.keys(crystalDefinitions);
+  let socket_capacity = idx(settings, 'socketCapacity', 4);
+  let useful_crystals = this.usefulCrystalKeys(item, crystal_keys, active_weapon_types);
+  let mod_count = this.modCombinations(item).length;
+  let groups = this.generateItemVariants(item_key, settings);
+  let nondominated_groups = this.pruneDominatedItemVariants(groups, active_weapon_types);
+  let orderedCount = function(crystal_count) {
+    return (crystal_count === 0 ? 1 : Math.pow(crystal_count, socket_capacity)) * mod_count;
+  };
+
+  return {
+    groups: groups,
+    nondominated_groups: nondominated_groups,
+    counts: {
+      unfiltered_ordered: orderedCount(crystal_keys.length),
+      filtered_ordered: orderedCount(useful_crystals.length),
+      canonical: groups.reduce(function(sum, group) { return sum + group.sources.length; }, 0),
+      unique_effective: groups.length,
+      nondominated: nondominated_groups.length,
+    },
+    useful_crystals: useful_crystals,
+  };
+};
+
+BuildSearch.slotVariantFrontier = function(slot, options) {
+  let settings = options || {};
+  let catalog = equipmentCatalog[slot];
+  if (!catalog) {
+    throw new Error('Unknown equipment slot: ' + slot + '.');
+  }
+
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let item_keys = settings.itemKeys || Object.keys(catalog);
+  if (slot === 'weapons') {
+    if (!settings.weaponType) {
+      throw new Error('Weapon slot frontiers require a weapon type.');
+    }
+    item_keys = item_keys.filter(function(key) {
+      return catalog[key].type === settings.weaponType;
+    });
+  }
+
+  let item_frontiers = [];
+  item_keys.forEach(function(key) {
+    let report = BuildSearch.itemVariantReport(key, settings);
+    item_frontiers = item_frontiers.concat(report.nondominated_groups);
+  });
+
+  let groups_by_signature = new Map();
+  item_frontiers.forEach(function(group) {
+    let existing = groups_by_signature.get(group.signature);
+    if (!existing) {
+      existing = {
+        signature: group.signature,
+        representative: group.representative,
+        sources: [],
+      };
+      groups_by_signature.set(group.signature, existing);
+    }
+    existing.sources = existing.sources.concat(group.sources);
+  });
+
+  let unique_effective_groups = Array.from(groups_by_signature.values());
+  let nondominated_groups = this.pruneDominatedItemVariants(
+    unique_effective_groups,
+    active_weapon_types
+  );
+
+  return {
+    groups: nondominated_groups,
+    counts: {
+      base_items: item_keys.length,
+      item_frontier_variants: item_frontiers.length,
+      unique_effective: unique_effective_groups.length,
+      nondominated: nondominated_groups.length,
+    },
+  };
+};
+
+// =============================================================================
+//                                  MatchupGame
+// =============================================================================
+function MatchupGame() {}
+
+MatchupGame.symmetrizedScore = function(player, opponent) {
+  let forward = CombatSim.combatOutcomeDistribution(player, opponent);
+  let reverse = CombatSim.combatOutcomeDistribution(opponent, player);
+  let forward_score = forward.player1_wins + (forward.draws / 2);
+  let reverse_score = reverse.player2_wins + (reverse.draws / 2);
+  return (forward_score + reverse_score) / 2;
+};
+
+MatchupGame.payoffMatrix = function(players) {
+  let matrix = players.map(function() {
+    return new Array(players.length).fill(0);
+  });
+
+  for (let i = 0; i < players.length; i++) {
+    matrix[i][i] = 0.5;
+    for (let j = i + 1; j < players.length; j++) {
+      let score = this.symmetrizedScore(players[i], players[j]);
+      matrix[i][j] = score;
+      matrix[j][i] = 1 - score;
+    }
+  }
+
+  return matrix;
+};
+
+MatchupGame.strategyScores = function(matrix, strategy) {
+  return matrix[0].map(function(unused, opponent) {
+    return strategy.reduce(function(score, probability, player) {
+      return score + (probability * matrix[player][opponent]);
+    }, 0);
+  });
+};
+
+MatchupGame.worstCaseScore = function(matrix, strategy) {
+  return Math.min.apply(null, this.strategyScores(matrix, strategy));
+};
+
+MatchupGame.bestResponse = function(matrix, opponent_strategy) {
+  let scores = matrix.map(function(row) {
+    return row.reduce(function(score, payoff, opponent) {
+      return score + (payoff * opponent_strategy[opponent]);
+    }, 0);
+  });
+  let best_score = Math.max.apply(null, scores);
+  let tolerance = 1e-12;
+  return {
+    score: best_score,
+    players: scores.map(function(score, player) {
+      return Math.abs(score - best_score) <= tolerance ? player : null;
+    }).filter(function(player) { return player !== null; }),
+  };
+};
+
+MatchupGame.exploitability = function(matrix, strategy) {
+  return this.bestResponse(matrix, strategy).score - 0.5;
+};
+
+MatchupGame.pureMaximin = function(matrix) {
+  let worst_case_scores = matrix.map(function(row) {
+    return Math.min.apply(null, row);
+  });
+  let best_score = Math.max.apply(null, worst_case_scores);
+  let tolerance = 1e-12;
+  return {
+    score: best_score,
+    players: worst_case_scores.map(function(score, player) {
+      return Math.abs(score - best_score) <= tolerance ? player : null;
+    }).filter(function(player) { return player !== null; }),
+  };
+};
+
+// =============================================================================
 
 // Main entry point
 if (typeof require === 'undefined' || require.main === module) {
@@ -558,5 +1078,9 @@ if (typeof module !== 'undefined') {
     Item: Item,
     WeaponMod: WeaponMod,
     Build: Build,
+    BuildCatalogs: BuildCatalogs,
+    mergeBuildCatalogs: mergeBuildCatalogs,
+    BuildSearch: BuildSearch,
+    MatchupGame: MatchupGame,
   };
 }

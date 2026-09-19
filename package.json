@@ -13,7 +13,7 @@
     "validate:crystals": "ajv validate --spec=draft2020 -s data/crystals.schema.json -d data/crystals.json",
     "validate:equipment": "ajv validate --spec=draft2020 -s data/equipment.schema.json -d data/equipment.json",
     "validate:weapon-mods": "ajv validate --spec=draft2020 -s data/weapon-mods.schema.json -d data/weapon-mods.json",
-    "validate:builds": "ajv validate --spec=draft2020 -s data/builds.schema.json -d data/builds.json",
+    "validate:builds": "ajv validate --spec=draft2020 -s data/builds.schema.json -d \"data/*builds.json\"",
     "validate:catalog-relations": "node data/validate-relations.js"
   },
   "devDependencies": {

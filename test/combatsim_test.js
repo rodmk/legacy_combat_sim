@@ -7,6 +7,10 @@ let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
+let BuildCatalogs = src.BuildCatalogs;
+let mergeBuildCatalogs = src.mergeBuildCatalogs;
+let BuildSearch = src.BuildSearch;
+let MatchupGame = src.MatchupGame;
 let CombatSim = src.CombatSim;
 
 let jsondiffpatch = require('jsondiffpatch');
@@ -20,6 +24,40 @@ let testDeepEqualWithDiff = function(test, a, b) {
     own_props_b,
     'Difference: ' + JSON.stringify(jsondiffpatch.diff(own_props_a, own_props_b))
   );
+};
+
+let testDistributionMatchesMonteCarlo = function(test, expected, sampleDamage, randomState) {
+  let observedCounts = new Map();
+  let sampleCount = 100000;
+  let originalRandom = Math.random;
+
+  Math.random = function() {
+    randomState = (randomState * 16807) % 2147483647;
+    return (randomState - 1) / 2147483646;
+  };
+
+  try {
+    for (let sample = 0; sample < sampleCount; sample++) {
+      let damage = sampleDamage();
+      observedCounts.set(damage, (observedCounts.get(damage) || 0) + 1);
+    }
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  test.deepEqual(
+    Array.from(observedCounts.keys()).sort(function(a, b) { return a - b; }),
+    Array.from(expected.keys()).sort(function(a, b) { return a - b; })
+  );
+
+  expected.forEach(function(expectedProbability, damage) {
+    let observedProbability = observedCounts.get(damage) / sampleCount;
+    test.ok(
+      Math.abs(observedProbability - expectedProbability) < 0.005,
+      'damage ' + damage + ': expected ' + expectedProbability +
+        ', observed ' + observedProbability
+    );
+  });
 };
 
 exports.testCombatInitiative = function(test) {
@@ -485,6 +523,238 @@ exports.testCurrentArmorDamageFormula = function(test) {
   test.done();
 };
 
+exports.testWeaponDamageDistribution = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 100,
+    gun_skill: 100,
+  };
+  let defender = {
+    armor: 0,
+    dodge: 100,
+    def_skill: 100,
+  };
+  let weapon = {
+    skill: 'gun_skill',
+    min_damage: 100,
+    max_damage: 100,
+  };
+
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 0.75 ], [ 100, 0.25 ] ]
+  );
+
+  attacker.accuracy = 500;
+  attacker.gun_skill = 500;
+  defender.armor = 280;
+  weapon.min_damage = 100;
+  weapon.max_damage = 102;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 50, 1 / 3 ], [ 51, 2 / 3 ] ]
+  );
+
+  attacker.accuracy = 100;
+  defender.dodge = 500;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 1 ] ]
+  );
+
+  attacker.accuracy = 500;
+  defender.armor = 100000;
+  weapon.min_damage = 1;
+  weapon.max_damage = 1;
+  test.deepEqual(
+    Array.from(CombatSim.weaponDamageDistribution(attacker, defender, weapon)),
+    [ [ 0, 1 ] ]
+  );
+
+  test.done();
+};
+
+exports.testWeaponDamageDistributionMatchesMonteCarlo = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 175,
+    gun_skill: 145,
+  };
+  let defender = {
+    armor: 237,
+    dodge: 130,
+    def_skill: 190,
+  };
+  let weapon = {
+    skill: 'gun_skill',
+    min_damage: 90,
+    max_damage: 96,
+  };
+  let expected = CombatSim.weaponDamageDistribution(attacker, defender, weapon);
+  testDistributionMatchesMonteCarlo(test, expected, function() {
+    return CombatSim.attemptHit(attacker, defender, weapon);
+  }, 123456789);
+
+  test.done();
+};
+
+exports.testAttackDamageDistribution = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 100,
+    gun_skill: 100,
+    melee_skill: 100,
+    weapon1: {
+      skill: 'gun_skill',
+      min_damage: 10,
+      max_damage: 10,
+    },
+    weapon2: {
+      skill: 'melee_skill',
+      min_damage: 20,
+      max_damage: 20,
+    },
+  };
+  let defender = {
+    armor: 0,
+    dodge: 100,
+    def_skill: 100,
+  };
+
+  test.deepEqual(
+    Array.from(CombatSim.attackDamageDistribution(attacker, defender)),
+    [ [ 0, 0.5625 ], [ 20, 0.1875 ], [ 10, 0.1875 ], [ 30, 0.0625 ] ]
+  );
+
+  test.done();
+};
+
+exports.testAttackDamageDistributionMatchesMonteCarlo = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 175,
+    gun_skill: 145,
+    melee_skill: 215,
+    weapon1: {
+      skill: 'gun_skill',
+      min_damage: 90,
+      max_damage: 96,
+    },
+    weapon2: {
+      skill: 'melee_skill',
+      min_damage: 41,
+      max_damage: 45,
+    },
+  };
+  let defender = {
+    armor: 237,
+    dodge: 130,
+    def_skill: 190,
+  };
+  let expected = CombatSim.attackDamageDistribution(attacker, defender);
+  testDistributionMatchesMonteCarlo(test, expected, function() {
+    return CombatSim.attemptHit(attacker, defender, attacker.weapon1) +
+      CombatSim.attemptHit(attacker, defender, attacker.weapon2);
+  }, 987654321);
+
+  test.done();
+};
+
+exports.testCombatOutcomeDistribution = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 1, player2_wins: 0, draws: 0 }
+  );
+
+  player2.speed = 101;
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 0, player2_wins: 1, draws: 0 }
+  );
+
+  player1.weapon1 = { skill: 'gun_skill', min_damage: 0, max_damage: 0 };
+  player2.weapon1 = { skill: 'gun_skill', min_damage: 0, max_damage: 0 };
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 0, player2_wins: 0, draws: 1 }
+  );
+
+  test.done();
+};
+
+exports.testCombatOutcomeDistributionMatchesMonteCarlo = function(test) {
+  let player1 = {
+    max_hp: 60,
+    level: 80,
+    speed: 110,
+    accuracy: 175,
+    dodge: 130,
+    gun_skill: 145,
+    melee_skill: 215,
+    def_skill: 190,
+    armor: 100,
+    weapon1: { skill: 'gun_skill', min_damage: 30, max_damage: 30 },
+    weapon2: { skill: 'melee_skill', min_damage: 15, max_damage: 15 },
+  };
+  let player2 = {
+    max_hp: 65,
+    level: 80,
+    speed: 100,
+    accuracy: 160,
+    dodge: 145,
+    gun_skill: 205,
+    melee_skill: 155,
+    def_skill: 175,
+    armor: 110,
+    weapon1: { skill: 'gun_skill', min_damage: 28, max_damage: 28 },
+    weapon2: { skill: 'melee_skill', min_damage: 16, max_damage: 16 },
+  };
+  let expected = CombatSim.combatOutcomeDistribution(player1, player2);
+  let sampleCount = 100000;
+  let randomState = 246813579;
+  let originalRandom = Math.random;
+  let observed;
+
+  Math.random = function() {
+    randomState = (randomState * 16807) % 2147483647;
+    return (randomState - 1) / 2147483646;
+  };
+
+  try {
+    observed = CombatSim.simulateCombat(player1, player2, sampleCount);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  Object.keys(expected).forEach(function(outcome) {
+    let observedProbability = observed[outcome] / sampleCount;
+    test.ok(
+      Math.abs(observedProbability - expected[outcome]) < 0.005,
+      outcome + ': expected ' + expected[outcome] + ', observed ' + observedProbability
+    );
+  });
+  test.ok(Math.abs(expected.player1_wins + expected.player2_wins + expected.draws - 1) < 1e-9);
+
+  test.done();
+};
+
 exports.testAttackTypes = function(test) {
   let raw_stats = {
     speed: 101,
@@ -700,6 +970,190 @@ exports.testJsonBuild = function(test) {
   test.equal(livePlayer.dodge, 143);
   test.equal(livePlayer.gun_skill, 818);
   test.equal(livePlayer.def_skill, 778);
+
+  test.done();
+};
+
+exports.testEquivalentBuildGrouping = function(test) {
+  let original = JSON.parse(JSON.stringify(Build.CoreStaffVoidSwordWithScouts));
+  let reordered = JSON.parse(JSON.stringify(original));
+  let distinct = JSON.parse(JSON.stringify(original));
+  let weapon1 = reordered.equipment.weapon1;
+  reordered.name = 'Reordered weapons';
+  reordered.equipment.weapon1 = reordered.equipment.weapon2;
+  reordered.equipment.weapon2 = weapon1;
+  distinct.name = 'Quick attack';
+  distinct.attack_type = 'quick';
+
+  let groups = Player.groupEquivalentBuilds([ original, reordered, distinct ]);
+  let equivalent_group = groups.filter(function(group) {
+    return group.builds.length === 2;
+  })[0];
+
+  test.equal(groups.length, 2);
+  test.ok(equivalent_group);
+  test.strictEqual(equivalent_group.builds[0], original);
+  test.strictEqual(equivalent_group.builds[1], reordered);
+  test.equal(
+    equivalent_group.signature,
+    CombatSim.combatSignature(Player.generateBuild(original))
+  );
+  test.equal(equivalent_group.representative.name, original.name);
+  test.notEqual(
+    CombatSim.combatSignature(Player.generateBuild(original)),
+    CombatSim.combatSignature(Player.generateBuild(distinct))
+  );
+
+  test.done();
+};
+
+exports.testMultipleBuildCatalogs = function(test) {
+  test.equal(BuildCatalogs.length, 2);
+  test.equal(Object.keys(BuildCatalogs[1]).length, 15);
+  test.equal(Object.keys(Build).length, 20);
+  test.equal(Player.generateReferencePlayers(BuildCatalogs).length, 19);
+
+  let q15_player = Player.generateBuild(Build.ShadowDojoDLGunBuild2);
+  test.deepEqual(q15_player.weapon2, {
+    type: 'gun',
+    skill: 'gun_skill',
+    min_damage: 120,
+    max_damage: 138,
+  });
+  test.throws(function() {
+    mergeBuildCatalogs([ { Duplicate: {} }, { Duplicate: {} } ]);
+  }, /Duplicate build key/);
+
+  test.done();
+};
+
+exports.testCanonicalEquipmentVariantGeneration = function(test) {
+  test.deepEqual(
+    BuildSearch.activeWeaponSkills([ 'projectile', 'gun', 'projectile' ]),
+    [ 'gun_skill', 'proj_skill' ]
+  );
+  test.deepEqual(
+    BuildSearch.crystalMultisets([ 'A', 'B' ], 2),
+    [ [ 'A', 'A' ], [ 'A', 'B' ], [ 'B', 'B' ] ]
+  );
+
+  let variants = BuildSearch.generateItemVariantsForWeapons('RiftGun', [ 'RiftGun', 'VoidBow' ], {
+    crystalKeys: [ 'PerfectGreen', 'PerfectOrange', 'PerfectYellow', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  let sources = variants.reduce(function(all_sources, group) {
+    return all_sources.concat(group.sources);
+  }, []);
+  let crystal_selections = sources.map(function(source) {
+    return source.crystals;
+  });
+
+  test.deepEqual(crystal_selections, [ [ 'PerfectGreen' ], [ 'PerfectFire' ] ]);
+  test.equal(variants.length, 2);
+
+  let report = BuildSearch.itemVariantReport('RiftGun', {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectOrange', 'PerfectYellow', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  test.deepEqual(report.counts, {
+    unfiltered_ordered: 4,
+    filtered_ordered: 2,
+    canonical: 2,
+    unique_effective: 2,
+    nondominated: 2,
+  });
+  test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
+
+  let mod_combinations = BuildSearch.modCombinations(Item.BioGunMk4);
+  test.equal(mod_combinations.length, 4);
+  mod_combinations.forEach(function(mods) {
+    let occupied_slots = mods.map(function(key) { return WeaponMod[key].slot; });
+    test.equal(mods.length, 2);
+    test.equal(new Set(occupied_slots).size, occupied_slots.length);
+  });
+
+  let frontier = BuildSearch.pruneDominatedItemVariants([
+    { representative: { armor: 10, speed: 5 } },
+    { representative: { armor: 10, speed: 4 } },
+    { representative: { armor: 9, speed: 6 } },
+  ], [ 'gun' ]);
+  test.deepEqual(frontier.map(function(group) { return group.representative; }), [
+    { armor: 10, speed: 5 },
+    { armor: 9, speed: 6 },
+  ]);
+
+  test.done();
+};
+
+exports.testSlotVariantFrontier = function(test) {
+  let report = BuildSearch.slotVariantFrontier('weapons', {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    weaponType: 'gun',
+    itemKeys: [ 'RiftGun', 'AlienRifle', 'VoidBow' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+
+  test.equal(report.counts.base_items, 2);
+  test.ok(report.counts.item_frontier_variants >= report.counts.unique_effective);
+  test.ok(report.counts.unique_effective >= report.counts.nondominated);
+  report.groups.forEach(function(group) {
+    test.equal(group.representative.type, 'gun');
+    group.sources.forEach(function(source) {
+      test.notEqual(source.item, 'VoidBow');
+    });
+  });
+  test.throws(function() {
+    BuildSearch.slotVariantFrontier('weapons', {});
+  }, /require a weapon type/);
+  test.throws(function() {
+    BuildSearch.slotVariantFrontier('unknown', {});
+  }, /Unknown equipment slot/);
+
+  test.done();
+};
+
+exports.testRestrictedMatchupGame = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+  let matrix = MatchupGame.payoffMatrix([ player1, player2 ]);
+
+  test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
+
+  let cyclic_matrix = [
+    [ 0.5, 0, 1 ],
+    [ 1, 0.5, 0 ],
+    [ 0, 1, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.strategyScores(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), [
+    0.5, 0.5, 0.5,
+  ]);
+  test.equal(MatchupGame.worstCaseScore(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), 0.5);
+  test.deepEqual(MatchupGame.bestResponse(cyclic_matrix, [ 1, 0, 0 ]), {
+    score: 1,
+    players: [ 1 ],
+  });
+  test.equal(MatchupGame.exploitability(cyclic_matrix, [ 1 / 3, 1 / 3, 1 / 3 ]), 0);
+  test.equal(MatchupGame.exploitability(cyclic_matrix, [ 1, 0, 0 ]), 0.5);
+  test.deepEqual(MatchupGame.pureMaximin(cyclic_matrix), {
+    score: 0,
+    players: [ 0, 1, 2 ],
+  });
 
   test.done();
 };
