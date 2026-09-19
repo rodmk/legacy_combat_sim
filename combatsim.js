@@ -1166,23 +1166,34 @@ BuildSearch.initiativeSpeedPoints = function(build, opponents, attack_type) {
 BuildSearch.forEachStatAllocation = function(speed_points, options, visit) {
   let settings = options || {};
   let allowed_hp_points = settings.hpPoints ? new Set(settings.hpPoints) : null;
+  let point_stride = settings.pointStride || 1;
   let count = 0;
+  let values = function(minimum, maximum) {
+    let result = [];
+    for (let value = minimum; value <= maximum; value += point_stride) {
+      result.push(value);
+    }
+    if (result[result.length - 1] !== maximum) {
+      result.push(maximum);
+    }
+    return result;
+  };
 
   Array.from(new Set(speed_points)).sort(function(a, b) { return a - b; })
     .forEach(function(speed) {
-      for (let hp = 2; hp <= 175 - speed; hp++) {
+      values(2, 175 - speed).forEach(function(hp) {
         if (allowed_hp_points && !allowed_hp_points.has(hp)) {
-          continue;
+          return;
         }
-        for (let accuracy = 4; accuracy <= 179 - speed - hp; accuracy++) {
+        values(4, 179 - speed - hp).forEach(function(accuracy) {
           let dodge = 183 - speed - hp - accuracy;
           if (dodge < 4) {
-            continue;
+            return;
           }
           visit({ hp: hp, speed: speed, accuracy: accuracy, dodge: dodge });
           count++;
-        }
-      }
+        });
+      });
     });
 
   return count;
@@ -1338,7 +1349,8 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
   let combat_frontier = [];
   let economy_frontier = [];
   let evaluated_matchups = 0;
-  let defeat_cache = CombatSim.createDefeatRoundCache(options.minimumSurvivalProbability);
+  let defeat_cache = options.defeatCache ||
+    CombatSim.createDefeatRoundCache(options.minimumSurvivalProbability);
   let dominates = function(left, right, include_economy) {
     let strictly_better = false;
     for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
@@ -1424,6 +1436,118 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       return left.healing_credits_per_win - right.healing_credits_per_win;
     }, function(candidate) { return candidate.average_score >= 0.5; }),
   };
+};
+
+MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
+  options = options || {};
+  let point_strides = options.pointStrides || [ 8, 4, 2, 1 ];
+  let minimum_survival_probability = options.minimumSurvivalProbability || 0;
+  let allowed_hp_points = options.hpPoints ? new Set(options.hpPoints) : null;
+  let groups_by_signature = new Map();
+  let source_keys = new Set();
+  let search_cache = CombatSim.createDefeatRoundCache(minimum_survival_probability);
+  let addSource = function(source) {
+    if (source.stats.hp < 2 || source.stats.speed < 2 ||
+        source.stats.accuracy < 4 || source.stats.dodge < 4 ||
+        source.stats.hp + source.stats.speed + source.stats.accuracy + source.stats.dodge !== 183 ||
+        (allowed_hp_points && !allowed_hp_points.has(source.stats.hp))) {
+      return;
+    }
+    let source_key = JSON.stringify([ source.attack_type, source.stats ]);
+    if (source_keys.has(source_key)) {
+      return;
+    }
+    source_keys.add(source_key);
+    let candidate = Object.assign({}, build, {
+      stats: source.stats,
+      attack_type: source.attack_type,
+    });
+    let player = Player.generateBuild(candidate);
+    let signature = CombatSim.combatSignature(player);
+    let group = groups_by_signature.get(signature);
+    if (!group) {
+      group = { signature: signature, representative: player, sources: [] };
+      groups_by_signature.set(signature, group);
+    }
+    group.sources.push({
+      attack_type: source.attack_type,
+      stats: Object.assign({}, source.stats),
+    });
+  };
+
+  attack_types.forEach(function(attack_type) {
+    let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
+    BuildSearch.forEachStatAllocation(speed_points, {
+      hpPoints: options.hpPoints,
+      pointStride: point_strides[0],
+    }, function(stats) {
+      addSource({ attack_type: attack_type, stats: stats });
+    });
+  });
+
+  let stages = [];
+  let frontier_result;
+  point_strides.forEach(function(point_stride, stage) {
+    frontier_result = MatchupGame.candidateFrontiers(
+      Array.from(groups_by_signature.values()),
+      opponents,
+      opponent_ids,
+      { defeatCache: search_cache }
+    );
+    stages.push({
+      point_stride: point_stride,
+      candidate_count: frontier_result.candidate_count,
+      evaluated_matchups: frontier_result.evaluated_matchups,
+      combat_frontier_count: frontier_result.combat_frontier.length,
+      combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+    });
+
+    if (stage === point_strides.length - 1) {
+      return;
+    }
+    let next_stride = point_strides[stage + 1];
+    let frontier = frontier_result.combat_frontier.concat(
+      frontier_result.combat_economy_frontier
+    );
+    frontier.forEach(function(candidate) {
+      candidate.sources.forEach(function(source) {
+        for (let hp_offset = -point_stride; hp_offset <= point_stride;
+          hp_offset += next_stride) {
+          for (let accuracy_offset = -point_stride; accuracy_offset <= point_stride;
+            accuracy_offset += next_stride) {
+            let stats = {
+              hp: source.stats.hp + hp_offset,
+              speed: source.stats.speed,
+              accuracy: source.stats.accuracy + accuracy_offset,
+            };
+            stats.dodge = 183 - stats.hp - stats.speed - stats.accuracy;
+            addSource({ attack_type: source.attack_type, stats: stats });
+          }
+        }
+      });
+    });
+  });
+
+  let finalist_source_keys = new Set();
+  frontier_result.combat_frontier.concat(frontier_result.combat_economy_frontier)
+    .forEach(function(candidate) {
+      candidate.sources.forEach(function(source) {
+        finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
+      });
+    });
+  let finalists = Array.from(groups_by_signature.values()).filter(function(group) {
+    return group.sources.some(function(source) {
+      return finalist_source_keys.has(JSON.stringify([ source.attack_type, source.stats ]));
+    });
+  });
+  let exact_result = MatchupGame.candidateFrontiers(finalists, opponents, opponent_ids);
+  exact_result.search_candidate_count = frontier_result.candidate_count;
+  exact_result.search_evaluated_matchups = frontier_result.evaluated_matchups;
+  exact_result.search_defeat_cache = frontier_result.defeat_cache;
+  exact_result.minimum_survival_probability = minimum_survival_probability;
+  exact_result.exact_finalist_count = finalists.length;
+  exact_result.stages = stages;
+  return exact_result;
 };
 
 MatchupGame.dominanceFrontier = function(matrix) {

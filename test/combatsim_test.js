@@ -1258,6 +1258,32 @@ exports.testStatAllocationGeneration = function(test) {
   test.ok(groups.every(function(group) {
     return group.representative.max_hp === 10 && group.sources.length > 0;
   }));
+
+  let exhaustive = MatchupGame.candidateFrontiers(groups, opponents, opponent_keys, {
+    minimumSurvivalProbability: 1e-6,
+  });
+  let adaptive = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], minimumSurvivalProbability: 1e-6 }
+  );
+  let frontierSources = function(result, frontier) {
+    return result[frontier].flatMap(function(candidate) {
+      return candidate.sources.map(function(source) { return JSON.stringify(source); });
+    }).sort();
+  };
+  test.deepEqual(
+    frontierSources(adaptive, 'combat_frontier'),
+    frontierSources(exhaustive, 'combat_frontier')
+  );
+  test.deepEqual(
+    frontierSources(adaptive, 'combat_economy_frontier'),
+    frontierSources(exhaustive, 'combat_economy_frontier')
+  );
+  test.ok(adaptive.search_candidate_count < groups.length);
+  test.equal(adaptive.exact_finalist_count, 2);
   test.done();
 };
 
