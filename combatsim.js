@@ -2063,12 +2063,15 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
 
 MatchupGame.expandEquipmentArchive = function(catalog, options) {
   options = options || {};
-  let batch_size = options.batchSize || 8;
+  let batch_size = options.batchSize || 2;
   let improvement_tolerance = options.improvementTolerance === undefined ?
     1e-6 : options.improvementTolerance;
+  let catalog_matchup_cache = options.catalogMatchupCache || {
+    values: new Map(), hits: 0, misses: 0,
+  };
   let analysis_started = Date.now();
   let before = this.analyzeBuildCatalog(catalog, {
-    matchupCache: options.catalogMatchupCache,
+    matchupCache: catalog_matchup_cache,
   });
   let analysis_ms = Date.now() - analysis_started;
   let equilibrium_entries = before.inferred_meta.weights;
@@ -2095,11 +2098,30 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let archived_concepts = new Set(Object.keys(catalog).map(function(key) {
     return BuildSearch.equipmentConceptSignature(catalog[key]);
   }));
-  let selected = response.beam.filter(function(entry) {
+  let profitable = response.beam.filter(function(entry) {
     return entry.best_response.weighted_score > 0.5 + improvement_tolerance &&
       !archived_signatures.has(entry.best_response.signature) &&
       !archived_concepts.has(entry.concept_signature);
-  }).slice(0, batch_size);
+  });
+  let provisional_catalog = Object.assign({}, catalog);
+  profitable.forEach(function(entry, index) {
+    provisional_catalog['ProvisionalResponse' + index] = Object.assign(
+      {}, entry.best_response.sources[0].build, { reference: false }
+    );
+  });
+  let provisional_analysis = profitable.length > 0 ? this.analyzeBuildCatalog(
+    provisional_catalog, { matchupCache: catalog_matchup_cache }
+  ) : before;
+  let provisional_frontier = new Set(provisional_analysis.candidates.filter(
+    function(candidate) { return candidate.frontier; }
+  ).map(function(candidate) { return candidate.id; }));
+  let selected = profitable.slice(0, 1);
+  profitable.slice(1).forEach(function(entry, index) {
+    if (selected.length < batch_size &&
+        provisional_frontier.has('ProvisionalResponse' + (index + 1))) {
+      selected.push(entry);
+    }
+  });
   let expanded_catalog = Object.assign({}, catalog);
   selected.forEach(function(entry, index) {
     let key = 'EndogenousResponse' + (Object.keys(catalog).length + index);
@@ -2111,7 +2133,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   });
   let solve_started = Date.now();
   let after = selected.length > 0 ? this.analyzeBuildCatalog(expanded_catalog, {
-    matchupCache: options.catalogMatchupCache,
+    matchupCache: catalog_matchup_cache,
   }) : before;
   let solve_ms = Date.now() - solve_started;
 
@@ -2128,6 +2150,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     before: before,
     after: after,
     response: response,
+    screened_response_count: profitable.length,
     timings_ms: {
       initial_analysis: analysis_ms,
       response_search: search_ms,

@@ -5,7 +5,7 @@ let src = require('../combatsim');
 let kernel = require('../data/kernel-builds.json');
 let result = src.MatchupGame.endogenousEquipmentSearch(kernel, {
   beamWidth: 8,
-  batchSize: 8,
+  batchSize: 2,
   maxRounds: Number(process.env.SEARCH_ROUNDS || 2),
   minimumSurvivalProbability: 0.01,
 });
