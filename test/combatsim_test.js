@@ -22,6 +22,40 @@ let testDeepEqualWithDiff = function(test, a, b) {
   );
 };
 
+let testDistributionMatchesMonteCarlo = function(test, expected, sampleDamage, randomState) {
+  let observedCounts = new Map();
+  let sampleCount = 100000;
+  let originalRandom = Math.random;
+
+  Math.random = function() {
+    randomState = (randomState * 16807) % 2147483647;
+    return (randomState - 1) / 2147483646;
+  };
+
+  try {
+    for (let sample = 0; sample < sampleCount; sample++) {
+      let damage = sampleDamage();
+      observedCounts.set(damage, (observedCounts.get(damage) || 0) + 1);
+    }
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  test.deepEqual(
+    Array.from(observedCounts.keys()).sort(function(a, b) { return a - b; }),
+    Array.from(expected.keys()).sort(function(a, b) { return a - b; })
+  );
+
+  expected.forEach(function(expectedProbability, damage) {
+    let observedProbability = observedCounts.get(damage) / sampleCount;
+    test.ok(
+      Math.abs(observedProbability - expectedProbability) < 0.005,
+      'damage ' + damage + ': expected ' + expectedProbability +
+        ', observed ' + observedProbability
+    );
+  });
+};
+
 exports.testCombatInitiative = function(test) {
   let slower = { name: 'Slower', speed: 100 };
   let faster = { name: 'Faster', speed: 101 };
@@ -553,38 +587,71 @@ exports.testWeaponDamageDistributionMatchesMonteCarlo = function(test) {
     max_damage: 96,
   };
   let expected = CombatSim.weaponDamageDistribution(attacker, defender, weapon);
-  let observedCounts = new Map();
-  let sampleCount = 100000;
-  let randomState = 123456789;
-  let originalRandom = Math.random;
+  testDistributionMatchesMonteCarlo(test, expected, function() {
+    return CombatSim.attemptHit(attacker, defender, weapon);
+  }, 123456789);
 
-  Math.random = function() {
-    randomState = (randomState * 16807) % 2147483647;
-    return (randomState - 1) / 2147483646;
+  test.done();
+};
+
+exports.testAttackDamageDistribution = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 100,
+    gun_skill: 100,
+    melee_skill: 100,
+    weapon1: {
+      skill: 'gun_skill',
+      min_damage: 10,
+      max_damage: 10,
+    },
+    weapon2: {
+      skill: 'melee_skill',
+      min_damage: 20,
+      max_damage: 20,
+    },
+  };
+  let defender = {
+    armor: 0,
+    dodge: 100,
+    def_skill: 100,
   };
 
-  try {
-    for (let sample = 0; sample < sampleCount; sample++) {
-      let damage = CombatSim.attemptHit(attacker, defender, weapon);
-      observedCounts.set(damage, (observedCounts.get(damage) || 0) + 1);
-    }
-  } finally {
-    Math.random = originalRandom;
-  }
-
   test.deepEqual(
-    Array.from(observedCounts.keys()).sort(function(a, b) { return a - b; }),
-    Array.from(expected.keys()).sort(function(a, b) { return a - b; })
+    Array.from(CombatSim.attackDamageDistribution(attacker, defender)),
+    [ [ 0, 0.5625 ], [ 20, 0.1875 ], [ 10, 0.1875 ], [ 30, 0.0625 ] ]
   );
 
-  expected.forEach(function(expectedProbability, damage) {
-    let observedProbability = observedCounts.get(damage) / sampleCount;
-    test.ok(
-      Math.abs(observedProbability - expectedProbability) < 0.005,
-      'damage ' + damage + ': expected ' + expectedProbability +
-        ', observed ' + observedProbability
-    );
-  });
+  test.done();
+};
+
+exports.testAttackDamageDistributionMatchesMonteCarlo = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 175,
+    gun_skill: 145,
+    melee_skill: 215,
+    weapon1: {
+      skill: 'gun_skill',
+      min_damage: 90,
+      max_damage: 96,
+    },
+    weapon2: {
+      skill: 'melee_skill',
+      min_damage: 41,
+      max_damage: 45,
+    },
+  };
+  let defender = {
+    armor: 237,
+    dodge: 130,
+    def_skill: 190,
+  };
+  let expected = CombatSim.attackDamageDistribution(attacker, defender);
+  testDistributionMatchesMonteCarlo(test, expected, function() {
+    return CombatSim.attemptHit(attacker, defender, attacker.weapon1) +
+      CombatSim.attemptHit(attacker, defender, attacker.weapon2);
+  }, 987654321);
 
   test.done();
 };

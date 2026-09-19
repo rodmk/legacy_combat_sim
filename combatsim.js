@@ -202,6 +202,22 @@ CombatSim.weaponDamageDistribution = function(att, def, weapon) {
   return distribution;
 };
 
+CombatSim.attackDamageDistribution = function(att, def) {
+  let weapon1_distribution = this.weaponDamageDistribution(att, def, att.weapon1);
+  let weapon2_distribution = this.weaponDamageDistribution(att, def, att.weapon2);
+  let distribution = new Map();
+
+  weapon1_distribution.forEach(function(weapon1_probability, weapon1_damage) {
+    weapon2_distribution.forEach(function(weapon2_probability, weapon2_damage) {
+      let damage = weapon1_damage + weapon2_damage;
+      let probability = weapon1_probability * weapon2_probability;
+      distribution.set(damage, (distribution.get(damage) || 0) + probability);
+    });
+  });
+
+  return distribution;
+};
+
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
   return Math.random() < this.combatProbability(stat1, stat2);
