@@ -334,9 +334,13 @@ Player.generateBuild = function(build) {
 };
 
 Player.generateReferencePlayers = function() {
-  return Object.keys(Build).map(function(key) {
-    return Player.generateBuild(Build[key]);
-  });
+  return Object.keys(Build)
+    .filter(function(key) {
+      return Build[key].reference !== false;
+    })
+    .map(function(key) {
+      return Player.generateBuild(Build[key]);
+    });
 };
 
 // =============================================================================

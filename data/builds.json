@@ -27,7 +27,8 @@
   },
   "DualRiftsWithBiosAbyss": {
     "name": "Dual Rifts w/ Bios (Abyss/Ammy Cs)",
-    "stats": { "hp": 70, "speed": 12, "accuracy": 4, "dodge": 97 },
+    "reference": false,
+    "stats": { "hp": 150, "speed": 3, "accuracy": 4, "dodge": 26 },
     "equipment": {
       "armor": {
         "item": "DarkLegionArmor",

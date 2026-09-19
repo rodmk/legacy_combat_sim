@@ -425,6 +425,15 @@ exports.testJsonBuild = function(test) {
     max_damage: 180,
   });
 
+  let livePlayer = Player.generateBuild(Build.DualRiftsWithBiosAbyss);
+  test.equal(livePlayer.max_hp, 750);
+  test.equal(livePlayer.armor, 83);
+  test.equal(livePlayer.speed, 256);
+  test.equal(livePlayer.accuracy, 228);
+  test.equal(livePlayer.dodge, 143);
+  test.equal(livePlayer.gun_skill, 818);
+  test.equal(livePlayer.def_skill, 778);
+
   test.done();
 };
 

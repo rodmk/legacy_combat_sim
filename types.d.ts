@@ -55,6 +55,7 @@ export interface BuildWeaponDefinition extends BuildItemDefinition {
 
 export interface BuildDefinition {
   name: string;
+  reference?: boolean;
   stats: {
     hp: number;
     speed: number;

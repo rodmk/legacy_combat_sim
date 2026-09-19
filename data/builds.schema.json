@@ -12,6 +12,7 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "reference": { "type": "boolean" },
         "stats": { "$ref": "#/$defs/stats" },
         "equipment": { "$ref": "#/$defs/loadout" }
       }
