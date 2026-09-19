@@ -729,9 +729,13 @@ function BuildSearch() {}
 BuildSearch.crystalMultisets = function(crystal_keys, socket_capacity) {
   let multisets = [];
 
+  if (crystal_keys.length === 0) {
+    return [ [] ];
+  }
+
   let addMultisets = function(start, remaining, selected) {
-    multisets.push(selected.slice());
     if (remaining === 0) {
+      multisets.push(selected.slice());
       return;
     }
 
@@ -850,11 +854,7 @@ BuildSearch.itemVariantReport = function(item_key, options) {
   let mod_count = this.modCombinations(item).length;
   let groups = this.generateItemVariants(item_key, settings);
   let orderedCount = function(crystal_count) {
-    let count = 0;
-    for (let sockets = 0; sockets <= socket_capacity; sockets++) {
-      count += Math.pow(crystal_count, sockets);
-    }
-    return count * mod_count;
+    return (crystal_count === 0 ? 1 : Math.pow(crystal_count, socket_capacity)) * mod_count;
   };
 
   return {

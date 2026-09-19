@@ -1007,7 +1007,7 @@ exports.testEquivalentBuildGrouping = function(test) {
 exports.testCanonicalEquipmentVariantGeneration = function(test) {
   test.deepEqual(
     BuildSearch.crystalMultisets([ 'A', 'B' ], 2),
-    [ [], [ 'A' ], [ 'A', 'A' ], [ 'A', 'B' ], [ 'B' ], [ 'B', 'B' ] ]
+    [ [ 'A', 'A' ], [ 'A', 'B' ], [ 'B', 'B' ] ]
   );
 
   let variants = BuildSearch.generateItemVariantsForWeapons('RiftGun', [ 'RiftGun', 'VoidBow' ], {
@@ -1021,8 +1021,8 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
     return source.crystals;
   });
 
-  test.deepEqual(crystal_selections, [ [], [ 'PerfectGreen' ], [ 'PerfectFire' ] ]);
-  test.equal(variants.length, 3);
+  test.deepEqual(crystal_selections, [ [ 'PerfectGreen' ], [ 'PerfectFire' ] ]);
+  test.equal(variants.length, 2);
 
   let report = BuildSearch.itemVariantReport('RiftGun', {
     activeWeaponTypes: [ 'gun', 'projectile' ],
@@ -1030,10 +1030,10 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
     socketCapacity: 1,
   });
   test.deepEqual(report.counts, {
-    unfiltered_ordered: 5,
-    filtered_ordered: 3,
-    canonical: 3,
-    unique_effective: 3,
+    unfiltered_ordered: 4,
+    filtered_ordered: 2,
+    canonical: 2,
+    unique_effective: 2,
   });
   test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
 
