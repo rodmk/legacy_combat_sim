@@ -43,7 +43,7 @@
       },
       "misc1": {
         "item": "BioSpinalEnhancer",
-        "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "PerfectPink"]
       },
       "misc2": {
         "item": "BioSpinalEnhancer",
