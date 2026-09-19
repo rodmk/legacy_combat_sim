@@ -1073,6 +1073,84 @@ BuildSearch.slotVariantFrontier = function(slot, options) {
   };
 };
 
+BuildSearch.initiativeSpeedPoints = function(build, opponents, attack_type) {
+  let minimum_speed_points = 2;
+  let maximum_speed_points = 173;
+  let speed_by_points = new Map();
+  let selected_points = new Set([ minimum_speed_points ]);
+
+  for (let speed_points = minimum_speed_points;
+    speed_points <= maximum_speed_points; speed_points++) {
+    let stats = {
+      hp: 2,
+      speed: speed_points,
+      accuracy: 4,
+      dodge: 177 - speed_points,
+    };
+    let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+    speed_by_points.set(speed_points, Player.generateBuild(candidate).speed);
+  }
+
+  opponents.forEach(function(opponent) {
+    for (let speed_points = minimum_speed_points;
+      speed_points <= maximum_speed_points; speed_points++) {
+      let speed = speed_by_points.get(speed_points);
+      if (speed === opponent.speed) {
+        selected_points.add(speed_points);
+      }
+      if (speed > opponent.speed) {
+        selected_points.add(speed_points);
+        break;
+      }
+    }
+  });
+
+  return Array.from(selected_points).sort(function(a, b) { return a - b; });
+};
+
+BuildSearch.forEachStatAllocation = function(speed_points, options, visit) {
+  let settings = options || {};
+  let allowed_hp_points = settings.hpPoints ? new Set(settings.hpPoints) : null;
+  let count = 0;
+
+  Array.from(new Set(speed_points)).sort(function(a, b) { return a - b; })
+    .forEach(function(speed) {
+      for (let hp = 2; hp <= 175 - speed; hp++) {
+        if (allowed_hp_points && !allowed_hp_points.has(hp)) {
+          continue;
+        }
+        for (let accuracy = 4; accuracy <= 179 - speed - hp; accuracy++) {
+          let dodge = 183 - speed - hp - accuracy;
+          if (dodge < 4) {
+            continue;
+          }
+          visit({ hp: hp, speed: speed, accuracy: accuracy, dodge: dodge });
+          count++;
+        }
+      }
+    });
+
+  return count;
+};
+
+BuildSearch.statAllocationReport = function(build, opponents, attack_types, options) {
+  return attack_types.map(function(attack_type) {
+    let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
+    let signatures = new Set();
+    let count = BuildSearch.forEachStatAllocation(speed_points, options, function(stats) {
+      let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+      signatures.add(CombatSim.combatSignature(Player.generateBuild(candidate)));
+    });
+
+    return {
+      attack_type: attack_type,
+      speed_points: speed_points,
+      allocations: count,
+      unique_combat_signatures: signatures.size,
+    };
+  });
+};
+
 // =============================================================================
 //                                  MatchupGame
 // =============================================================================

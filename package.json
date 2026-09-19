@@ -4,6 +4,7 @@
   "description": "Combat Simulator for Legacy (http://www.legacy-game.net)",
   "scripts": {
     "analyze:seed": "node scripts/analyze-seed-builds.js",
+    "analyze:allocations": "node scripts/analyze-stat-allocations.js",
     "verify": "yarn test && yarn validate:data && yarn typecheck",
     "prepare": "husky",
     "test": "yarn test-eslint && yarn test-unittest",

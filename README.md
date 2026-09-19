@@ -50,6 +50,12 @@ yarn analyze:seed > seed-analysis.json
 
 The report groups combat-equivalent builds, identifies the initial matchup-vector frontier, iteratively removes dominated strategies to a stable strategic kernel, and identifies pure maximin candidates. It includes each elimination round, scores, draw rates, exploitability, limiting opponents, HP loss, healing cost, credits per win, and the restricted matchup matrices. Overall expected HP loss treats defeat as zero remaining HP; separate win metrics report expected HP and credits spent conditional on winning. Healing cost is modeled as the missing HP divided by six and rounded to the nearest credit, with a five-credit premium when reviving from zero HP.
 
+Inspect the legal stat-allocation space for the seed-kernel loadout with speed compressed to initiative thresholds:
+
+```sh
+yarn analyze:allocations > allocation-analysis.json
+```
+
 Development
 ===========
 

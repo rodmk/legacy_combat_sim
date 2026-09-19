@@ -1177,6 +1177,48 @@ exports.testSlotVariantFrontier = function(test) {
   test.done();
 };
 
+exports.testStatAllocationGeneration = function(test) {
+  let build = Build.ShadowDojoDLGunBuild3;
+  let opponent_keys = [
+    'ShadowDojoArmorStackCores',
+    'ShadowDojoDLGunBuild3',
+    'ShadowDojoHFCoreVoid',
+    'ShadowDojoSG1SplitBombs',
+  ];
+  let opponents = opponent_keys.map(function(key) {
+    return Player.generateBuild(Build[key]);
+  });
+
+  test.deepEqual(
+    BuildSearch.initiativeSpeedPoints(build, opponents, 'normal'),
+    [ 2, 3, 16, 19, 24 ]
+  );
+
+  let allocations = [];
+  let count = BuildSearch.forEachStatAllocation([ 173 ], {}, function(stats) {
+    allocations.push(stats);
+  });
+  test.equal(count, 1);
+  test.deepEqual(allocations, [ { hp: 2, speed: 173, accuracy: 4, dodge: 4 } ]);
+
+  let allocations_are_valid = true;
+  count = BuildSearch.forEachStatAllocation([ 2 ], { hpPoints: [ 2 ] }, function(stats) {
+    allocations_are_valid = allocations_are_valid &&
+      stats.hp + stats.speed + stats.accuracy + stats.dodge === 183 &&
+      stats.accuracy >= 4 && stats.dodge >= 4;
+  });
+  test.equal(count, 172);
+  test.ok(allocations_are_valid);
+
+  let report = BuildSearch.statAllocationReport(
+    build, opponents, [ 'normal' ], { hpPoints: [ 2 ] }
+  );
+  test.equal(report.length, 1);
+  test.deepEqual(report[0].speed_points, [ 2, 3, 16, 19, 24 ]);
+  test.ok(report[0].unique_combat_signatures <= report[0].allocations);
+  test.done();
+};
+
 exports.testRestrictedMatchupGame = function(test) {
   let player1 = {
     max_hp: 10,
