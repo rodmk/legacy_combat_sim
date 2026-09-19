@@ -1059,6 +1059,34 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
   test.done();
 };
 
+exports.testSlotVariantFrontier = function(test) {
+  let report = BuildSearch.slotVariantFrontier('weapons', {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    weaponType: 'gun',
+    itemKeys: [ 'RiftGun', 'AlienRifle', 'VoidBow' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+
+  test.equal(report.counts.base_items, 2);
+  test.ok(report.counts.item_frontier_variants >= report.counts.unique_effective);
+  test.ok(report.counts.unique_effective >= report.counts.nondominated);
+  report.groups.forEach(function(group) {
+    test.equal(group.representative.type, 'gun');
+    group.sources.forEach(function(source) {
+      test.notEqual(source.item, 'VoidBow');
+    });
+  });
+  test.throws(function() {
+    BuildSearch.slotVariantFrontier('weapons', {});
+  }, /require a weapon type/);
+  test.throws(function() {
+    BuildSearch.slotVariantFrontier('unknown', {});
+  }, /Unknown equipment slot/);
+
+  test.done();
+};
+
 exports.testCatalogIntegration = function(test) {
   let player = Player.generatePlayer(
     'Catalog Player',

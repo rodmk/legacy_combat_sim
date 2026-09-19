@@ -915,6 +915,61 @@ BuildSearch.itemVariantReport = function(item_key, options) {
   };
 };
 
+BuildSearch.slotVariantFrontier = function(slot, options) {
+  let settings = options || {};
+  let catalog = equipmentCatalog[slot];
+  if (!catalog) {
+    throw new Error('Unknown equipment slot: ' + slot + '.');
+  }
+
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let item_keys = settings.itemKeys || Object.keys(catalog);
+  if (slot === 'weapons') {
+    if (!settings.weaponType) {
+      throw new Error('Weapon slot frontiers require a weapon type.');
+    }
+    item_keys = item_keys.filter(function(key) {
+      return catalog[key].type === settings.weaponType;
+    });
+  }
+
+  let item_frontiers = [];
+  item_keys.forEach(function(key) {
+    let report = BuildSearch.itemVariantReport(key, settings);
+    item_frontiers = item_frontiers.concat(report.nondominated_groups);
+  });
+
+  let groups_by_signature = new Map();
+  item_frontiers.forEach(function(group) {
+    let existing = groups_by_signature.get(group.signature);
+    if (!existing) {
+      existing = {
+        signature: group.signature,
+        representative: group.representative,
+        sources: [],
+      };
+      groups_by_signature.set(group.signature, existing);
+    }
+    existing.sources = existing.sources.concat(group.sources);
+  });
+
+  let unique_effective_groups = Array.from(groups_by_signature.values());
+  let nondominated_groups = this.pruneDominatedItemVariants(
+    unique_effective_groups,
+    active_weapon_types
+  );
+
+  return {
+    groups: nondominated_groups,
+    counts: {
+      base_items: item_keys.length,
+      item_frontier_variants: item_frontiers.length,
+      unique_effective: unique_effective_groups.length,
+      nondominated: nondominated_groups.length,
+    },
+  };
+};
+
 // =============================================================================
 
 // Main entry point
