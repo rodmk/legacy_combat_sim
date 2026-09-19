@@ -1982,7 +1982,9 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
   let initial = this.equipmentResponseBeam(
     build, opponents, opponent_ids, opponent_weights, shared_options
   );
-  let beam = initial.beam;
+  let beam = initial.beam.map(function(entry) {
+    return Object.assign({ stable: false }, entry);
+  });
   let iterations = [ {
     iteration: 1,
     beam: beam,
@@ -1993,25 +1995,35 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
   } ];
 
   for (let iteration = 2; iteration <= maximum_iterations; iteration++) {
-    let responses = beam.map(function(entry) {
-      return MatchupGame.equipmentBestResponse(
+    let advances = beam.filter(function(entry) {
+      return !entry.stable;
+    }).map(function(entry) {
+      let response = MatchupGame.equipmentBestResponse(
         entry.best_response.sources[0].build,
         opponents,
         opponent_ids,
         opponent_weights,
         shared_options
       );
+      return {
+        entry: {
+          concept_signature: BuildSearch.equipmentConceptSignature(
+            response.best_response.sources[0].build
+          ),
+          best_response: response.best_response,
+          stable: response.best_response.signature === entry.best_response.signature,
+        },
+        response: response,
+      };
     });
     let best_by_concept = new Map();
-    responses.forEach(function(response) {
-      let candidate = response.best_response;
-      let signature = BuildSearch.equipmentConceptSignature(candidate.sources[0].build);
-      let existing = best_by_concept.get(signature);
-      if (!existing || candidate.weighted_score > existing.best_response.weighted_score) {
-        best_by_concept.set(signature, {
-          concept_signature: signature,
-          best_response: candidate,
-        });
+    beam.filter(function(entry) { return entry.stable; }).concat(
+      advances.map(function(advance) { return advance.entry; })
+    ).forEach(function(entry) {
+      let existing = best_by_concept.get(entry.concept_signature);
+      if (!existing || entry.best_response.weighted_score >
+          existing.best_response.weighted_score) {
+        best_by_concept.set(entry.concept_signature, entry);
       }
     });
     let next_beam = Array.from(best_by_concept.values()).sort(function(left, right) {
@@ -2026,21 +2038,22 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
     iterations.push({
       iteration: iteration,
       beam: next_beam,
-      candidate_count: responses.reduce(function(sum, response) {
-        return sum + response.candidate_count;
+      candidate_count: advances.reduce(function(sum, advance) {
+        return sum + advance.response.candidate_count;
       }, 0),
-      finalist_count: responses.reduce(function(sum, response) {
-        return sum + response.finalist_count;
+      finalist_count: advances.reduce(function(sum, advance) {
+        return sum + advance.response.finalist_count;
       }, 0),
-      evaluated_matchups: responses.reduce(function(sum, response) {
-        return sum + response.evaluated_matchups;
+      evaluated_matchups: advances.reduce(function(sum, advance) {
+        return sum + advance.response.evaluated_matchups;
       }, 0),
-      exact_matchups: responses.reduce(function(sum, response) {
-        return sum + response.exact_matchups;
+      exact_matchups: advances.reduce(function(sum, advance) {
+        return sum + advance.response.exact_matchups;
       }, 0),
     });
     beam = next_beam;
-    if (JSON.stringify(previous_signatures) === JSON.stringify(next_signatures)) {
+    if (beam.every(function(entry) { return entry.stable; }) ||
+        JSON.stringify(previous_signatures) === JSON.stringify(next_signatures)) {
       return { beam: beam, iterations: iterations, converged: true };
     }
   }
