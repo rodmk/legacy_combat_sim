@@ -1166,8 +1166,11 @@ BuildSearch.initiativeSpeedPoints = function(build, opponents, attack_type) {
 BuildSearch.forEachStatAllocation = function(speed_points, options, visit) {
   let settings = options || {};
   let allowed_hp_points = settings.hpPoints ? new Set(settings.hpPoints) : null;
-  let point_stride = settings.pointStride || 1;
+  let point_stride = settings.pointStride === undefined ? 1 : settings.pointStride;
   let count = 0;
+  if (!Number.isInteger(point_stride) || point_stride <= 0) {
+    throw new Error('Stat allocation point stride must be a positive integer.');
+  }
   let values = function(minimum, maximum) {
     let result = [];
     for (let value = minimum; value <= maximum; value += point_stride) {
@@ -1388,7 +1391,12 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
   groups.forEach(function(group) {
     let group_signature = group.signature || CombatSim.combatSignature(group.representative);
     let matchups = opponents.map(function(opponent, opponent_index) {
-      let matchup_key = group_signature + ':' + opponent_index;
+      let matchup_key = JSON.stringify([
+        group_signature,
+        CombatSim.combatSignature(opponent),
+        opponent_index,
+        defeat_cache.minimum_survival_probability,
+      ]);
       if (matchup_cache.values.has(matchup_key)) {
         matchup_cache.hits++;
         return matchup_cache.values.get(matchup_key);
@@ -1463,6 +1471,11 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
   options = options || {};
   let point_strides = options.pointStrides || [ 11, 5, 2, 1 ];
+  if (point_strides.length === 0 || point_strides.some(function(point_stride) {
+    return !Number.isInteger(point_stride) || point_stride <= 0;
+  })) {
+    throw new Error('Adaptive stat search requires positive integer point strides.');
+  }
   let minimum_survival_probability = options.minimumSurvivalProbability || 0;
   let allowed_hp_points = options.hpPoints ? new Set(options.hpPoints) : null;
   let groups_by_signature = new Map();

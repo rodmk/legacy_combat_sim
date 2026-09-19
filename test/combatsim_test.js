@@ -1243,6 +1243,9 @@ exports.testStatAllocationGeneration = function(test) {
   });
   test.equal(count, 172);
   test.ok(allocations_are_valid);
+  test.throws(function() {
+    BuildSearch.forEachStatAllocation([ 2 ], { pointStride: 0 }, function() {});
+  }, /positive integer/);
 
   let report = BuildSearch.statAllocationReport(
     build, opponents, [ 'normal' ], { hpPoints: [ 2 ] }
@@ -1286,6 +1289,16 @@ exports.testStatAllocationGeneration = function(test) {
   test.equal(adaptive.exact_finalist_count, 2);
   test.equal(adaptive.converged, true);
   test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
+  test.throws(function() {
+    MatchupGame.adaptiveStatFrontiers(
+      build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [] }
+    );
+  }, /positive integer/);
+  test.throws(function() {
+    MatchupGame.adaptiveStatFrontiers(
+      build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [ -1 ] }
+    );
+  }, /positive integer/);
 
   let sparse_adaptive = MatchupGame.adaptiveStatFrontiers(
     build,
@@ -1387,6 +1400,18 @@ exports.testRestrictedMatchupGame = function(test) {
     hits: matchup_cache.hits,
     misses: matchup_cache.misses,
   }, { entries: 2, hits: 1, misses: 2 });
+  let changed_opponent = Object.assign({}, player2, { dodge: player2.dodge + 1 });
+  MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ changed_opponent ], [ 'changed-opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  test.deepEqual({
+    entries: matchup_cache.values.size,
+    hits: matchup_cache.hits,
+    misses: matchup_cache.misses,
+  }, { entries: 3, hits: 1, misses: 3 });
 
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],
