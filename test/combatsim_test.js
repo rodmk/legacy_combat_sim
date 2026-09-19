@@ -656,6 +656,101 @@ exports.testAttackDamageDistributionMatchesMonteCarlo = function(test) {
   test.done();
 };
 
+exports.testCombatOutcomeDistribution = function(test) {
+  let player1 = {
+    max_hp: 10,
+    level: 80,
+    speed: 100,
+    accuracy: 500,
+    dodge: 100,
+    gun_skill: 500,
+    def_skill: 100,
+    armor: 0,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  };
+  let player2 = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 1, player2_wins: 0, draws: 0 }
+  );
+
+  player2.speed = 101;
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 0, player2_wins: 1, draws: 0 }
+  );
+
+  player1.weapon1 = { skill: 'gun_skill', min_damage: 0, max_damage: 0 };
+  player2.weapon1 = { skill: 'gun_skill', min_damage: 0, max_damage: 0 };
+  test.deepEqual(
+    CombatSim.combatOutcomeDistribution(player1, player2),
+    { player1_wins: 0, player2_wins: 0, draws: 1 }
+  );
+
+  test.done();
+};
+
+exports.testCombatOutcomeDistributionMatchesMonteCarlo = function(test) {
+  let player1 = {
+    max_hp: 60,
+    level: 80,
+    speed: 110,
+    accuracy: 175,
+    dodge: 130,
+    gun_skill: 145,
+    melee_skill: 215,
+    def_skill: 190,
+    armor: 100,
+    weapon1: { skill: 'gun_skill', min_damage: 30, max_damage: 30 },
+    weapon2: { skill: 'melee_skill', min_damage: 15, max_damage: 15 },
+  };
+  let player2 = {
+    max_hp: 65,
+    level: 80,
+    speed: 100,
+    accuracy: 160,
+    dodge: 145,
+    gun_skill: 205,
+    melee_skill: 155,
+    def_skill: 175,
+    armor: 110,
+    weapon1: { skill: 'gun_skill', min_damage: 28, max_damage: 28 },
+    weapon2: { skill: 'melee_skill', min_damage: 16, max_damage: 16 },
+  };
+  let expected = CombatSim.combatOutcomeDistribution(player1, player2);
+  let sampleCount = 100000;
+  let randomState = 246813579;
+  let originalRandom = Math.random;
+  let observed;
+
+  Math.random = function() {
+    randomState = (randomState * 16807) % 2147483647;
+    return (randomState - 1) / 2147483646;
+  };
+
+  try {
+    observed = CombatSim.simulateCombat(player1, player2, sampleCount);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  Object.keys(expected).forEach(function(outcome) {
+    let observedProbability = observed[outcome] / sampleCount;
+    test.ok(
+      Math.abs(observedProbability - expected[outcome]) < 0.005,
+      outcome + ': expected ' + expected[outcome] + ', observed ' + observedProbability
+    );
+  });
+  test.ok(Math.abs(expected.player1_wins + expected.player2_wins + expected.draws - 1) < 1e-9);
+
+  test.done();
+};
+
 exports.testAttackTypes = function(test) {
   let raw_stats = {
     speed: 101,

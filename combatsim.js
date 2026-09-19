@@ -218,6 +218,78 @@ CombatSim.attackDamageDistribution = function(att, def) {
   return distribution;
 };
 
+CombatSim.combatOutcomeDistribution = function(player1, player2) {
+  let first = player1;
+  let second = player2;
+  let first_is_player1 = true;
+
+  if (player2.speed > player1.speed) {
+    first = player2;
+    second = player1;
+    first_is_player1 = false;
+  }
+
+  let first_attack = this.attackDamageDistribution(first, second);
+  let second_attack = this.attackDamageDistribution(second, first);
+  let states = new Map();
+  let first_wins = 0;
+  let second_wins = 0;
+  states.set(first.max_hp + ',' + second.max_hp, 1);
+
+  for (let round = 0; round < this.MAX_COMBAT_ROUNDS; round++) {
+    let after_round = new Map();
+
+    states.forEach(function(state_probability, state) {
+      let hit_points = state.split(',').map(Number);
+      let first_hp = hit_points[0];
+      let second_hp = hit_points[1];
+
+      first_attack.forEach(function(first_attack_probability, first_damage) {
+        let probability_after_first_attack = state_probability * first_attack_probability;
+        let remaining_second_hp = second_hp - first_damage;
+
+        if (remaining_second_hp <= 0) {
+          first_wins += probability_after_first_attack;
+          return;
+        }
+
+        second_attack.forEach(function(second_attack_probability, second_damage) {
+          let probability_after_second_attack =
+            probability_after_first_attack * second_attack_probability;
+          let remaining_first_hp = first_hp - second_damage;
+
+          if (remaining_first_hp <= 0) {
+            second_wins += probability_after_second_attack;
+            return;
+          }
+
+          let next_state = remaining_first_hp + ',' + remaining_second_hp;
+          after_round.set(
+            next_state,
+            (after_round.get(next_state) || 0) + probability_after_second_attack
+          );
+        });
+      });
+    });
+
+    states = after_round;
+    if (states.size === 0) {
+      break;
+    }
+  }
+
+  let draws = 0;
+  states.forEach(function(probability) {
+    draws += probability;
+  });
+
+  return {
+    player1_wins: first_is_player1 ? first_wins : second_wins,
+    player2_wins: first_is_player1 ? second_wins : first_wins,
+    draws: draws,
+  };
+};
+
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
   return Math.random() < this.combatProbability(stat1, stat2);
