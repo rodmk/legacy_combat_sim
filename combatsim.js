@@ -1134,6 +1134,85 @@ BuildSearch.slotVariantFrontier = function(slot, options) {
   };
 };
 
+BuildSearch.normalizeEquipment = function(build, options) {
+  let settings = options || {};
+  let slots = settings.slots || [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
+  let dominates = function(left, right) {
+    let strictly_better = false;
+    let stats = new Set(Object.keys(left.mult).concat(Object.keys(right.mult)));
+    for (let stat of stats) {
+      let left_multiplier = idx(left.mult, stat, 1);
+      let right_multiplier = idx(right.mult, stat, 1);
+      if (left_multiplier < right_multiplier) {
+        return false;
+      }
+      strictly_better = strictly_better || left_multiplier > right_multiplier;
+    }
+    return strictly_better;
+  };
+  let crystal_keys = Object.keys(crystalDefinitions);
+  let replacements = new Map();
+  crystal_keys.forEach(function(key) {
+    let dominators = crystal_keys.filter(function(other) {
+      return dominates(Item[other], Item[key]);
+    });
+    dominators = dominators.filter(function(candidate) {
+      return !dominators.some(function(other) {
+        return other !== candidate && dominates(Item[other], Item[candidate]);
+      });
+    });
+    replacements.set(key, dominators.length > 0 ? dominators : [ key ]);
+  });
+  let variants = [ { build: build, replacements: [] } ];
+
+  slots.forEach(function(slot) {
+    let next_variants = [];
+    variants.forEach(function(entry) {
+      let descriptor = entry.build.equipment[slot];
+      if (!descriptor.crystals) {
+        next_variants.push(entry);
+        return;
+      }
+      let crystal_sets = [ [] ];
+      descriptor.crystals.forEach(function(key) {
+        crystal_sets = crystal_sets.flatMap(function(selected) {
+          return replacements.get(key).map(function(replacement) {
+            return selected.concat([ replacement ]);
+          });
+        });
+      });
+      let descriptors = new Map();
+      crystal_sets.forEach(function(crystals) {
+        let replacement = Object.assign({}, descriptor, { crystals: crystals.sort() });
+        descriptors.set(JSON.stringify(replacement), replacement);
+      });
+      descriptors.forEach(function(replacement) {
+        let equipment = Object.assign({}, entry.build.equipment);
+        equipment[slot] = replacement;
+        let changed = JSON.stringify(replacement) !== JSON.stringify(descriptor);
+        next_variants.push({
+          build: Object.assign({}, entry.build, { equipment: equipment }),
+          replacements: changed ? entry.replacements.concat([ {
+            slot: slot,
+            from: descriptor,
+            to: replacement,
+          } ]) : entry.replacements,
+        });
+      });
+    });
+    variants = next_variants;
+  });
+
+  let variants_by_signature = new Map();
+  variants.forEach(function(entry) {
+    let signature = CombatSim.combatSignature(Player.generateBuild(entry.build));
+    if (!variants_by_signature.has(signature)) {
+      variants_by_signature.set(signature, entry);
+    }
+  });
+  return Array.from(variants_by_signature.values());
+};
+
 BuildSearch.equipmentNeighborhood = function(build, options) {
   let settings = options || {};
   let slots = settings.slots || [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
@@ -1144,61 +1223,75 @@ BuildSearch.equipmentNeighborhood = function(build, options) {
     misc1: 'miscs',
     misc2: 'miscs',
   };
-  let weapon_keys = [ build.equipment.weapon1.item, build.equipment.weapon2.item ];
   let groups_by_signature = new Map();
   let variant_count = 0;
-
   slots.forEach(function(slot) {
-    let catalog_name = catalog_by_slot[slot];
-    if (!catalog_name) {
+    if (!catalog_by_slot[slot]) {
       throw new Error('Unknown equipment slot: ' + slot + '.');
     }
-    let catalog = equipmentCatalog[catalog_name];
-    let item_keys = settings.itemKeysBySlot && settings.itemKeysBySlot[slot] ||
+  });
+  let normalized_builds = settings.normalize === false ?
+    [ { build: build, replacements: [] } ] : this.normalizeEquipment(build, settings);
+
+  normalized_builds.forEach(function(normalized) {
+    let base_build = normalized.build;
+    let weapon_keys = [
+      base_build.equipment.weapon1.item,
+      base_build.equipment.weapon2.item,
+    ];
+    slots.forEach(function(slot) {
+      let catalog_name = catalog_by_slot[slot];
+      if (!catalog_name) {
+        throw new Error('Unknown equipment slot: ' + slot + '.');
+      }
+      let catalog = equipmentCatalog[catalog_name];
+      let item_keys = settings.itemKeysBySlot && settings.itemKeysBySlot[slot] ||
       Object.keys(catalog);
-    let slot_groups = [];
+      let slot_groups = [];
 
-    item_keys.forEach(function(item_key) {
-      if (!catalog[item_key]) {
-        throw new Error('Unknown ' + catalog_name + ' item: ' + item_key + '.');
-      }
-      let active_weapon_keys = weapon_keys.slice();
-      if (slot === 'weapon1') {
-        active_weapon_keys[0] = item_key;
-      } else if (slot === 'weapon2') {
-        active_weapon_keys[1] = item_key;
-      }
-      let report = BuildSearch.itemVariantReport(item_key, {
-        activeWeaponTypes: active_weapon_keys.map(function(key) { return Item[key].type; }),
-        crystalKeys: settings.crystalKeys,
-        socketCapacity: settings.socketCapacity,
+      item_keys.forEach(function(item_key) {
+        if (!catalog[item_key]) {
+          throw new Error('Unknown ' + catalog_name + ' item: ' + item_key + '.');
+        }
+        let active_weapon_keys = weapon_keys.slice();
+        if (slot === 'weapon1') {
+          active_weapon_keys[0] = item_key;
+        } else if (slot === 'weapon2') {
+          active_weapon_keys[1] = item_key;
+        }
+        let report = BuildSearch.itemVariantReport(item_key, {
+          activeWeaponTypes: active_weapon_keys.map(function(key) { return Item[key].type; }),
+          crystalKeys: settings.crystalKeys,
+          socketCapacity: settings.socketCapacity,
+        });
+        slot_groups = slot_groups.concat(report.nondominated_groups);
       });
-      slot_groups = slot_groups.concat(report.nondominated_groups);
-    });
 
-    variant_count += slot_groups.length;
-    slot_groups.forEach(function(group) {
-      group.sources.forEach(function(source) {
-        let equipment = Object.assign({}, build.equipment);
-        equipment[slot] = {
-          item: source.item,
-          crystals: source.crystals.slice(),
-        };
-        if (source.mods.length > 0) {
-          equipment[slot].mods = source.mods.slice();
-        }
-        let candidate = Object.assign({}, build, { equipment: equipment });
-        let player = Player.generateBuild(candidate);
-        let signature = CombatSim.combatSignature(player);
-        let existing = groups_by_signature.get(signature);
-        if (!existing) {
-          existing = { signature: signature, representative: player, sources: [] };
-          groups_by_signature.set(signature, existing);
-        }
-        existing.sources.push({
-          slot: slot,
-          equipment: equipment[slot],
-          build: candidate,
+      variant_count += slot_groups.length;
+      slot_groups.forEach(function(group) {
+        group.sources.forEach(function(source) {
+          let equipment = Object.assign({}, base_build.equipment);
+          equipment[slot] = {
+            item: source.item,
+            crystals: source.crystals.slice(),
+          };
+          if (source.mods.length > 0) {
+            equipment[slot].mods = source.mods.slice();
+          }
+          let candidate = Object.assign({}, base_build, { equipment: equipment });
+          let player = Player.generateBuild(candidate);
+          let signature = CombatSim.combatSignature(player);
+          let existing = groups_by_signature.get(signature);
+          if (!existing) {
+            existing = { signature: signature, representative: player, sources: [] };
+            groups_by_signature.set(signature, existing);
+          }
+          existing.sources.push({
+            slot: slot,
+            equipment: equipment[slot],
+            build: candidate,
+            normalization: normalized.replacements,
+          });
         });
       });
     });
@@ -1209,6 +1302,7 @@ BuildSearch.equipmentNeighborhood = function(build, options) {
     counts: {
       slot_variants: variant_count,
       unique_combat_signatures: groups_by_signature.size,
+      normalized_builds: normalized_builds.length,
     },
   };
 };

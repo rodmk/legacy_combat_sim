@@ -1213,6 +1213,35 @@ exports.testSlotVariantFrontier = function(test) {
 
 exports.testEquipmentNeighborhood = function(test) {
   let build = Build.ShadowDojoDLGunBuild3;
+  let normalized = BuildSearch.normalizeEquipment(build);
+  test.equal(normalized.length, 1);
+  normalized.forEach(function(entry) {
+    test.equal(entry.replacements.length, 3);
+    test.deepEqual(entry.build.equipment.weapon2.crystals, [
+      'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+    ]);
+    test.deepEqual(entry.build.equipment.misc1.crystals, [
+      'GreenInferno', 'GreenInferno', 'GreenInferno', 'GreenInferno',
+    ]);
+    test.deepEqual(entry.build.equipment.misc2.crystals, [
+      'GreenInferno', 'GreenInferno', 'GreenInferno', 'GreenInferno',
+    ]);
+  });
+  let branching_build = Object.assign({}, build, {
+    equipment: Object.assign({}, build.equipment, {
+      misc1: {
+        item: 'BioSpinalEnhancer',
+        crystals: [ 'PerfectWater', 'PerfectWater', 'PerfectWater', 'PerfectWater' ],
+      },
+    }),
+  });
+  let branching_normalized = BuildSearch.normalizeEquipment(
+    branching_build, { slots: [ 'misc1' ] }
+  );
+  test.equal(branching_normalized.length, 5);
+  branching_normalized.forEach(function(entry) {
+    test.ok(!entry.build.equipment.misc1.crystals.includes('PerfectWater'));
+  });
   let neighborhood = BuildSearch.equipmentNeighborhood(build, {
     slots: [ 'weapon1', 'misc1' ],
     itemKeysBySlot: {
