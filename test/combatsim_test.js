@@ -357,3 +357,14 @@ exports.testCrystalSocketing = function(test) {
 
   test.done();
 };
+
+exports.testCrystalCatalog = function(test) {
+  let crystalDefinitions = require('../data/crystals.json');
+
+  Object.keys(crystalDefinitions).forEach(function(key) {
+    test.ok(Item[key] instanceof Equipment, key + ' should be equipment');
+    testDeepEqualWithDiff(test, Item[key], crystalDefinitions[key]);
+  });
+
+  test.done();
+};

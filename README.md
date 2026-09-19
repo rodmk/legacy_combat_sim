@@ -1,9 +1,16 @@
 Legacy Combat Simulator
 =======================
 
-[![Build Status](https://travis-ci.org/rodmk/legacy_combat_sim.svg?branch=master)](https://travis-ci.org/rodmk/legacy_combat_sim)
+[![CI](https://github.com/rodmk/legacy_combat_sim/actions/workflows/ci.yml/badge.svg)](https://github.com/rodmk/legacy_combat_sim/actions/workflows/ci.yml)
 
 Combat simulator for Legacy (http://www.legacy-game.net).
+
+Development
+===========
+
+Install dependencies with `yarn install`. Run linting, tests, and crystal data
+schema validation with `yarn verify`. The same checks run before each commit and
+in CI.
 
 License
 =======

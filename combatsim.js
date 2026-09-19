@@ -471,7 +471,7 @@ Equipment.prototype.socket = function(crystals) {
   return new_item;
 };
 
-let Item = deepFreeze({
+let itemDefinitions = {
   none: {
     name:        'None',
   },
@@ -691,78 +691,14 @@ let Item = deepFreeze({
     proj_skill:  50,
   }),
 
-  // === Crystals ===
-  PerfectFire: {
-    name: 'Perfect Fire',
-    min_damage_mult: 1.1,
-    max_damage_mult: 1.1,
-  },
+};
 
-  GiantFire: {
-    name: 'Giant Fire',
-    min_damage_mult: 1.08,
-    max_damage_mult: 1.08,
-  },
-
-  PerfectVoid: {
-    name: 'Perfect Void',
-    armor_mult: 1.1,
-  },
-
-  PerfectWater: {
-    name: 'Perfect Water',
-    dodge_mult: 1.05,
-  },
-
-  PerfectAir: {
-    name: 'Perfect Air',
-    accuracy_mult: 1.05,
-  },
-
-  PerfectPink: {
-    name: 'Perfect Pink',
-    def_skill_mult: 1.2,
-  },
-
-  PerfectOrange: {
-    name: 'Perfect Orange',
-    melee_skill_mult: 1.2,
-  },
-
-  PerfectGreen: {
-    name: 'Perfect Green',
-    gun_skill_mult: 1.2,
-  },
-
-  PerfectYellow: {
-    name: 'Perfect Yellow',
-    proj_skill_mult: 1.2,
-  },
-
-  PerfectNull: {
-    name: 'Perfect Null',
-    speed_mult: 1.2,
-  },
-
-  AbyssCrystal: {
-    name: 'Abyss Crystal',
-    armor_mult: 1.05,
-    dodge_mult: 1.04,
-    speed_mult: 1.1,
-    def_skill_mult: 1.05,
-  },
-
-  AmuletCrystal: {
-    name: 'Amulet Crystal',
-    min_damage_mult: 1.06,
-    max_damage_mult: 1.06,
-    accuracy_mult: 1.06,
-    melee_skill_mult: 1.1,
-    gun_skill_mult: 1.1,
-    proj_skill_mult: 1.1,
-    def_skill_mult: 1.1,
-  },
+let crystalDefinitions = require('./data/crystals.json');
+Object.keys(crystalDefinitions).forEach(function(key) {
+  itemDefinitions[key] = new Equipment(crystalDefinitions[key]);
 });
+
+let Item = deepFreeze(itemDefinitions);
 
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all

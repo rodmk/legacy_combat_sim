@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rodmk/legacy_combat_sim/data/crystals.schema.json",
+  "title": "Legacy combat simulator crystals",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "$ref": "#/$defs/crystal"
+  },
+  "$defs": {
+    "crystal": {
+      "type": "object",
+      "required": ["name"],
+      "minProperties": 2,
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_damage_mult": { "$ref": "#/$defs/multiplier" },
+        "max_damage_mult": { "$ref": "#/$defs/multiplier" },
+        "armor_mult": { "$ref": "#/$defs/multiplier" },
+        "dodge_mult": { "$ref": "#/$defs/multiplier" },
+        "accuracy_mult": { "$ref": "#/$defs/multiplier" },
+        "speed_mult": { "$ref": "#/$defs/multiplier" },
+        "def_skill_mult": { "$ref": "#/$defs/multiplier" },
+        "melee_skill_mult": { "$ref": "#/$defs/multiplier" },
+        "gun_skill_mult": { "$ref": "#/$defs/multiplier" },
+        "proj_skill_mult": { "$ref": "#/$defs/multiplier" }
+      }
+    },
+    "multiplier": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  }
+}
