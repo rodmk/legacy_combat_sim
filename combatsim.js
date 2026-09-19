@@ -250,7 +250,37 @@ CombatSim.combatSignature = function(player) {
   ]);
 };
 
-CombatSim.defeatRoundDistribution = function(att, def) {
+CombatSim.defeatRoundSignature = function(att, def) {
+  let weapons = [ att.weapon1, att.weapon2 ].map(function(weapon) {
+    return [ weapon.skill, att[weapon.skill], weapon.min_damage, weapon.max_damage ];
+  }).sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  });
+  return JSON.stringify([
+    att.level,
+    att.accuracy,
+    weapons,
+    def.max_hp,
+    def.armor,
+    def.dodge,
+    def.def_skill,
+  ]);
+};
+
+CombatSim.createDefeatRoundCache = function() {
+  return { values: new Map(), hits: 0, misses: 0 };
+};
+
+CombatSim.defeatRoundDistribution = function(att, def, cache) {
+  let cache_key;
+  if (cache) {
+    cache_key = this.defeatRoundSignature(att, def);
+    if (cache.values.has(cache_key)) {
+      cache.hits++;
+      return cache.values.get(cache_key);
+    }
+    cache.misses++;
+  }
   let attack = Array.from(this.attackDamageDistribution(att, def));
   let lethal_probability = new Float64Array(def.max_hp + 1);
   let healing_cost = new Uint32Array(def.max_hp + 1);
@@ -320,16 +350,20 @@ CombatSim.defeatRoundDistribution = function(att, def) {
     survives += remaining_hp[hit_points];
   }
 
-  return {
+  let result = {
     defeat_rounds: defeat_rounds,
     survives: survives,
     surviving_hp_by_round: surviving_hp_by_round,
     surviving_healing_cost_by_round: surviving_healing_cost_by_round,
     full_hp_probability_by_round: full_hp_probability_by_round,
   };
+  if (cache) {
+    cache.values.set(cache_key, result);
+  }
+  return result;
 };
 
-CombatSim.combatResultDistribution = function(player1, player2) {
+CombatSim.combatResultDistribution = function(player1, player2, cache) {
   let first = player1;
   let second = player2;
   let first_is_player1 = true;
@@ -340,8 +374,8 @@ CombatSim.combatResultDistribution = function(player1, player2) {
     first_is_player1 = false;
   }
 
-  let first_defeats_second = this.defeatRoundDistribution(first, second);
-  let second_defeats_first = this.defeatRoundDistribution(second, first);
+  let first_defeats_second = this.defeatRoundDistribution(first, second, cache);
+  let second_defeats_first = this.defeatRoundDistribution(second, first, cache);
   let first_wins = 0;
   let second_wins = 0;
   let first_win_hp = 0;
@@ -1251,13 +1285,13 @@ MatchupGame.pureMaximin = function(matrix) {
   };
 };
 
-MatchupGame.candidateMatchup = function(player, opponent) {
-  let forward = CombatSim.combatResultDistribution(player, opponent);
+MatchupGame.candidateMatchup = function(player, opponent, cache) {
+  let forward = CombatSim.combatResultDistribution(player, opponent, cache);
   let results = [ forward.player1 ];
   let outcomes = [ forward.outcome ];
 
   if (player.speed === opponent.speed) {
-    let reverse = CombatSim.combatResultDistribution(opponent, player);
+    let reverse = CombatSim.combatResultDistribution(opponent, player, cache);
     results.push(reverse.player2);
     outcomes.push({
       player1_wins: reverse.outcome.player2_wins,
@@ -1282,6 +1316,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
   let combat_frontier = [];
   let economy_frontier = [];
   let evaluated_matchups = 0;
+  let defeat_cache = CombatSim.createDefeatRoundCache();
   let dominates = function(left, right, include_economy) {
     let strictly_better = false;
     for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
@@ -1312,7 +1347,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
   let candidates = groups.map(function(group) {
     let matchups = opponents.map(function(opponent) {
       evaluated_matchups++;
-      return MatchupGame.candidateMatchup(group.representative, opponent);
+      return MatchupGame.candidateMatchup(group.representative, opponent, defeat_cache);
     });
     let matchup_scores = matchups.map(function(matchup) { return matchup.score; });
     let total_wins = matchups.reduce(function(sum, matchup) {
@@ -1346,6 +1381,11 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
     opponent_ids: opponent_ids,
     candidate_count: candidates.length,
     evaluated_matchups: evaluated_matchups,
+    defeat_cache: {
+      entries: defeat_cache.values.size,
+      hits: defeat_cache.hits,
+      misses: defeat_cache.misses,
+    },
     combat_frontier: combat_frontier,
     combat_economy_frontier: economy_frontier,
     best_worst_case: select(function(left, right) {

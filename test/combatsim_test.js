@@ -759,6 +759,22 @@ exports.testCombatHealthLossDistribution = function(test) {
   test.equal(result.player1.zero_damage_win_probability, 0);
   test.equal(result.player1.expected_healing_cost_on_win, 1);
   test.equal(result.player1.expected_healing_cost, 1);
+
+  let cache = CombatSim.createDefeatRoundCache();
+  let first_cached_result = CombatSim.combatResultDistribution(player1, player2, cache);
+  test.deepEqual(first_cached_result, result);
+  test.deepEqual({ entries: cache.values.size, hits: cache.hits, misses: cache.misses }, {
+    entries: 2,
+    hits: 0,
+    misses: 2,
+  });
+  let second_cached_result = CombatSim.combatResultDistribution(player1, player2, cache);
+  test.deepEqual(second_cached_result, result);
+  test.deepEqual({ entries: cache.values.size, hits: cache.hits, misses: cache.misses }, {
+    entries: 2,
+    hits: 2,
+    misses: 2,
+  });
   test.done();
 };
 
