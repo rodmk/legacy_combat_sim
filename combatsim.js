@@ -250,9 +250,43 @@ CombatSim.combatSignature = function(player) {
   ]);
 };
 
-CombatSim.defeatRoundDistribution = function(att, def) {
+CombatSim.defeatRoundSignature = function(att, def) {
+  let weapons = [ att.weapon1, att.weapon2 ].map(function(weapon) {
+    return [ weapon.skill, att[weapon.skill], weapon.min_damage, weapon.max_damage ];
+  }).sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  });
+  return JSON.stringify([
+    att.level,
+    att.accuracy,
+    weapons,
+    def.max_hp,
+    def.armor,
+    def.dodge,
+    def.def_skill,
+  ]);
+};
+
+CombatSim.createDefeatRoundCache = function(minimum_survival_probability) {
+  return {
+    values: new Map(),
+    hits: 0,
+    misses: 0,
+    minimum_survival_probability: minimum_survival_probability || 0,
+  };
+};
+
+CombatSim.defeatRoundDistribution = function(att, def, cache) {
+  let cache_key;
+  if (cache) {
+    cache_key = this.defeatRoundSignature(att, def);
+    if (cache.values.has(cache_key)) {
+      cache.hits++;
+      return cache.values.get(cache_key);
+    }
+    cache.misses++;
+  }
   let attack = Array.from(this.attackDamageDistribution(att, def));
-  let lethal_probability = new Float64Array(def.max_hp + 1);
   let healing_cost = new Uint32Array(def.max_hp + 1);
   let remaining_hp = new Float64Array(def.max_hp + 1);
   let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
@@ -260,19 +294,21 @@ CombatSim.defeatRoundDistribution = function(att, def) {
   let surviving_healing_cost_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   let full_hp_probability_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   attack.sort(function(a, b) { return a[0] - b[0]; });
+  let attack_damage = new Uint32Array(attack.length);
+  let attack_probability = new Float64Array(attack.length);
+  for (let outcome = 0; outcome < attack.length; outcome++) {
+    attack_damage[outcome] = attack[outcome][0];
+    attack_probability[outcome] = attack[outcome][1];
+  }
 
   for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
     healing_cost[hit_points] = this.healingCost(hit_points, def.max_hp);
-    for (let outcome = 0; outcome < attack.length; outcome++) {
-      if (attack[outcome][0] >= hit_points) {
-        lethal_probability[hit_points] += attack[outcome][1];
-      }
-    }
   }
 
   remaining_hp[def.max_hp] = 1;
   surviving_hp_by_round[0] = def.max_hp;
   full_hp_probability_by_round[0] = 1;
+  let survives = 1;
 
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     let next_remaining_hp = new Float64Array(def.max_hp + 1);
@@ -287,24 +323,38 @@ CombatSim.defeatRoundDistribution = function(att, def) {
         continue;
       }
 
-      defeat_rounds[round] += state_probability * lethal_probability[hit_points];
       for (let outcome = 0; outcome < attack.length; outcome++) {
-        let damage = attack[outcome][0];
+        let damage = attack_damage[outcome];
         if (damage >= hit_points) {
           break;
         }
 
-        let probability = state_probability * attack[outcome][1];
+        let probability = state_probability * attack_probability[outcome];
         let next_hit_points = hit_points - damage;
         next_remaining_hp[next_hit_points] += probability;
-        next_surviving_hp += next_hit_points * probability;
-        next_surviving_healing_cost += healing_cost[next_hit_points] * probability;
-        if (next_hit_points === def.max_hp) {
-          next_full_hp_probability += probability;
-        }
-        has_survivors = true;
       }
     }
+
+    let next_survives = 0;
+    for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+      let state_probability = next_remaining_hp[hit_points];
+      next_survives += state_probability;
+      next_surviving_hp += hit_points * state_probability;
+      next_surviving_healing_cost += healing_cost[hit_points] * state_probability;
+    }
+    if (next_survives > survives) {
+      let survival_scale = survives / next_survives;
+      for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+        next_remaining_hp[hit_points] *= survival_scale;
+      }
+      next_surviving_hp *= survival_scale;
+      next_surviving_healing_cost *= survival_scale;
+      next_survives = survives;
+    }
+    defeat_rounds[round] = survives - next_survives;
+    survives = next_survives;
+    next_full_hp_probability = next_remaining_hp[def.max_hp];
+    has_survivors = next_survives > 0;
 
     remaining_hp = next_remaining_hp;
     surviving_hp_by_round[round] = next_surviving_hp;
@@ -313,23 +363,28 @@ CombatSim.defeatRoundDistribution = function(att, def) {
     if (!has_survivors) {
       break;
     }
+    if (cache && survives <= cache.minimum_survival_probability) {
+      surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_hp;
+      surviving_healing_cost_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_healing_cost;
+      full_hp_probability_by_round[this.MAX_COMBAT_ROUNDS] = next_full_hp_probability;
+      break;
+    }
   }
 
-  let survives = 0;
-  for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
-    survives += remaining_hp[hit_points];
-  }
-
-  return {
+  let result = {
     defeat_rounds: defeat_rounds,
     survives: survives,
     surviving_hp_by_round: surviving_hp_by_round,
     surviving_healing_cost_by_round: surviving_healing_cost_by_round,
     full_hp_probability_by_round: full_hp_probability_by_round,
   };
+  if (cache) {
+    cache.values.set(cache_key, result);
+  }
+  return result;
 };
 
-CombatSim.combatResultDistribution = function(player1, player2) {
+CombatSim.combatResultDistribution = function(player1, player2, cache) {
   let first = player1;
   let second = player2;
   let first_is_player1 = true;
@@ -340,8 +395,8 @@ CombatSim.combatResultDistribution = function(player1, player2) {
     first_is_player1 = false;
   }
 
-  let first_defeats_second = this.defeatRoundDistribution(first, second);
-  let second_defeats_first = this.defeatRoundDistribution(second, first);
+  let first_defeats_second = this.defeatRoundDistribution(first, second, cache);
+  let second_defeats_first = this.defeatRoundDistribution(second, first, cache);
   let first_wins = 0;
   let second_wins = 0;
   let first_win_hp = 0;
@@ -1073,6 +1128,108 @@ BuildSearch.slotVariantFrontier = function(slot, options) {
   };
 };
 
+BuildSearch.initiativeSpeedPoints = function(build, opponents, attack_type) {
+  let minimum_speed_points = 2;
+  let maximum_speed_points = 173;
+  let speed_by_points = new Map();
+  let selected_points = new Set([ minimum_speed_points ]);
+
+  for (let speed_points = minimum_speed_points;
+    speed_points <= maximum_speed_points; speed_points++) {
+    let stats = {
+      hp: 2,
+      speed: speed_points,
+      accuracy: 4,
+      dodge: 177 - speed_points,
+    };
+    let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+    speed_by_points.set(speed_points, Player.generateBuild(candidate).speed);
+  }
+
+  opponents.forEach(function(opponent) {
+    for (let speed_points = minimum_speed_points;
+      speed_points <= maximum_speed_points; speed_points++) {
+      let speed = speed_by_points.get(speed_points);
+      if (speed === opponent.speed) {
+        selected_points.add(speed_points);
+      }
+      if (speed > opponent.speed) {
+        selected_points.add(speed_points);
+        break;
+      }
+    }
+  });
+
+  return Array.from(selected_points).sort(function(a, b) { return a - b; });
+};
+
+BuildSearch.forEachStatAllocation = function(speed_points, options, visit) {
+  let settings = options || {};
+  let allowed_hp_points = settings.hpPoints ? new Set(settings.hpPoints) : null;
+  let count = 0;
+
+  Array.from(new Set(speed_points)).sort(function(a, b) { return a - b; })
+    .forEach(function(speed) {
+      for (let hp = 2; hp <= 175 - speed; hp++) {
+        if (allowed_hp_points && !allowed_hp_points.has(hp)) {
+          continue;
+        }
+        for (let accuracy = 4; accuracy <= 179 - speed - hp; accuracy++) {
+          let dodge = 183 - speed - hp - accuracy;
+          if (dodge < 4) {
+            continue;
+          }
+          visit({ hp: hp, speed: speed, accuracy: accuracy, dodge: dodge });
+          count++;
+        }
+      }
+    });
+
+  return count;
+};
+
+BuildSearch.statAllocationReport = function(build, opponents, attack_types, options) {
+  return attack_types.map(function(attack_type) {
+    let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
+    let signatures = new Set();
+    let count = BuildSearch.forEachStatAllocation(speed_points, options, function(stats) {
+      let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+      signatures.add(CombatSim.combatSignature(Player.generateBuild(candidate)));
+    });
+
+    return {
+      attack_type: attack_type,
+      speed_points: speed_points,
+      allocations: count,
+      unique_combat_signatures: signatures.size,
+    };
+  });
+};
+
+BuildSearch.statAllocationGroups = function(build, opponents, attack_types, options) {
+  let groups_by_signature = new Map();
+
+  attack_types.forEach(function(attack_type) {
+    let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
+    BuildSearch.forEachStatAllocation(speed_points, options, function(stats) {
+      let candidate = Object.assign({}, build, { stats: stats, attack_type: attack_type });
+      let player = Player.generateBuild(candidate);
+      let signature = CombatSim.combatSignature(player);
+      let group = groups_by_signature.get(signature);
+      if (!group) {
+        group = { signature: signature, representative: player, sources: [] };
+        groups_by_signature.set(signature, group);
+      }
+      group.sources.push({
+        attack_type: attack_type,
+        stats: Object.assign({}, stats),
+      });
+    });
+  });
+
+  return Array.from(groups_by_signature.values());
+};
+
 // =============================================================================
 //                                  MatchupGame
 // =============================================================================
@@ -1146,6 +1303,126 @@ MatchupGame.pureMaximin = function(matrix) {
     players: worst_case_scores.map(function(score, player) {
       return Math.abs(score - best_score) <= tolerance ? player : null;
     }).filter(function(player) { return player !== null; }),
+  };
+};
+
+MatchupGame.candidateMatchup = function(player, opponent, cache) {
+  let forward = CombatSim.combatResultDistribution(player, opponent, cache);
+  let results = [ forward.player1 ];
+  let outcomes = [ forward.outcome ];
+
+  if (player.speed === opponent.speed) {
+    let reverse = CombatSim.combatResultDistribution(opponent, player, cache);
+    results.push(reverse.player2);
+    outcomes.push({
+      player1_wins: reverse.outcome.player2_wins,
+      player2_wins: reverse.outcome.player1_wins,
+      draws: reverse.outcome.draws,
+    });
+  }
+
+  let total_wins = results.reduce(function(sum, result) { return sum + result.wins; }, 0);
+  return {
+    score: outcomes.reduce(function(sum, outcome) {
+      return sum + outcome.player1_wins + (outcome.draws / 2);
+    }, 0) / outcomes.length,
+    win_probability: total_wins / results.length,
+    expected_healing_cost: results.reduce(function(sum, result) {
+      return sum + result.expected_healing_cost;
+    }, 0) / results.length,
+  };
+};
+
+MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, options) {
+  options = options || {};
+  let combat_frontier = [];
+  let economy_frontier = [];
+  let evaluated_matchups = 0;
+  let defeat_cache = CombatSim.createDefeatRoundCache(options.minimumSurvivalProbability);
+  let dominates = function(left, right, include_economy) {
+    let strictly_better = false;
+    for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
+      if (left.matchup_scores[opponent] < right.matchup_scores[opponent] - 1e-12) {
+        return false;
+      }
+      strictly_better = strictly_better ||
+        left.matchup_scores[opponent] > right.matchup_scores[opponent] + 1e-12;
+    }
+    if (include_economy) {
+      if (left.healing_credits_per_win > right.healing_credits_per_win + 1e-12) {
+        return false;
+      }
+      strictly_better = strictly_better ||
+        left.healing_credits_per_win < right.healing_credits_per_win - 1e-12;
+    }
+    return strictly_better;
+  };
+  let addToFrontier = function(frontier, candidate, include_economy) {
+    if (frontier.some(function(entry) { return dominates(entry, candidate, include_economy); })) {
+      return frontier;
+    }
+    return frontier.filter(function(entry) {
+      return !dominates(candidate, entry, include_economy);
+    }).concat([ candidate ]);
+  };
+
+  let candidates = groups.map(function(group) {
+    let matchups = opponents.map(function(opponent) {
+      evaluated_matchups++;
+      return MatchupGame.candidateMatchup(group.representative, opponent, defeat_cache);
+    });
+    let matchup_scores = matchups.map(function(matchup) { return matchup.score; });
+    let total_wins = matchups.reduce(function(sum, matchup) {
+      return sum + matchup.win_probability;
+    }, 0);
+    let total_healing_cost = matchups.reduce(function(sum, matchup) {
+      return sum + matchup.expected_healing_cost;
+    }, 0);
+    let candidate = {
+      sources: group.sources,
+      matchup_scores: matchup_scores,
+      worst_score: Math.min.apply(null, matchup_scores),
+      average_score: matchup_scores.reduce(function(sum, score) {
+        return sum + score;
+      }, 0) / matchup_scores.length,
+      average_win_probability: total_wins / matchups.length,
+      average_healing_cost: total_healing_cost / matchups.length,
+      healing_credits_per_win: total_wins > 0 ? total_healing_cost / total_wins : Infinity,
+    };
+    combat_frontier = addToFrontier(combat_frontier, candidate, false);
+    economy_frontier = addToFrontier(economy_frontier, candidate, true);
+    return candidate;
+  });
+  let select = function(compare, filter) {
+    return candidates.filter(filter || function() { return true; }).reduce(function(best, candidate) {
+      return !best || compare(candidate, best) < 0 ? candidate : best;
+    }, null);
+  };
+
+  return {
+    opponent_ids: opponent_ids,
+    candidate_count: candidates.length,
+    evaluated_matchups: evaluated_matchups,
+    defeat_cache: {
+      entries: defeat_cache.values.size,
+      hits: defeat_cache.hits,
+      misses: defeat_cache.misses,
+      minimum_survival_probability: defeat_cache.minimum_survival_probability,
+    },
+    combat_frontier: combat_frontier,
+    combat_economy_frontier: economy_frontier,
+    best_worst_case: select(function(left, right) {
+      return right.worst_score - left.worst_score;
+    }),
+    best_average: select(function(left, right) {
+      return right.average_score - left.average_score;
+    }),
+    cheapest_per_win: select(function(left, right) {
+      return left.healing_credits_per_win - right.healing_credits_per_win;
+    }),
+    cheapest_average_winner: select(function(left, right) {
+      return left.healing_credits_per_win - right.healing_credits_per_win;
+    }, function(candidate) { return candidate.average_score >= 0.5; }),
   };
 };
 

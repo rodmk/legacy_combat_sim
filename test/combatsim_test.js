@@ -759,6 +759,40 @@ exports.testCombatHealthLossDistribution = function(test) {
   test.equal(result.player1.zero_damage_win_probability, 0);
   test.equal(result.player1.expected_healing_cost_on_win, 1);
   test.equal(result.player1.expected_healing_cost, 1);
+
+  let cache = CombatSim.createDefeatRoundCache();
+  let first_cached_result = CombatSim.combatResultDistribution(player1, player2, cache);
+  test.deepEqual(first_cached_result, result);
+  test.deepEqual({ entries: cache.values.size, hits: cache.hits, misses: cache.misses }, {
+    entries: 2,
+    hits: 0,
+    misses: 2,
+  });
+  let second_cached_result = CombatSim.combatResultDistribution(player1, player2, cache);
+  test.deepEqual(second_cached_result, result);
+  test.deepEqual({ entries: cache.values.size, hits: cache.hits, misses: cache.misses }, {
+    entries: 2,
+    hits: 2,
+    misses: 2,
+  });
+
+  let tail_attacker = Object.assign({}, player1, {
+    accuracy: 100,
+    gun_skill: 100,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+  });
+  let exact_tail = CombatSim.defeatRoundDistribution(tail_attacker, player2);
+  test.ok(exact_tail.defeat_rounds.every(function(probability) { return probability >= 0; }));
+  test.ok(Math.abs(exact_tail.defeat_rounds.reduce(function(sum, probability) {
+    return sum + probability;
+  }, exact_tail.survives) - 1) < 1e-12);
+  let truncated_tail = CombatSim.defeatRoundDistribution(
+    tail_attacker,
+    player2,
+    CombatSim.createDefeatRoundCache(1e-6)
+  );
+  test.ok(truncated_tail.survives > exact_tail.survives);
+  test.ok(truncated_tail.survives <= 1e-6);
   test.done();
 };
 
@@ -1177,6 +1211,56 @@ exports.testSlotVariantFrontier = function(test) {
   test.done();
 };
 
+exports.testStatAllocationGeneration = function(test) {
+  let build = Build.ShadowDojoDLGunBuild3;
+  let opponent_keys = [
+    'ShadowDojoArmorStackCores',
+    'ShadowDojoDLGunBuild3',
+    'ShadowDojoHFCoreVoid',
+    'ShadowDojoSG1SplitBombs',
+  ];
+  let opponents = opponent_keys.map(function(key) {
+    return Player.generateBuild(Build[key]);
+  });
+
+  test.deepEqual(
+    BuildSearch.initiativeSpeedPoints(build, opponents, 'normal'),
+    [ 2, 3, 16, 19, 24 ]
+  );
+
+  let allocations = [];
+  let count = BuildSearch.forEachStatAllocation([ 173 ], {}, function(stats) {
+    allocations.push(stats);
+  });
+  test.equal(count, 1);
+  test.deepEqual(allocations, [ { hp: 2, speed: 173, accuracy: 4, dodge: 4 } ]);
+
+  let allocations_are_valid = true;
+  count = BuildSearch.forEachStatAllocation([ 2 ], { hpPoints: [ 2 ] }, function(stats) {
+    allocations_are_valid = allocations_are_valid &&
+      stats.hp + stats.speed + stats.accuracy + stats.dodge === 183 &&
+      stats.accuracy >= 4 && stats.dodge >= 4;
+  });
+  test.equal(count, 172);
+  test.ok(allocations_are_valid);
+
+  let report = BuildSearch.statAllocationReport(
+    build, opponents, [ 'normal' ], { hpPoints: [ 2 ] }
+  );
+  test.equal(report.length, 1);
+  test.deepEqual(report[0].speed_points, [ 2, 3, 16, 19, 24 ]);
+  test.ok(report[0].unique_combat_signatures <= report[0].allocations);
+
+  let groups = BuildSearch.statAllocationGroups(
+    build, opponents, [ 'normal', 'quick', 'aimed', 'cover' ], { hpPoints: [ 2 ] }
+  );
+  test.equal(groups.length, 3310);
+  test.ok(groups.every(function(group) {
+    return group.representative.max_hp === 10 && group.sources.length > 0;
+  }));
+  test.done();
+};
+
 exports.testRestrictedMatchupGame = function(test) {
   let player1 = {
     max_hp: 10,
@@ -1197,6 +1281,24 @@ exports.testRestrictedMatchupGame = function(test) {
   let matrix = MatchupGame.payoffMatrix([ player1, player2 ]);
 
   test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
+  test.deepEqual(MatchupGame.candidateMatchup(player1, player2), {
+    score: 0.5,
+    win_probability: 0.5,
+    expected_healing_cost: 3.5,
+  });
+
+  let helpless = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+  let candidate_frontiers = MatchupGame.candidateFrontiers([
+    { representative: helpless, sources: [ 'helpless' ] },
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ]);
+  test.deepEqual(candidate_frontiers.cheapest_per_win.sources, [ 'viable' ]);
+  test.deepEqual(candidate_frontiers.combat_economy_frontier.map(function(candidate) {
+    return candidate.sources[0];
+  }), [ 'viable' ]);
 
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],
