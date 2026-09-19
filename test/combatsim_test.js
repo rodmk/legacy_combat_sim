@@ -1432,6 +1432,37 @@ exports.testRestrictedMatchupGame = function(test) {
     score: 0,
     players: [ 0, 1, 2 ],
   });
+  test.deepEqual(MatchupGame.mixedEquilibrium(cyclic_matrix), {
+    strategy: [ 1 / 3, 1 / 3, 1 / 3 ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 1,
+    converged: true,
+  });
+
+  let weighted_cyclic_matrix = [
+    [ 0.5, 0.4, 0.8 ],
+    [ 0.6, 0.5, 0.3 ],
+    [ 0.2, 0.7, 0.5 ],
+  ];
+  let weighted_equilibrium = MatchupGame.mixedEquilibrium(weighted_cyclic_matrix);
+  test.ok(weighted_equilibrium.converged);
+  test.ok(weighted_equilibrium.exploitability <= 0.001);
+  [ 2 / 6, 3 / 6, 1 / 6 ].forEach(function(expected, player) {
+    test.ok(Math.abs(weighted_equilibrium.strategy[player] - expected) <= 0.01);
+  });
+
+  let pure_matrix = [
+    [ 0.5, 0.7 ],
+    [ 0.3, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.mixedEquilibrium(pure_matrix), {
+    strategy: [ 1, 0 ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 0,
+    converged: true,
+  });
 
   test.done();
 };
@@ -1487,6 +1518,13 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
   test.deepEqual(analysis.strategic_kernel, [
     'ShadowDojoDLGunBuild3',
   ]);
+  test.deepEqual(analysis.inferred_meta, {
+    weights: [ { candidate: 'ShadowDojoDLGunBuild3', weight: 1 } ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 0,
+    converged: true,
+  });
   test.equal(analysis.elimination_rounds.length, 3);
   test.equal(analysis.score_matrix.length, analysis.candidate_count);
   test.deepEqual(

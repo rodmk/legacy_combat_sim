@@ -1320,6 +1320,77 @@ MatchupGame.pureMaximin = function(matrix) {
   };
 };
 
+MatchupGame.mixedEquilibrium = function(matrix, options) {
+  options = options || {};
+  let tolerance = options.tolerance === undefined ? 1e-3 : options.tolerance;
+  let max_iterations = options.maxIterations || 100000;
+  let pure = this.pureMaximin(matrix);
+
+  if (pure.score >= 0.5 - 1e-12) {
+    let pure_strategy = matrix.map(function(unused, player) {
+      return pure.players.includes(player) ? 1 / pure.players.length : 0;
+    });
+    return {
+      strategy: pure_strategy,
+      exploitability: this.exploitability(matrix, pure_strategy),
+      tolerance: tolerance,
+      iterations: 0,
+      converged: true,
+    };
+  }
+
+  let row_counts = new Array(matrix.length).fill(1);
+  let column_counts = new Array(matrix.length).fill(1);
+  let normalize = function(counts) {
+    let total = counts.reduce(function(sum, count) { return sum + count; }, 0);
+    return counts.map(function(count) { return count / total; });
+  };
+  let strategy;
+  let exploitability;
+
+  for (let iteration = 1; iteration <= max_iterations; iteration++) {
+    let row_strategy = normalize(row_counts);
+    let column_strategy = normalize(column_counts);
+    let row_response = this.bestResponse(matrix, column_strategy);
+    let column_scores = this.strategyScores(matrix, row_strategy);
+    let minimum_column_score = Math.min.apply(null, column_scores);
+    let column_responses = column_scores.map(function(score, player) {
+      return Math.abs(score - minimum_column_score) <= 1e-12 ? player : null;
+    }).filter(function(player) { return player !== null; });
+
+    row_response.players.forEach(function(player) {
+      row_counts[player] += 1 / row_response.players.length;
+    });
+    column_responses.forEach(function(player) {
+      column_counts[player] += 1 / column_responses.length;
+    });
+
+    row_strategy = normalize(row_counts);
+    column_strategy = normalize(column_counts);
+    strategy = row_strategy.map(function(probability, player) {
+      return (probability + column_strategy[player]) / 2;
+    });
+    exploitability = this.exploitability(matrix, strategy);
+    if (exploitability <= tolerance) {
+      return {
+        strategy: strategy,
+        exploitability: exploitability,
+        tolerance: tolerance,
+        iterations: iteration,
+        converged: true,
+      };
+    }
+  }
+
+  return {
+    strategy: strategy,
+    exploitability: exploitability,
+    tolerance: tolerance,
+    iterations: max_iterations,
+    converged: false,
+  };
+};
+
 MatchupGame.candidateMatchup = function(player, opponent, cache) {
   let forward = CombatSim.combatResultDistribution(player, opponent, cache);
   let results = [ forward.player1 ];
@@ -1833,6 +1904,7 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
   let frontier = this.dominanceFrontier(score_matrix);
   let kernel = this.iteratedDominanceKernel(score_matrix);
   let maximin = this.pureMaximin(score_matrix);
+  let equilibrium = this.mixedEquilibrium(score_matrix);
   let ids = groups.map(function(group) { return group.build_keys[0]; });
   let candidates = groups.map(function(group, player) {
     let worst_score = Math.min.apply(null, score_matrix[player]);
@@ -1918,6 +1990,15 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     pure_maximin: {
       score: maximin.score,
       candidates: maximin.players.map(function(player) { return ids[player]; }),
+    },
+    inferred_meta: {
+      weights: equilibrium.strategy.map(function(weight, player) {
+        return { candidate: ids[player], weight: weight };
+      }).filter(function(entry) { return entry.weight > 0; }),
+      exploitability: equilibrium.exploitability,
+      tolerance: equilibrium.tolerance,
+      iterations: equilibrium.iterations,
+      converged: equilibrium.converged,
     },
     score_matrix: score_matrix,
     win_probability_matrix: win_probability_matrix,
