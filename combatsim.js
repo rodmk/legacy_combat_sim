@@ -237,6 +237,7 @@ Player.emptyStats = function() {
 
 Player.fullyTrainedStats = function() {
   return {
+    level:       80,
     max_hp:      0,                  // Base 0
     armor:       5,                  // 5 from 'Resilience' Ability
     speed:       50,                 // 50 from 'Time Control' Ability
@@ -251,12 +252,7 @@ Player.fullyTrainedStats = function() {
   };
 };
 
-Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type, level) {
-  level = typeof level === 'undefined' ? 80 : level;
-  if (level !== 80) {
-    throw new Error('Fully trained builds require level 80.');
-  }
-
+Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type) {
   let hp_points       = stat_points.hp;
   let speed_points    = stat_points.speed;
   let dodge_points    = stat_points.dodge;
@@ -285,7 +281,6 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_ty
   }
 
   let stats = this.fullyTrainedStats();
-  stats.level = level;
   stats.max_hp   += hp_points * 5;
   stats.speed    += speed_points * 5;
   stats.dodge    += dodge_points;
@@ -364,13 +359,7 @@ Player.generateBuild = function(build) {
     return item;
   });
 
-  return Player.generateFullyTrainedPlayer(
-    build.name,
-    build.stats,
-    items,
-    build.attack_type,
-    build.level
-  );
+  return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
 };
 
 Player.generateReferencePlayers = function() {
