@@ -394,3 +394,46 @@ exports.testCrystalCatalog = function(test) {
 
   test.done();
 };
+
+exports.testEquipmentCatalog = function(test) {
+  let equipmentCatalog = require('../data/equipment');
+  let expectedEquipment = {
+    armor: [
+      'TitanGuard',
+      'HellforgedArmor',
+      'DarkLegionArmor',
+      'SG1Armor',
+    ],
+    weapons: [
+      'RailGun',
+      'CrystalSword',
+      'CBombsT2',
+      'ConcentratedCBombsT2',
+      'SplitCBombsT2',
+      'Scythe',
+      'VoidSword',
+      'RiftGun',
+      'CoreStaff',
+      'VoidBow',
+    ],
+    miscs: [
+      'Amulet',
+      'PrimeAmulet',
+      'InfernoAmulet',
+      'NerveGauntlet',
+      'BioSpinalEnhancer',
+      'OrphicAmulet',
+      'ScoutDrones',
+    ],
+  };
+
+  Object.keys(expectedEquipment).forEach(function(category) {
+    test.deepEqual(Object.keys(equipmentCatalog[category]), expectedEquipment[category]);
+    Object.keys(equipmentCatalog[category]).forEach(function(key) {
+      test.ok(Item[key] instanceof Equipment, key + ' should be equipment');
+      testDeepEqualWithDiff(test, Item[key], equipmentCatalog[category][key]);
+    });
+  });
+
+  test.done();
+};

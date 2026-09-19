@@ -17,3 +17,19 @@ export interface CrystalDefinition {
 }
 
 export type CrystalCatalog = Readonly<Record<string, CrystalDefinition>>;
+
+export type EquipmentStats = Partial<GearStats>;
+
+export type EquipmentDefinition = { name: string } & EquipmentStats;
+
+export type WeaponDefinition = EquipmentDefinition & {
+  type: string;
+  min_damage: number;
+  max_damage: number;
+};
+
+export interface EquipmentCatalog {
+  armor: Readonly<Record<string, EquipmentDefinition>>;
+  weapons: Readonly<Record<string, WeaponDefinition>>;
+  miscs: Readonly<Record<string, EquipmentDefinition>>;
+}

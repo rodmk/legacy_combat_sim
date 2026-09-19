@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rodmk/legacy_combat_sim/data/equipment.schema.json",
+  "title": "Legacy combat simulator equipment",
+  "type": "object",
+  "required": ["armor", "weapons", "miscs"],
+  "additionalProperties": false,
+  "properties": {
+    "armor": {
+      "$ref": "#/$defs/equipmentGroup"
+    },
+    "weapons": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/weapon"
+      }
+    },
+    "miscs": {
+      "$ref": "#/$defs/equipmentGroup"
+    }
+  },
+  "$defs": {
+    "equipmentGroup": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/equipment"
+      }
+    },
+    "equipment": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "min_damage": { "$ref": "#/$defs/stat" },
+        "max_damage": { "$ref": "#/$defs/stat" },
+        "armor": { "$ref": "#/$defs/stat" },
+        "dodge": { "$ref": "#/$defs/stat" },
+        "accuracy": { "$ref": "#/$defs/stat" },
+        "speed": { "$ref": "#/$defs/stat" },
+        "def_skill": { "$ref": "#/$defs/stat" },
+        "melee_skill": { "$ref": "#/$defs/stat" },
+        "gun_skill": { "$ref": "#/$defs/stat" },
+        "proj_skill": { "$ref": "#/$defs/stat" }
+      }
+    },
+    "weapon": {
+      "type": "object",
+      "required": ["name", "type", "min_damage", "max_damage"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["melee", "gun", "projectile"] },
+        "min_damage": { "$ref": "#/$defs/stat" },
+        "max_damage": { "$ref": "#/$defs/stat" },
+        "armor": { "$ref": "#/$defs/stat" },
+        "dodge": { "$ref": "#/$defs/stat" },
+        "accuracy": { "$ref": "#/$defs/stat" },
+        "speed": { "$ref": "#/$defs/stat" },
+        "def_skill": { "$ref": "#/$defs/stat" },
+        "melee_skill": { "$ref": "#/$defs/stat" },
+        "gun_skill": { "$ref": "#/$defs/stat" },
+        "proj_skill": { "$ref": "#/$defs/stat" }
+      }
+    },
+    "stat": {
+      "type": "number"
+    }
+  }
+}
