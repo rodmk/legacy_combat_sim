@@ -1006,6 +1006,10 @@ exports.testEquivalentBuildGrouping = function(test) {
 
 exports.testCanonicalEquipmentVariantGeneration = function(test) {
   test.deepEqual(
+    BuildSearch.activeWeaponSkills([ 'projectile', 'gun', 'projectile' ]),
+    [ 'gun_skill', 'proj_skill' ]
+  );
+  test.deepEqual(
     BuildSearch.crystalMultisets([ 'A', 'B' ], 2),
     [ [ 'A', 'A' ], [ 'A', 'B' ], [ 'B', 'B' ] ]
   );

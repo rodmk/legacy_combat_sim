@@ -726,6 +726,12 @@ let Crystals = deepFreeze({
 // =============================================================================
 function BuildSearch() {}
 
+BuildSearch.activeWeaponSkills = function(active_weapon_types) {
+  return Array.from(new Set(active_weapon_types.map(function(type) {
+    return WEAPON_TYPE_TO_SKILL[type];
+  }))).sort();
+};
+
 BuildSearch.crystalMultisets = function(crystal_keys, socket_capacity) {
   let multisets = [];
 
@@ -772,9 +778,6 @@ BuildSearch.modCombinations = function(item) {
 };
 
 BuildSearch.itemCombatStats = function(item, active_weapon_types) {
-  let active_skills = new Set(active_weapon_types.map(function(type) {
-    return WEAPON_TYPE_TO_SKILL[type];
-  }));
   let combat_stats = [
     'min_damage',
     'max_damage',
@@ -783,7 +786,7 @@ BuildSearch.itemCombatStats = function(item, active_weapon_types) {
     'accuracy',
     'speed',
     'def_skill',
-  ].concat(Array.from(active_skills).sort());
+  ].concat(this.activeWeaponSkills(active_weapon_types));
 
   return combat_stats.map(function(stat) {
     return [ stat, idx(item, stat, 0) ];
@@ -791,9 +794,7 @@ BuildSearch.itemCombatStats = function(item, active_weapon_types) {
 };
 
 BuildSearch.usefulCrystalKeys = function(item, crystal_keys, active_weapon_types) {
-  let active_skills = new Set(active_weapon_types.map(function(type) {
-    return WEAPON_TYPE_TO_SKILL[type];
-  }));
+  let active_skills = new Set(this.activeWeaponSkills(active_weapon_types));
 
   return crystal_keys.filter(function(key) {
     return Object.keys(Item[key].mult).some(function(stat) {
