@@ -46,22 +46,6 @@ function main() {
   combatants = combatants.concat(testCombatants);
   combatants = combatants.concat(Player.generateReferencePlayers());
 
-  combatants.forEach(function(combatant) {
-    // Equalize stats for all players so they don't factor into simulation.
-    const BASE_HP = 350;
-    const BASE_SPEED = 300;
-
-    assert(
-      combatant.max_hp === BASE_HP,
-      combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP
-    );
-    assert(
-      combatant.speed >= BASE_SPEED && combatant.speed - BASE_SPEED < 5,
-      combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED + ' to ' + (BASE_SPEED + 4)
-    );
-    combatant.speed = BASE_SPEED;
-  });
-
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
     let combatant = Object.assign({}, testCombatant);
@@ -90,16 +74,6 @@ function idx(obj, key, def) {
     return obj[key];
   } else {
     return def;
-  }
-}
-
-function assert(condition, message) {
-  if (!condition) {
-    message = message || 'Assertion failed';
-    if (typeof Error !== 'undefined') {
-      throw new Error(message);
-    }
-    throw message; // Fallback
   }
 }
 
@@ -136,7 +110,7 @@ CombatSim.simulateCombat = function(player1, player2, fights) {
       r = this.fight(player1, player2);
     } else if (player2.speed > player1.speed) {
       r = this.fight(player2, player1);
-    } else if (i <= (fights / 2)) {
+    } else if (i < (fights / 2)) {
       r = this.fight(player1, player2);
     } else {
       r = this.fight(player2, player1);

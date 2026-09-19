@@ -7,6 +7,7 @@ let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
+let CombatSim = src.CombatSim;
 
 let jsondiffpatch = require('jsondiffpatch');
 
@@ -19,6 +20,32 @@ let testDeepEqualWithDiff = function(test, a, b) {
     own_props_b,
     'Difference: ' + JSON.stringify(jsondiffpatch.diff(own_props_a, own_props_b))
   );
+};
+
+exports.testCombatInitiative = function(test) {
+  let slower = { name: 'Slower', speed: 100 };
+  let faster = { name: 'Faster', speed: 101 };
+  let originalFight = CombatSim.fight;
+  let attackers = [];
+
+  CombatSim.fight = function(attacker) {
+    attackers.push(attacker);
+    return attacker;
+  };
+
+  try {
+    CombatSim.simulateCombat(slower, faster, 4);
+    test.deepEqual(attackers, [ faster, faster, faster, faster ]);
+
+    attackers = [];
+    faster.speed = slower.speed;
+    CombatSim.simulateCombat(slower, faster, 4);
+    test.deepEqual(attackers, [ slower, slower, faster, faster ]);
+  } finally {
+    CombatSim.fight = originalFight;
+  }
+
+  test.done();
 };
 
 exports.testPlayerGeneration = function(test) {
