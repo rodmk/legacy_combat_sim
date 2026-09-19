@@ -160,9 +160,8 @@ CombatSim.attemptHit = function(att, def, weapon) {
   if (this.rollCombat(att.accuracy, def.dodge) &&
       this.rollCombat(att[weapon.skill], def.def_skill)) {
     let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
-    // Damage absorbption is capped at 60% of base damage dealt.
-    let absorb = Math.min(def.armor, Math.floor(base_damage * 0.6));
-    net_damage = Math.max(base_damage - absorb, 1);
+    let level_modifier = Math.min(att.level, 80) * 7 / 2;
+    net_damage = Math.round(base_damage * (level_modifier / (level_modifier + def.armor)));
   }
 
   return net_damage;
@@ -187,6 +186,7 @@ function Player() {}
 
 Player.emptyStats = function() {
   return {
+    level:       80,
     max_hp:      0,
     armor:       0,
     speed:       0,

@@ -129,6 +129,7 @@ exports.testPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 50,
     armor: 10,
     speed: 11,
@@ -166,6 +167,7 @@ exports.testNullPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 0,
     speed: 0,
@@ -203,6 +205,7 @@ exports.testFullyTrainedPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 350,
     armor: 5,
     speed: 100,
@@ -277,6 +280,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 10,
     speed: 100,
@@ -319,6 +323,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 0,
     speed: 100,
@@ -354,6 +359,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 350,
     armor: 15,
     speed: 200,
@@ -379,6 +385,47 @@ exports.testPlayerGenerationWithItem = function(test) {
   };
 
   testDeepEqualWithDiff(test, test_player, expected_stats);
+
+  test.done();
+};
+
+exports.testCurrentArmorDamageFormula = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 1,
+    gun_skill: 1,
+  };
+  let defender = {
+    armor: 280,
+    dodge: 1,
+    def_skill: 1,
+  };
+  let weapon = {
+    skill: 'gun_skill',
+    min_damage: 101,
+    max_damage: 101,
+  };
+  let originalRollCombat = CombatSim.rollCombat;
+
+  CombatSim.rollCombat = function() {
+    return true;
+  };
+
+  try {
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 51);
+
+    defender.armor = 0;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 101);
+
+    attacker.level = 100;
+    defender.armor = 280;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 51);
+
+    defender.armor = 100000;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 0);
+  } finally {
+    CombatSim.rollCombat = originalRollCombat;
+  }
 
   test.done();
 };
@@ -541,6 +588,7 @@ exports.testCatalogIntegration = function(test) {
 
   let expectedStats = {
     name: 'Catalog Player',
+    level: 80,
     max_hp: 0,
     armor: 69,
     speed: 197,
