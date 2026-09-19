@@ -376,14 +376,14 @@ exports.testCatalogIntegration = function(test) {
   let expectedStats = {
     name: 'Catalog Player',
     max_hp: 0,
-    armor: 30,
+    armor: 69,
     speed: 197,
     accuracy: 179,
-    dodge: 92,
-    melee_skill: 355,
+    dodge: 100,
+    melee_skill: 315,
     gun_skill: 265,
     proj_skill: 128,
-    def_skill: 219,
+    def_skill: 229,
     weapon1: {
       type: 'gun',
       skill: 'gun_skill',
@@ -393,8 +393,8 @@ exports.testCatalogIntegration = function(test) {
     weapon2: {
       type: 'melee',
       skill: 'melee_skill',
-      min_damage: 45,
-      max_damage: 55,
+      min_damage: 50,
+      max_damage: 60,
     },
   };
 

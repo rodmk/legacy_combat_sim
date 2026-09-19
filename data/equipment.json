@@ -1,104 +1,168 @@
 {
   "armor": {
-    "TitanGuard": {
-      "name": "Titan Guard",
-      "armor": 24,
-      "dodge": 68,
-      "speed": 55,
-      "def_skill": 40
+    "DarkLegionArmor": {
+      "name": "Dark Legion Armor",
+      "armor": 65,
+      "dodge": 90,
+      "speed": 65,
+      "def_skill": 60
     },
     "HellforgedArmor": {
       "name": "Hellforged Armor",
-      "armor": 30,
-      "dodge": 75,
-      "speed": 65,
-      "def_skill": 50
-    },
-    "DarkLegionArmor": {
-      "name": "Dark Legion Armor",
-      "armor": 28,
-      "dodge": 82,
-      "speed": 65,
-      "def_skill": 50
+      "armor": 115,
+      "dodge": 65,
+      "speed": 55,
+      "def_skill": 55
     },
     "SG1Armor": {
       "name": "SG1 Armor",
-      "armor": 26,
-      "dodge": 72,
+      "armor": 70,
+      "dodge": 75,
       "speed": 65,
-      "def_skill": 80
+      "def_skill": 90
     }
   },
   "weapons": {
-    "RailGun": {
-      "name": "Rail Gun",
+    "AlienRifle": {
+      "name": "Alien Rifle",
       "type": "gun",
-      "min_damage": 56,
-      "max_damage": 88,
-      "accuracy": 36,
-      "speed": 70,
-      "gun_skill": 26,
-      "def_skill": 14
+      "min_damage": 90,
+      "max_damage": 115,
+      "accuracy": 42,
+      "speed": 90,
+      "def_skill": 10,
+      "gun_skill": 90
     },
-    "CrystalSword": {
-      "name": "Crystal Sword",
-      "type": "melee",
-      "min_damage": 68,
-      "max_damage": 84,
-      "accuracy": 34,
-      "speed": 70,
-      "melee_skill": 26,
-      "def_skill": 14
-    },
-    "CBombsT2": {
-      "name": "Crystal Bombs T2",
+    "AlienStaff": {
+      "name": "Alien Staff",
       "type": "projectile",
-      "min_damage": 66,
-      "max_damage": 97,
-      "accuracy": 38,
-      "speed": 77,
-      "proj_skill": 38,
-      "def_skill": 14
+      "min_damage": 89,
+      "max_damage": 112,
+      "accuracy": 39,
+      "speed": 50,
+      "def_skill": 8,
+      "proj_skill": 48
+    },
+    "BioGunMk4": {
+      "name": "Bio Gun Mk4",
+      "type": "gun",
+      "min_damage": 76,
+      "max_damage": 91,
+      "accuracy": 47,
+      "speed": 50,
+      "def_skill": 15,
+      "gun_skill": 42
+    },
+    "ChainBladeT2": {
+      "name": "Chain Blade T2",
+      "type": "melee",
+      "min_damage": 82,
+      "max_damage": 98,
+      "accuracy": 48,
+      "speed": 82,
+      "def_skill": 12,
+      "melee_skill": 61
     },
     "ConcentratedCBombsT2": {
       "name": "Concentrated Crystal Bombs T2",
       "type": "projectile",
       "min_damage": 87,
       "max_damage": 112,
-      "accuracy": 32,
-      "speed": 65,
-      "proj_skill": 9,
-      "def_skill": 5
+      "accuracy": 85
     },
-    "SplitCBombsT2": {
-      "name": "Split Crystal Bombs T2",
+    "CoreStaff": {
+      "name": "Core Staff",
+      "type": "melee",
+      "min_damage": 50,
+      "max_damage": 60,
+      "accuracy": 55,
+      "speed": 75,
+      "def_skill": 50,
+      "melee_skill": 110
+    },
+    "CBombsT2": {
+      "name": "Crystal Bombs T2",
       "type": "projectile",
-      "min_damage": 55,
+      "min_damage": 66,
+      "max_damage": 97,
+      "accuracy": 48,
+      "speed": 77,
+      "def_skill": 16,
+      "proj_skill": 51
+    },
+    "CrystalCrossbow": {
+      "name": "Crystal Crossbow",
+      "type": "projectile",
+      "min_damage": 70,
+      "max_damage": 89,
+      "accuracy": 57,
+      "speed": 60,
+      "proj_skill": 72
+    },
+    "CrystalMaul": {
+      "name": "Crystal Maul",
+      "type": "melee",
+      "min_damage": 95,
+      "max_damage": 105,
+      "accuracy": 95
+    },
+    "CrystalSwordT2": {
+      "name": "Crystal Sword T2",
+      "type": "melee",
+      "min_damage": 84,
+      "max_damage": 95,
+      "accuracy": 50,
+      "speed": 77,
+      "def_skill": 40,
+      "melee_skill": 38
+    },
+    "DarkShadow": {
+      "name": "Dark Shadow",
+      "type": "projectile",
+      "min_damage": 50,
+      "max_damage": 55,
+      "accuracy": 60,
+      "dodge": 20,
+      "speed": 85,
+      "def_skill": 30,
+      "proj_skill": 62
+    },
+    "DoubleBarrelSniperRifle": {
+      "name": "Double Barrel Sniper Rifle",
+      "type": "gun",
+      "min_damage": 95,
+      "max_damage": 105,
+      "accuracy": 95
+    },
+    "GunBladeMk4": {
+      "name": "Gun Blade Mk4",
+      "type": "gun",
+      "min_damage": 73,
       "max_damage": 87,
-      "accuracy": 23,
-      "speed": 79,
-      "proj_skill": 84,
-      "def_skill": 83
+      "accuracy": 50,
+      "speed": 50,
+      "def_skill": 15,
+      "gun_skill": 42
     },
-    "Scythe": {
-      "name": "Scythe",
-      "type": "melee",
-      "min_damage": 76,
-      "max_damage": 92,
-      "accuracy": 31,
-      "speed": 60,
-      "melee_skill": 40,
-      "def_skill": 10
+    "HavocLauncherT2": {
+      "name": "Havoc Launcher T2",
+      "type": "gun",
+      "min_damage": 58,
+      "max_damage": 63,
+      "accuracy": 58,
+      "speed": 50,
+      "def_skill": 82,
+      "gun_skill": 60
     },
-    "VoidSword": {
-      "name": "Void Sword",
-      "type": "melee",
-      "min_damage": 90,
-      "max_damage": 120,
-      "accuracy": 28,
-      "speed": 60,
-      "melee_skill": 20,
-      "def_skill": 5
+    "RailGunT2": {
+      "name": "Rail Gun T2",
+      "type": "gun",
+      "min_damage": 60,
+      "max_damage": 105,
+      "accuracy": 39,
+      "speed": 69,
+      "def_skill": 18,
+      "gun_skill": 47
     },
     "RiftGun": {
       "name": "Rift Gun",
@@ -107,92 +171,168 @@
       "max_damage": 65,
       "accuracy": 85,
       "speed": 50,
-      "gun_skill": 85,
-      "def_skill": 5
+      "def_skill": 5,
+      "gun_skill": 85
     },
-    "CoreStaff": {
-      "name": "Core Staff",
+    "ReaperAxe": {
+      "name": "Reaper Axe",
       "type": "melee",
-      "min_damage": 45,
-      "max_damage": 55,
-      "accuracy": 55,
+      "min_damage": 84,
+      "max_damage": 108,
+      "accuracy": 54,
+      "speed": 65,
+      "def_skill": 15,
+      "melee_skill": 80
+    },
+    "ScytheT2": {
+      "name": "Scythe T2",
+      "type": "melee",
+      "min_damage": 80,
+      "max_damage": 101,
+      "accuracy": 42,
       "speed": 75,
-      "melee_skill": 130,
-      "def_skill": 50
+      "def_skill": 18,
+      "melee_skill": 65
+    },
+    "SplitCBombsT2": {
+      "name": "Split Crystal Bombs T2",
+      "type": "projectile",
+      "min_damage": 55,
+      "max_damage": 87,
+      "accuracy": 23,
+      "speed": 79,
+      "def_skill": 80,
+      "proj_skill": 84
+    },
+    "VoidAxe": {
+      "name": "Void Axe",
+      "type": "melee",
+      "min_damage": 68,
+      "max_damage": 96,
+      "accuracy": 44,
+      "speed": 78,
+      "def_skill": 20,
+      "melee_skill": 60
     },
     "VoidBow": {
       "name": "Void Bow",
       "type": "projectile",
-      "min_damage": 5,
+      "min_damage": 10,
       "max_damage": 125,
       "accuracy": 48,
       "speed": 70,
-      "proj_skill": 65,
-      "def_skill": 20
+      "def_skill": 20,
+      "proj_skill": 65
+    },
+    "VoidSword": {
+      "name": "Void Sword",
+      "type": "melee",
+      "min_damage": 90,
+      "max_damage": 120,
+      "accuracy": 35,
+      "speed": 60,
+      "def_skill": 5,
+      "melee_skill": 40
     }
   },
   "miscs": {
-    "Amulet": {
-      "name": "Amulet",
-      "accuracy": 5,
-      "dodge": 5,
-      "def_skill": 14,
-      "gun_skill": 12,
-      "melee_skill": 12,
-      "proj_skill": 12
-    },
-    "PrimeAmulet": {
-      "name": "Prime Amulet",
-      "accuracy": 4,
-      "dodge": 4,
-      "def_skill": 30,
-      "gun_skill": 30,
-      "melee_skill": 30,
-      "proj_skill": 30
-    },
-    "InfernoAmulet": {
-      "name": "Inferno Amulet",
-      "accuracy": 8,
-      "dodge": 8,
-      "def_skill": 40,
-      "gun_skill": 40,
-      "melee_skill": 40,
-      "proj_skill": 40
-    },
-    "NerveGauntlet": {
-      "name": "Nerve Gauntlet",
-      "accuracy": 6,
-      "dodge": 6,
-      "def_skill": 25,
-      "gun_skill": 40,
-      "melee_skill": 40,
-      "proj_skill": 50
+    "ArchaticRing": {
+      "name": "Archatic Ring",
+      "dodge": 30,
+      "speed": 50,
+      "def_skill": 55
     },
     "BioSpinalEnhancer": {
       "name": "Bio Spinal Enhancer",
       "accuracy": 1,
       "dodge": 1,
       "def_skill": 65,
-      "gun_skill": 65,
       "melee_skill": 65,
+      "gun_skill": 65,
       "proj_skill": 65
+    },
+    "CoreShield": {
+      "name": "Core Shield",
+      "dodge": 7,
+      "armor": 10,
+      "def_skill": 65,
+      "melee_skill": 25,
+      "gun_skill": 25,
+      "proj_skill": 25
+    },
+    "CoreShieldVariant": {
+      "name": "Core Shield Variant",
+      "dodge": 18,
+      "armor": 20,
+      "def_skill": 35,
+      "melee_skill": 35,
+      "gun_skill": 35,
+      "proj_skill": 35
+    },
+    "DroidDrone": {
+      "name": "Droid Drone",
+      "accuracy": 14,
+      "dodge": 14,
+      "melee_skill": 60,
+      "gun_skill": 40,
+      "proj_skill": -20
+    },
+    "InfernoAmulet": {
+      "name": "Inferno Amulet",
+      "accuracy": 8,
+      "dodge": 8,
+      "def_skill": 40,
+      "melee_skill": 40,
+      "gun_skill": 40,
+      "proj_skill": 40
+    },
+    "InfernoShield": {
+      "name": "Inferno Shield",
+      "accuracy": 10,
+      "armor": 8,
+      "def_skill": 35,
+      "melee_skill": 30,
+      "gun_skill": 30,
+      "proj_skill": 30
+    },
+    "NerveGauntlet": {
+      "name": "Nerve Gauntlet",
+      "accuracy": 23,
+      "dodge": 8,
+      "melee_skill": 40,
+      "proj_skill": 75
     },
     "OrphicAmulet": {
       "name": "Orphic Amulet",
+      "accuracy": 27,
+      "speed": 40,
+      "melee_skill": 70,
+      "gun_skill": 70,
+      "proj_skill": 70
+    },
+    "ProjectorBots": {
+      "name": "Projector Bots",
       "accuracy": 10,
-      "dodge": 10,
-      "def_skill": -25,
-      "gun_skill": 50,
-      "melee_skill": 50,
-      "proj_skill": 50
+      "dodge": 25,
+      "def_skill": 40,
+      "melee_skill": 15,
+      "gun_skill": 5,
+      "proj_skill": 40
+    },
+    "ReconDrones": {
+      "name": "Recon Drones",
+      "accuracy": 14,
+      "dodge": 14,
+      "gun_skill": 60,
+      "proj_skill": 40
     },
     "ScoutDrones": {
       "name": "Scout Drones",
       "accuracy": 32,
       "dodge": 5,
       "def_skill": 30,
-      "gun_skill": 30,
       "melee_skill": 30,
+      "gun_skill": 30,
       "proj_skill": 50
     }
   }
