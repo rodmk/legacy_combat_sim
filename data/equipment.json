@@ -178,6 +178,17 @@
       "def_skill": 5,
       "gun_skill": 85
     },
+    "RitualDaggerIV": {
+      "name": "Ritual Dagger IV",
+      "type": "melee",
+      "mod_slots": 2,
+      "min_damage": 76,
+      "max_damage": 94,
+      "accuracy": 32,
+      "speed": 50,
+      "def_skill": 15,
+      "melee_skill": 42
+    },
     "ReaperAxe": {
       "name": "Reaper Axe",
       "type": "melee",
@@ -240,6 +251,17 @@
       "speed": 60,
       "def_skill": 5,
       "melee_skill": 40
+    },
+    "WarlordsKatana": {
+      "name": "Warlords Katana",
+      "type": "melee",
+      "mod_slots": 2,
+      "min_damage": 76,
+      "max_damage": 94,
+      "accuracy": 32,
+      "speed": 50,
+      "def_skill": 15,
+      "melee_skill": 42
     }
   },
   "miscs": {

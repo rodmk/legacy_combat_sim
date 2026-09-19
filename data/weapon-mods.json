@@ -138,5 +138,78 @@
       "min_damage": 1.2,
       "max_damage": 1.2
     }
+  },
+  "MagneticBlade3": {
+    "name": "Magnetic Blade 3",
+    "slot": 1,
+    "compatible": ["WarlordsKatana"],
+    "mult": {
+      "accuracy": 1.1
+    }
+  },
+  "StrongerGuard3": {
+    "name": "Stronger Guard 3",
+    "slot": 1,
+    "compatible": ["WarlordsKatana"],
+    "mult": {
+      "accuracy": 1.05,
+      "min_damage": 1.05,
+      "max_damage": 1.05
+    }
+  },
+  "SharpenedBlade3": {
+    "name": "Sharpened Blade 3",
+    "slot": 2,
+    "compatible": ["WarlordsKatana"],
+    "mult": {
+      "min_damage": 1.2,
+      "max_damage": 1.2
+    }
+  },
+  "ExtraGrip3": {
+    "name": "Extra Grip 3",
+    "slot": 2,
+    "compatible": ["WarlordsKatana"],
+    "mult": {
+      "accuracy": 1.1,
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
+  },
+  "MagneticBlade2": {
+    "name": "Magnetic Blade 2",
+    "slot": 1,
+    "compatible": ["RitualDaggerIV"],
+    "mult": {
+      "accuracy": 1.1
+    }
+  },
+  "EnhancedPoison2": {
+    "name": "Enhanced Poison 2",
+    "slot": 1,
+    "compatible": ["RitualDaggerIV"],
+    "mult": {
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
+  },
+  "SharpenedBlade2": {
+    "name": "Sharpened Blade 2",
+    "slot": 2,
+    "compatible": ["RitualDaggerIV"],
+    "mult": {
+      "min_damage": 1.2,
+      "max_damage": 1.2
+    }
+  },
+  "ExtraGrip2": {
+    "name": "Extra Grip 2",
+    "slot": 2,
+    "compatible": ["RitualDaggerIV"],
+    "mult": {
+      "accuracy": 1.1,
+      "min_damage": 1.1,
+      "max_damage": 1.1
+    }
   }
 }

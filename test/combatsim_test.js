@@ -401,6 +401,13 @@ exports.testWeaponMods = function(test) {
     /Void Bow supports at most 1 weapon mod/
   );
 
+  let dagger = Item.RitualDaggerIV.applyMods([
+    WeaponMod.EnhancedPoison2,
+    WeaponMod.SharpenedBlade2,
+  ]);
+  test.equal(dagger.min_damage, 99);
+  test.equal(dagger.max_damage, 123);
+
   test.done();
 };
 
