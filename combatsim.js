@@ -2067,7 +2067,9 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let improvement_tolerance = options.improvementTolerance === undefined ?
     1e-6 : options.improvementTolerance;
   let analysis_started = Date.now();
-  let before = this.analyzeBuildCatalog(catalog);
+  let before = this.analyzeBuildCatalog(catalog, {
+    matchupCache: options.catalogMatchupCache,
+  });
   let analysis_ms = Date.now() - analysis_started;
   let equilibrium_entries = before.inferred_meta.weights;
   let opponents = equilibrium_entries.map(function(entry) {
@@ -2075,7 +2077,9 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   });
   let opponent_ids = equilibrium_entries.map(function(entry) { return entry.candidate; });
   let opponent_weights = equilibrium_entries.map(function(entry) { return entry.weight; });
-  let starting_build = options.startBuild || catalog[Object.keys(catalog).sort()[0]];
+  let starting_build = options.startBuild || catalog[equilibrium_entries.slice().sort(
+    function(left, right) { return right.weight - left.weight; }
+  )[0].candidate];
   let search_started = Date.now();
   let response = this.adaptiveEquipmentResponseBeam(
     starting_build,
@@ -2106,7 +2110,9 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     expanded_catalog[key] = build;
   });
   let solve_started = Date.now();
-  let after = selected.length > 0 ? this.analyzeBuildCatalog(expanded_catalog) : before;
+  let after = selected.length > 0 ? this.analyzeBuildCatalog(expanded_catalog, {
+    matchupCache: options.catalogMatchupCache,
+  }) : before;
   let solve_ms = Date.now() - solve_started;
 
   return {
@@ -2128,6 +2134,77 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
       expanded_analysis: solve_ms,
       total: analysis_ms + search_ms + solve_ms,
     },
+  };
+};
+
+MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
+  options = options || {};
+  let maximum_rounds = options.maxRounds === undefined ? Infinity : options.maxRounds;
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
+  let shared_options = Object.assign({}, options, {
+    catalogMatchupCache: options.catalogMatchupCache || {
+      values: new Map(), hits: 0, misses: 0,
+    },
+    defeatCache: options.defeatCache ||
+      CombatSim.createDefeatRoundCache(minimum_survival_probability),
+    matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
+    exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
+    exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+  });
+  delete shared_options.startBuild;
+  let current_catalog = Object.assign({}, catalog);
+  let rounds = [];
+  let started = Date.now();
+
+  for (let round = 1; round <= maximum_rounds; round++) {
+    let expansion = this.expandEquipmentArchive(current_catalog, shared_options);
+    let support = new Set(expansion.after.inferred_meta.weights.map(function(entry) {
+      return entry.candidate;
+    }));
+    rounds.push({
+      round: round,
+      archive_size_before: Object.keys(current_catalog).length,
+      archive_size_after: Object.keys(expansion.catalog).length,
+      added: expansion.added,
+      added_to_support: expansion.added.filter(function(entry) {
+        return support.has(entry.id);
+      }).map(function(entry) { return entry.id; }),
+      support_size: support.size,
+      equilibrium: expansion.after.inferred_meta,
+      response_converged: expansion.response.converged,
+      response_iterations: expansion.response.iterations.length,
+      timings_ms: expansion.timings_ms,
+    });
+    current_catalog = expansion.catalog;
+    if (expansion.added.length === 0) {
+      return {
+        catalog: current_catalog,
+        rounds: rounds,
+        converged: true,
+        elapsed_ms: Date.now() - started,
+        caches: MatchupGame.equipmentSearchCacheStats(shared_options),
+      };
+    }
+  }
+
+  return {
+    catalog: current_catalog,
+    rounds: rounds,
+    converged: false,
+    elapsed_ms: Date.now() - started,
+    caches: MatchupGame.equipmentSearchCacheStats(shared_options),
+  };
+};
+
+MatchupGame.equipmentSearchCacheStats = function(options) {
+  let stats = function(cache) {
+    return { entries: cache.values.size, hits: cache.hits, misses: cache.misses };
+  };
+  return {
+    catalog_matchups: stats(options.catalogMatchupCache),
+    approximate_matchups: stats(options.matchupCache),
+    exact_matchups: stats(options.exactMatchupCache),
   };
 };
 
@@ -2366,7 +2443,9 @@ MatchupGame.iteratedDominanceKernel = function(matrix) {
   return { players: active, rounds: rounds };
 };
 
-MatchupGame.analyzeBuildCatalog = function(catalog) {
+MatchupGame.analyzeBuildCatalog = function(catalog, options) {
+  options = options || {};
+  let matchup_cache = options.matchupCache || { values: new Map(), hits: 0, misses: 0 };
   let groups_by_signature = new Map();
 
   Object.keys(catalog).sort().forEach(function(key) {
@@ -2409,9 +2488,23 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       (right.wins * (right[metric] || 0))
     ) / wins;
   };
+  let combatResult = function(player, opponent) {
+    let key = JSON.stringify([
+      CombatSim.combatSignature(player),
+      CombatSim.combatSignature(opponent),
+    ]);
+    if (matchup_cache.values.has(key)) {
+      matchup_cache.hits++;
+      return matchup_cache.values.get(key);
+    }
+    matchup_cache.misses++;
+    let result = CombatSim.combatResultDistribution(player, opponent);
+    matchup_cache.values.set(key, result);
+    return result;
+  };
 
   for (let i = 0; i < players.length; i++) {
-    let self_result = CombatSim.combatResultDistribution(players[i], players[i]);
+    let self_result = combatResult(players[i], players[i]);
     score_matrix[i][i] = 0.5;
     win_probability_matrix[i][i] = average(
       self_result.outcome.player1_wins,
@@ -2437,8 +2530,8 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     );
 
     for (let j = i + 1; j < players.length; j++) {
-      let forward_result = CombatSim.combatResultDistribution(players[i], players[j]);
-      let reverse_result = CombatSim.combatResultDistribution(players[j], players[i]);
+      let forward_result = combatResult(players[i], players[j]);
+      let reverse_result = combatResult(players[j], players[i]);
       let forward = forward_result.outcome;
       let reverse = reverse_result.outcome;
       let score = (

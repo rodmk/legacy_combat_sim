@@ -1765,6 +1765,28 @@ exports.testBatchedEquipmentArchiveExpansion = function(test) {
   test.done();
 };
 
+exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
+  let kernel = BuildCatalogs[2];
+  let search = MatchupGame.endogenousEquipmentSearch(kernel, {
+    beamWidth: 2,
+    batchSize: 2,
+    maxRounds: 2,
+    maxIterations: 1,
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    minimumSurvivalProbability: 0.01,
+  });
+
+  test.ok(search.converged);
+  test.equal(search.rounds.length, 2);
+  test.equal(search.rounds[0].added.length, 1);
+  test.equal(search.rounds[1].added.length, 0);
+  test.ok(search.caches.catalog_matchups.hits > 0);
+  test.equal(Object.keys(search.catalog).length, 2);
+  test.done();
+};
+
 exports.testCatalogIntegration = function(test) {
   let player = Player.generatePlayer(
     'Catalog Player',
