@@ -1284,6 +1284,8 @@ exports.testStatAllocationGeneration = function(test) {
   );
   test.ok(adaptive.search_candidate_count < groups.length);
   test.equal(adaptive.exact_finalist_count, 2);
+  test.equal(adaptive.converged, true);
+  test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
   test.done();
 };
 

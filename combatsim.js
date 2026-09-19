@@ -1451,11 +1451,11 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         source.stats.accuracy < 4 || source.stats.dodge < 4 ||
         source.stats.hp + source.stats.speed + source.stats.accuracy + source.stats.dodge !== 183 ||
         (allowed_hp_points && !allowed_hp_points.has(source.stats.hp))) {
-      return;
+      return false;
     }
     let source_key = JSON.stringify([ source.attack_type, source.stats ]);
     if (source_keys.has(source_key)) {
-      return;
+      return false;
     }
     source_keys.add(source_key);
     let candidate = Object.assign({}, build, {
@@ -1473,6 +1473,32 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       attack_type: source.attack_type,
       stats: Object.assign({}, source.stats),
     });
+    return true;
+  };
+  let expandFrontier = function(frontier_result, radius, point_stride) {
+    let added = 0;
+    let frontier = frontier_result.combat_frontier.concat(
+      frontier_result.combat_economy_frontier
+    );
+    frontier.forEach(function(candidate) {
+      candidate.sources.forEach(function(source) {
+        for (let hp_offset = -radius; hp_offset <= radius; hp_offset += point_stride) {
+          for (let accuracy_offset = -radius; accuracy_offset <= radius;
+            accuracy_offset += point_stride) {
+            let stats = {
+              hp: source.stats.hp + hp_offset,
+              speed: source.stats.speed,
+              accuracy: source.stats.accuracy + accuracy_offset,
+            };
+            stats.dodge = 183 - stats.hp - stats.speed - stats.accuracy;
+            if (addSource({ attack_type: source.attack_type, stats: stats })) {
+              added++;
+            }
+          }
+        }
+      });
+    });
+    return added;
   };
 
   attack_types.forEach(function(attack_type) {
@@ -1506,27 +1532,40 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       return;
     }
     let next_stride = point_strides[stage + 1];
-    let frontier = frontier_result.combat_frontier.concat(
-      frontier_result.combat_economy_frontier
-    );
-    frontier.forEach(function(candidate) {
-      candidate.sources.forEach(function(source) {
-        for (let hp_offset = -point_stride; hp_offset <= point_stride;
-          hp_offset += next_stride) {
-          for (let accuracy_offset = -point_stride; accuracy_offset <= point_stride;
-            accuracy_offset += next_stride) {
-            let stats = {
-              hp: source.stats.hp + hp_offset,
-              speed: source.stats.speed,
-              accuracy: source.stats.accuracy + accuracy_offset,
-            };
-            stats.dodge = 183 - stats.hp - stats.speed - stats.accuracy;
-            addSource({ attack_type: source.attack_type, stats: stats });
-          }
-        }
-      });
-    });
+    expandFrontier(frontier_result, point_stride, next_stride);
   });
+
+  let convergence = [];
+  let convergence_iteration = 0;
+  let converged = false;
+  while (!converged) {
+    convergence_iteration++;
+    let added = expandFrontier(frontier_result, 1, 1);
+    if (added === 0) {
+      convergence.push({
+        iteration: convergence_iteration,
+        added_allocations: 0,
+        candidate_count: frontier_result.candidate_count,
+        combat_frontier_count: frontier_result.combat_frontier.length,
+        combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+      });
+      converged = true;
+      continue;
+    }
+    frontier_result = MatchupGame.candidateFrontiers(
+      Array.from(groups_by_signature.values()),
+      opponents,
+      opponent_ids,
+      { defeatCache: search_cache }
+    );
+    convergence.push({
+      iteration: convergence_iteration,
+      added_allocations: added,
+      candidate_count: frontier_result.candidate_count,
+      combat_frontier_count: frontier_result.combat_frontier.length,
+      combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+    });
+  }
 
   let finalist_source_keys = new Set();
   frontier_result.combat_frontier.concat(frontier_result.combat_economy_frontier)
@@ -1547,6 +1586,8 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   exact_result.minimum_survival_probability = minimum_survival_probability;
   exact_result.exact_finalist_count = finalists.length;
   exact_result.stages = stages;
+  exact_result.convergence = convergence;
+  exact_result.converged = converged;
   return exact_result;
 };
 

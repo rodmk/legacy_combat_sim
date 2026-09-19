@@ -70,7 +70,7 @@ Search unrestricted legal stat allocations for the same loadout with progressive
 yarn search:stats > stat-search.json
 ```
 
-Each refinement explores the neighborhoods of the preceding combat and economy frontiers. The final frontier candidates are evaluated exactly.
+Each refinement explores the neighborhoods of the preceding combat and economy frontiers. One-point expansion continues until no unseen frontier neighbors remain, and the final frontier candidates are evaluated exactly.
 
 Development
 ===========
