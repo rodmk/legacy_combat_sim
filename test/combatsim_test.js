@@ -1243,6 +1243,9 @@ exports.testStatAllocationGeneration = function(test) {
   });
   test.equal(count, 172);
   test.ok(allocations_are_valid);
+  test.throws(function() {
+    BuildSearch.forEachStatAllocation([ 2 ], { pointStride: 0 }, function() {});
+  }, /positive integer/);
 
   let report = BuildSearch.statAllocationReport(
     build, opponents, [ 'normal' ], { hpPoints: [ 2 ] }
@@ -1258,6 +1261,72 @@ exports.testStatAllocationGeneration = function(test) {
   test.ok(groups.every(function(group) {
     return group.representative.max_hp === 10 && group.sources.length > 0;
   }));
+
+  let exhaustive = MatchupGame.candidateFrontiers(groups, opponents, opponent_keys, {
+    minimumSurvivalProbability: 1e-6,
+  });
+  let adaptive = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], minimumSurvivalProbability: 1e-6 }
+  );
+  let frontierSources = function(result, frontier) {
+    return result[frontier].flatMap(function(candidate) {
+      return candidate.sources.map(function(source) { return JSON.stringify(source); });
+    }).sort();
+  };
+  test.deepEqual(
+    frontierSources(adaptive, 'combat_frontier'),
+    frontierSources(exhaustive, 'combat_frontier')
+  );
+  test.deepEqual(
+    frontierSources(adaptive, 'combat_economy_frontier'),
+    frontierSources(exhaustive, 'combat_economy_frontier')
+  );
+  test.ok(adaptive.search_candidate_count < groups.length);
+  test.equal(adaptive.exact_finalist_count, 2);
+  test.equal(adaptive.converged, true);
+  test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
+  test.throws(function() {
+    MatchupGame.adaptiveStatFrontiers(
+      build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [] }
+    );
+  }, /positive integer/);
+  test.throws(function() {
+    MatchupGame.adaptiveStatFrontiers(
+      build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [ -1 ] }
+    );
+  }, /positive integer/);
+
+  let sparse_adaptive = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], pointStrides: [ 8 ], minimumSurvivalProbability: 1e-6 }
+  );
+  test.ok(sparse_adaptive.convergence[0].added_allocations > 0);
+  test.equal(
+    sparse_adaptive.convergence[sparse_adaptive.convergence.length - 1].added_allocations,
+    0
+  );
+  test.deepEqual(
+    frontierSources(sparse_adaptive, 'combat_frontier'),
+    frontierSources(exhaustive, 'combat_frontier')
+  );
+  test.deepEqual(
+    frontierSources(sparse_adaptive, 'combat_economy_frontier'),
+    frontierSources(exhaustive, 'combat_economy_frontier')
+  );
+  test.equal(
+    sparse_adaptive.search_candidate_count,
+    sparse_adaptive.stages[0].candidate_count +
+      sparse_adaptive.convergence.reduce(function(sum, iteration) {
+        return sum + iteration.added_allocations;
+      }, 0)
+  );
   test.done();
 };
 
@@ -1299,6 +1368,50 @@ exports.testRestrictedMatchupGame = function(test) {
   test.deepEqual(candidate_frontiers.combat_economy_frontier.map(function(candidate) {
     return candidate.sources[0];
   }), [ 'viable' ]);
+
+  let defeat_cache = CombatSim.createDefeatRoundCache();
+  let matchup_cache = { values: new Map(), hits: 0, misses: 0 };
+  let incremental = MatchupGame.candidateFrontiers([
+    { representative: helpless, sources: [ 'helpless' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  incremental = MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+    previousResult: incremental,
+  });
+  test.equal(incremental.candidate_count, 2);
+  test.equal(incremental.evaluated_matchups, 2);
+  test.deepEqual(incremental.combat_economy_frontier.map(function(candidate) {
+    return candidate.sources[0];
+  }), [ 'viable' ]);
+  MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  test.deepEqual({
+    entries: matchup_cache.values.size,
+    hits: matchup_cache.hits,
+    misses: matchup_cache.misses,
+  }, { entries: 2, hits: 1, misses: 2 });
+  let changed_opponent = Object.assign({}, player2, { dodge: player2.dodge + 1 });
+  MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ changed_opponent ], [ 'changed-opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  test.deepEqual({
+    entries: matchup_cache.values.size,
+    hits: matchup_cache.hits,
+    misses: matchup_cache.misses,
+  }, { entries: 3, hits: 1, misses: 3 });
 
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],

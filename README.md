@@ -64,6 +64,14 @@ yarn search:min-hp > minimum-hp-search.json
 
 The broad search stops propagating combat tails below one-in-a-million probability. It then evaluates the surviving combat and economy frontier candidates exactly.
 
+Search unrestricted legal stat allocations for the same loadout with 11, 5, 2, and 1-point grids:
+
+```sh
+yarn search:stats > stat-search.json
+```
+
+Each refinement explores the neighborhoods of the preceding combat and economy frontiers. One-point expansion continues until no unseen frontier neighbors remain, and the final frontier candidates are evaluated exactly.
+
 Development
 ===========
 
