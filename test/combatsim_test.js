@@ -1242,6 +1242,44 @@ exports.testEquipmentNeighborhood = function(test) {
   branching_normalized.forEach(function(entry) {
     test.ok(!entry.build.equipment.misc1.crystals.includes('PerfectWater'));
   });
+  let concept_left = Object.assign({}, normalized[0].build, {
+    equipment: Object.assign({}, normalized[0].build.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'AmuletCrystal', 'AmuletCrystal', 'AmuletCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  let concept_right = Object.assign({}, concept_left, {
+    equipment: Object.assign({}, concept_left.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'AmuletCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  test.equal(
+    BuildSearch.equipmentConceptSignature(concept_left),
+    BuildSearch.equipmentConceptSignature(concept_right)
+  );
+  let distinct_concept = Object.assign({}, concept_right, {
+    equipment: Object.assign({}, concept_right.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  test.notEqual(
+    BuildSearch.equipmentConceptSignature(concept_left),
+    BuildSearch.equipmentConceptSignature(distinct_concept)
+  );
   let neighborhood = BuildSearch.equipmentNeighborhood(build, {
     slots: [ 'weapon1', 'misc1' ],
     itemKeysBySlot: {
@@ -1314,6 +1352,34 @@ exports.testEquipmentNeighborhood = function(test) {
   );
   test.ok(adaptive_response.converged);
   test.ok(adaptive_response.iterations.length <= 3);
+  let response_beam = MatchupGame.equipmentResponseBeam(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire', 'AmuletCrystal', 'BerserkerCrystal' ],
+      socketCapacity: 2,
+      minimumSurvivalProbability: 1e-6,
+      beamWidth: 2,
+    }
+  );
+  test.equal(response_beam.beam.length, 2);
+  test.equal(new Set(response_beam.beam.map(function(entry) {
+    return entry.concept_signature;
+  })).size, 2);
+  test.ok(response_beam.finalist_count >= response_beam.beam.length);
+  let adaptive_beam = MatchupGame.adaptiveEquipmentResponseBeam(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire', 'AmuletCrystal', 'BerserkerCrystal' ],
+      socketCapacity: 2,
+      minimumSurvivalProbability: 1e-6,
+      beamWidth: 2,
+      maxIterations: 2,
+    }
+  );
+  test.ok(adaptive_beam.beam.length <= 2);
+  test.ok(adaptive_beam.iterations.length <= 2);
 
   test.done();
 };

@@ -1213,6 +1213,33 @@ BuildSearch.normalizeEquipment = function(build, options) {
   return Array.from(variants_by_signature.values());
 };
 
+BuildSearch.equipmentConceptSignature = function(build) {
+  let descriptor = function(equipment) {
+    return [
+      equipment.item,
+      (equipment.mods || []).slice().sort(),
+      Array.from(new Set(equipment.crystals || [])).sort(),
+    ];
+  };
+  let weapons = [
+    descriptor(build.equipment.weapon1),
+    descriptor(build.equipment.weapon2),
+  ].sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  });
+  let miscs = [
+    descriptor(build.equipment.misc1),
+    descriptor(build.equipment.misc2),
+  ].sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  });
+  return JSON.stringify([
+    descriptor(build.equipment.armor),
+    weapons,
+    miscs,
+  ]);
+};
+
 BuildSearch.equipmentNeighborhood = function(build, options) {
   let settings = options || {};
   let slots = settings.slots || [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
@@ -1795,6 +1822,98 @@ MatchupGame.equipmentBestResponse = function(
   };
 };
 
+MatchupGame.equipmentResponseBeam = function(
+  build, opponents, opponent_ids, opponent_weights, options
+) {
+  options = options || {};
+  let beam_width = options.beamWidth || 8;
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
+  let neighborhood = BuildSearch.equipmentNeighborhood(build, options);
+  let approximate = this.candidateFrontiers(
+    neighborhood.groups, opponents, opponent_ids, {
+      defeatCache: options.defeatCache,
+      matchupCache: options.matchupCache,
+      minimumSurvivalProbability: minimum_survival_probability,
+      opponentWeights: opponent_weights,
+      includeCandidates: true,
+    }
+  );
+  let concepts = new Map();
+  approximate.candidates.forEach(function(candidate) {
+    candidate.sources.forEach(function(source) {
+      let signature = BuildSearch.equipmentConceptSignature(source.build);
+      if (!concepts.has(signature)) {
+        concepts.set(signature, { signature: signature, candidates: new Map() });
+      }
+      concepts.get(signature).candidates.set(candidate.signature, candidate);
+    });
+  });
+  let selected_concepts = Array.from(concepts.values()).map(function(concept) {
+    let candidates = Array.from(concept.candidates.values());
+    concept.lower_bound = Math.max.apply(null, candidates.map(function(candidate) {
+      return candidate.weighted_score - candidate.weighted_score_error_bound;
+    }));
+    concept.approximate_score = Math.max.apply(null, candidates.map(function(candidate) {
+      return candidate.weighted_score;
+    }));
+    concept.finalist_signatures = new Set(candidates.filter(function(candidate) {
+      return candidate.weighted_score + candidate.weighted_score_error_bound >=
+        concept.lower_bound - 1e-12;
+    }).map(function(candidate) { return candidate.signature; }));
+    return concept;
+  }).sort(function(left, right) {
+    return right.approximate_score - left.approximate_score;
+  }).slice(0, beam_width);
+  let finalist_signatures = new Set();
+  selected_concepts.forEach(function(concept) {
+    concept.finalist_signatures.forEach(function(signature) {
+      finalist_signatures.add(signature);
+    });
+  });
+  let finalists = neighborhood.groups.filter(function(group) {
+    return finalist_signatures.has(group.signature);
+  });
+  let exact = this.candidateFrontiers(finalists, opponents, opponent_ids, {
+    defeatCache: options.exactDefeatCache,
+    matchupCache: options.exactMatchupCache,
+    opponentWeights: opponent_weights,
+    includeCandidates: true,
+  });
+  let exact_by_signature = new Map(exact.candidates.map(function(candidate) {
+    return [ candidate.signature, candidate ];
+  }));
+  let beam = selected_concepts.map(function(concept) {
+    let candidates = Array.from(concept.finalist_signatures).map(function(signature) {
+      return exact_by_signature.get(signature);
+    }).filter(function(candidate) { return candidate !== undefined; });
+    candidates.sort(function(left, right) {
+      return right.weighted_score - left.weighted_score;
+    });
+    let best = Object.assign({}, candidates[0], {
+      sources: candidates[0].sources.filter(function(source) {
+        return BuildSearch.equipmentConceptSignature(source.build) === concept.signature;
+      }),
+    });
+    return {
+      concept_signature: concept.signature,
+      best_response: best,
+    };
+  }).sort(function(left, right) {
+    return right.best_response.weighted_score - left.best_response.weighted_score;
+  });
+
+  return {
+    beam: beam,
+    concept_count: concepts.size,
+    selected_concept_count: selected_concepts.length,
+    candidate_count: neighborhood.counts.unique_combat_signatures,
+    finalist_count: finalists.length,
+    evaluated_matchups: approximate.evaluated_matchups,
+    exact_matchups: exact.evaluated_matchups,
+  };
+};
+
 MatchupGame.adaptiveEquipmentBestResponse = function(
   build, opponents, opponent_ids, opponent_weights, options
 ) {
@@ -1842,6 +1961,91 @@ MatchupGame.adaptiveEquipmentBestResponse = function(
   }
 
   return { best_response: best, iterations: iterations, converged: false };
+};
+
+MatchupGame.adaptiveEquipmentResponseBeam = function(
+  build, opponents, opponent_ids, opponent_weights, options
+) {
+  options = options || {};
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
+  let beam_width = options.beamWidth || 8;
+  let maximum_iterations = options.maxIterations || 5;
+  let shared_options = Object.assign({}, options, {
+    beamWidth: beam_width,
+    defeatCache: options.defeatCache ||
+      CombatSim.createDefeatRoundCache(minimum_survival_probability),
+    matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
+    exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
+    exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+  });
+  let initial = this.equipmentResponseBeam(
+    build, opponents, opponent_ids, opponent_weights, shared_options
+  );
+  let beam = initial.beam;
+  let iterations = [ {
+    iteration: 1,
+    beam: beam,
+    candidate_count: initial.candidate_count,
+    finalist_count: initial.finalist_count,
+    evaluated_matchups: initial.evaluated_matchups,
+    exact_matchups: initial.exact_matchups,
+  } ];
+
+  for (let iteration = 2; iteration <= maximum_iterations; iteration++) {
+    let responses = beam.map(function(entry) {
+      return MatchupGame.equipmentBestResponse(
+        entry.best_response.sources[0].build,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        shared_options
+      );
+    });
+    let best_by_concept = new Map();
+    responses.forEach(function(response) {
+      let candidate = response.best_response;
+      let signature = BuildSearch.equipmentConceptSignature(candidate.sources[0].build);
+      let existing = best_by_concept.get(signature);
+      if (!existing || candidate.weighted_score > existing.best_response.weighted_score) {
+        best_by_concept.set(signature, {
+          concept_signature: signature,
+          best_response: candidate,
+        });
+      }
+    });
+    let next_beam = Array.from(best_by_concept.values()).sort(function(left, right) {
+      return right.best_response.weighted_score - left.best_response.weighted_score;
+    }).slice(0, beam_width);
+    let previous_signatures = beam.map(function(entry) {
+      return entry.best_response.signature;
+    }).sort();
+    let next_signatures = next_beam.map(function(entry) {
+      return entry.best_response.signature;
+    }).sort();
+    iterations.push({
+      iteration: iteration,
+      beam: next_beam,
+      candidate_count: responses.reduce(function(sum, response) {
+        return sum + response.candidate_count;
+      }, 0),
+      finalist_count: responses.reduce(function(sum, response) {
+        return sum + response.finalist_count;
+      }, 0),
+      evaluated_matchups: responses.reduce(function(sum, response) {
+        return sum + response.evaluated_matchups;
+      }, 0),
+      exact_matchups: responses.reduce(function(sum, response) {
+        return sum + response.exact_matchups;
+      }, 0),
+    });
+    beam = next_beam;
+    if (JSON.stringify(previous_signatures) === JSON.stringify(next_signatures)) {
+      return { beam: beam, iterations: iterations, converged: true };
+    }
+  }
+
+  return { beam: beam, iterations: iterations, converged: false };
 };
 
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
