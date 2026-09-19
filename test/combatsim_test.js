@@ -775,6 +775,20 @@ exports.testCombatHealthLossDistribution = function(test) {
     hits: 2,
     misses: 2,
   });
+
+  let tail_attacker = Object.assign({}, player1, {
+    accuracy: 100,
+    gun_skill: 100,
+    weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
+  });
+  let exact_tail = CombatSim.defeatRoundDistribution(tail_attacker, player2);
+  let truncated_tail = CombatSim.defeatRoundDistribution(
+    tail_attacker,
+    player2,
+    CombatSim.createDefeatRoundCache(1e-6)
+  );
+  test.ok(truncated_tail.survives > exact_tail.survives);
+  test.ok(truncated_tail.survives <= 1e-6);
   test.done();
 };
 

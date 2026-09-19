@@ -267,8 +267,13 @@ CombatSim.defeatRoundSignature = function(att, def) {
   ]);
 };
 
-CombatSim.createDefeatRoundCache = function() {
-  return { values: new Map(), hits: 0, misses: 0 };
+CombatSim.createDefeatRoundCache = function(minimum_survival_probability) {
+  return {
+    values: new Map(),
+    hits: 0,
+    misses: 0,
+    minimum_survival_probability: minimum_survival_probability || 0,
+  };
 };
 
 CombatSim.defeatRoundDistribution = function(att, def, cache) {
@@ -347,6 +352,12 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
     surviving_healing_cost_by_round[round] = next_surviving_healing_cost;
     full_hp_probability_by_round[round] = next_full_hp_probability;
     if (!has_survivors) {
+      break;
+    }
+    if (cache && survives <= cache.minimum_survival_probability) {
+      surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_hp;
+      surviving_healing_cost_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_healing_cost;
+      full_hp_probability_by_round[this.MAX_COMBAT_ROUNDS] = next_full_hp_probability;
       break;
     }
   }
@@ -1313,11 +1324,12 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
   };
 };
 
-MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
+MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, options) {
+  options = options || {};
   let combat_frontier = [];
   let economy_frontier = [];
   let evaluated_matchups = 0;
-  let defeat_cache = CombatSim.createDefeatRoundCache();
+  let defeat_cache = CombatSim.createDefeatRoundCache(options.minimumSurvivalProbability);
   let dominates = function(left, right, include_economy) {
     let strictly_better = false;
     for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
@@ -1386,6 +1398,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids) {
       entries: defeat_cache.values.size,
       hits: defeat_cache.hits,
       misses: defeat_cache.misses,
+      minimum_survival_probability: defeat_cache.minimum_survival_probability,
     },
     combat_frontier: combat_frontier,
     combat_economy_frontier: economy_frontier,

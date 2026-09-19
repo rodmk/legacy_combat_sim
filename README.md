@@ -56,11 +56,13 @@ Inspect the legal stat-allocation space for the seed-kernel loadout with speed c
 yarn analyze:allocations > allocation-analysis.json
 ```
 
-Run the exact minimum-HP allocation search for the seed-kernel loadout:
+Run the minimum-HP allocation search for the seed-kernel loadout:
 
 ```sh
 yarn search:min-hp > minimum-hp-search.json
 ```
+
+The broad search stops propagating combat tails below one-in-a-million probability. It then evaluates the surviving combat and economy frontier candidates exactly.
 
 Development
 ===========
