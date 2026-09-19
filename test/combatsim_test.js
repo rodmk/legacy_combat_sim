@@ -1105,10 +1105,13 @@ exports.testEquivalentBuildGrouping = function(test) {
 };
 
 exports.testMultipleBuildCatalogs = function(test) {
-  test.equal(BuildCatalogs.length, 2);
+  test.equal(BuildCatalogs.length, 3);
   test.equal(Object.keys(BuildCatalogs[1]).length, 15);
-  test.equal(Object.keys(Build).length, 20);
+  test.equal(Object.keys(BuildCatalogs[2]).length, 1);
+  test.equal(Object.keys(Build).length, 21);
   test.equal(Player.generateReferencePlayers(BuildCatalogs).length, 19);
+  test.equal(Build.ControlledKernel.equipment.weapon1.item, 'CrystalSword');
+  test.equal(Build.ControlledKernel.equipment.weapon2.item, 'CrystalSword');
 
   let q15_player = Player.generateBuild(Build.ShadowDojoDLGunBuild2);
   test.deepEqual(q15_player.weapon2, {
@@ -1736,6 +1739,29 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
     ) < 1e-12);
   });
 
+  test.done();
+};
+
+exports.testBatchedEquipmentArchiveExpansion = function(test) {
+  let kernel = BuildCatalogs[2];
+  let expansion = MatchupGame.expandEquipmentArchive(kernel, {
+    startBuild: kernel.ControlledKernel,
+    beamWidth: 2,
+    batchSize: 2,
+    maxIterations: 1,
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    minimumSurvivalProbability: 0.01,
+  });
+
+  test.equal(expansion.added.length, 1);
+  test.equal(expansion.added[0].build.equipment.weapon1.item, 'CrystalSwordT2');
+  test.ok(expansion.added[0].score_against_equilibrium > 0.5);
+  test.equal(Object.keys(expansion.catalog).length, 2);
+  test.deepEqual(expansion.after.inferred_meta.weights, [
+    { candidate: 'EndogenousResponse1', weight: 1 },
+  ]);
   test.done();
 };
 

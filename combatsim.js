@@ -2061,6 +2061,76 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
   return { beam: beam, iterations: iterations, converged: false };
 };
 
+MatchupGame.expandEquipmentArchive = function(catalog, options) {
+  options = options || {};
+  let batch_size = options.batchSize || 8;
+  let improvement_tolerance = options.improvementTolerance === undefined ?
+    1e-6 : options.improvementTolerance;
+  let analysis_started = Date.now();
+  let before = this.analyzeBuildCatalog(catalog);
+  let analysis_ms = Date.now() - analysis_started;
+  let equilibrium_entries = before.inferred_meta.weights;
+  let opponents = equilibrium_entries.map(function(entry) {
+    return Player.generateBuild(catalog[entry.candidate]);
+  });
+  let opponent_ids = equilibrium_entries.map(function(entry) { return entry.candidate; });
+  let opponent_weights = equilibrium_entries.map(function(entry) { return entry.weight; });
+  let starting_build = options.startBuild || catalog[Object.keys(catalog).sort()[0]];
+  let search_started = Date.now();
+  let response = this.adaptiveEquipmentResponseBeam(
+    starting_build,
+    opponents,
+    opponent_ids,
+    opponent_weights,
+    options
+  );
+  let search_ms = Date.now() - search_started;
+  let archived_signatures = new Set(Object.keys(catalog).map(function(key) {
+    return CombatSim.combatSignature(Player.generateBuild(catalog[key]));
+  }));
+  let archived_concepts = new Set(Object.keys(catalog).map(function(key) {
+    return BuildSearch.equipmentConceptSignature(catalog[key]);
+  }));
+  let selected = response.beam.filter(function(entry) {
+    return entry.best_response.weighted_score > 0.5 + improvement_tolerance &&
+      !archived_signatures.has(entry.best_response.signature) &&
+      !archived_concepts.has(entry.concept_signature);
+  }).slice(0, batch_size);
+  let expanded_catalog = Object.assign({}, catalog);
+  selected.forEach(function(entry, index) {
+    let key = 'EndogenousResponse' + (Object.keys(catalog).length + index);
+    let build = Object.assign({}, entry.best_response.sources[0].build, {
+      name: 'Endogenous Response ' + (Object.keys(catalog).length + index),
+      reference: false,
+    });
+    expanded_catalog[key] = build;
+  });
+  let solve_started = Date.now();
+  let after = selected.length > 0 ? this.analyzeBuildCatalog(expanded_catalog) : before;
+  let solve_ms = Date.now() - solve_started;
+
+  return {
+    catalog: expanded_catalog,
+    added: selected.map(function(entry, index) {
+      return {
+        id: 'EndogenousResponse' + (Object.keys(catalog).length + index),
+        concept_signature: entry.concept_signature,
+        score_against_equilibrium: entry.best_response.weighted_score,
+        build: expanded_catalog['EndogenousResponse' + (Object.keys(catalog).length + index)],
+      };
+    }),
+    before: before,
+    after: after,
+    response: response,
+    timings_ms: {
+      initial_analysis: analysis_ms,
+      response_search: search_ms,
+      expanded_analysis: solve_ms,
+      total: analysis_ms + search_ms + solve_ms,
+    },
+  };
+};
+
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
   options = options || {};
   let point_strides = options.pointStrides || [ 11, 5, 2, 1 ];
