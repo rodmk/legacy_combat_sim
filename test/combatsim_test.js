@@ -48,6 +48,68 @@ exports.testCombatInitiative = function(test) {
   test.done();
 };
 
+exports.testDefeatedPlayerCannotRetaliate = function(test) {
+  let attacker = {
+    name: 'Attacker',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let defender = {
+    name: 'Defender',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attacks = [];
+
+  CombatSim.attemptHit = function(player) {
+    attacks.push(player.name);
+    return 5;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(attacker, defender), attacker);
+    test.deepEqual(attacks, [ 'Attacker', 'Attacker' ]);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
+exports.testSurvivingPlayerCounterattacksWithBothWeapons = function(test) {
+  let attacker = {
+    name: 'Attacker',
+    max_hp: 5,
+    weapon1: {},
+    weapon2: {},
+  };
+  let defender = {
+    name: 'Defender',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attacks = [];
+
+  CombatSim.attemptHit = function(player) {
+    attacks.push(player.name);
+    return player === attacker ? 1 : 3;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(attacker, defender), defender);
+    test.deepEqual(attacks, [ 'Attacker', 'Attacker', 'Defender', 'Defender' ]);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
 exports.testPlayerGeneration = function(test) {
   let test_player = Player.generatePlayer(
     'Test Player',

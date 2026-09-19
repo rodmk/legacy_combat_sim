@@ -139,12 +139,17 @@ CombatSim.fight = function(att, def) {
     def_hp -=
       this.attemptHit(att, def, att.weapon1) +
       this.attemptHit(att, def, att.weapon2);
+
+    if (def_hp <= 0) {
+      return att;
+    }
+
     att_hp -=
       this.attemptHit(def, att, def.weapon1) +
       this.attemptHit(def, att, def.weapon2);
   }
 
-  return def_hp > 0 ? def : att;
+  return def;
 };
 
 // Returns damage given to p2 by p1 in one hit
