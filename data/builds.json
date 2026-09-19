@@ -1,6 +1,7 @@
 {
   "DualRiftsWithBios": {
     "name": "Dual Rifts w/ Bios",
+    "level": 80,
     "stats": { "hp": 70, "speed": 17, "accuracy": 4, "dodge": 92 },
     "equipment": {
       "armor": {
@@ -27,6 +28,7 @@
   },
   "DualRiftsWithBiosAbyss": {
     "name": "Dual Rifts w/ Bios (Abyss/Ammy Cs)",
+    "level": 80,
     "reference": false,
     "stats": { "hp": 150, "speed": 3, "accuracy": 4, "dodge": 26 },
     "equipment": {
@@ -54,6 +56,7 @@
   },
   "DualVoidBowsWithScouts": {
     "name": "Dual VBows w/ Scouts",
+    "level": 80,
     "stats": { "hp": 70, "speed": 9, "accuracy": 4, "dodge": 100 },
     "equipment": {
       "armor": {
@@ -82,6 +85,7 @@
   },
   "CoreStaffVoidSwordWithScouts": {
     "name": "CStaff/VSword w/ Scouts",
+    "level": 80,
     "stats": { "hp": 70, "speed": 10, "accuracy": 4, "dodge": 99 },
     "equipment": {
       "armor": {
@@ -108,6 +112,7 @@
   },
   "CoreStaffVoidSwordWithScoutsAbyss": {
     "name": "CStaff/VSword w/ Scouts (Abyss/Ammy Cs)",
+    "level": 80,
     "stats": { "hp": 70, "speed": 5, "accuracy": 4, "dodge": 104 },
     "equipment": {
       "armor": {

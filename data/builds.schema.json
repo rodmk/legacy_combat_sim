@@ -8,11 +8,13 @@
   "$defs": {
     "build": {
       "type": "object",
-      "required": ["name", "stats", "equipment"],
+      "required": ["name", "level", "stats", "equipment"],
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "level": { "const": 80 },
         "reference": { "type": "boolean" },
+        "attack_type": { "enum": ["normal", "quick", "aimed", "cover"] },
         "stats": { "$ref": "#/$defs/stats" },
         "equipment": { "$ref": "#/$defs/loadout" }
       }

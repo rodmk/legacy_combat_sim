@@ -46,22 +46,6 @@ function main() {
   combatants = combatants.concat(testCombatants);
   combatants = combatants.concat(Player.generateReferencePlayers());
 
-  combatants.forEach(function(combatant) {
-    // Equalize stats for all players so they don't factor into simulation.
-    const BASE_HP = 350;
-    const BASE_SPEED = 300;
-
-    assert(
-      combatant.max_hp === BASE_HP,
-      combatant.name + '\'s hp is ' + combatant.max_hp + ', required hp is ' + BASE_HP
-    );
-    assert(
-      combatant.speed >= BASE_SPEED && combatant.speed - BASE_SPEED < 5,
-      combatant.name + '\'s speed is ' + combatant.speed + ', required speed is ' + BASE_SPEED + ' to ' + (BASE_SPEED + 4)
-    );
-    combatant.speed = BASE_SPEED;
-  });
-
   console.log('Running Simulation');
   testCombatants.forEach(function(testCombatant) {
     let combatant = Object.assign({}, testCombatant);
@@ -93,16 +77,6 @@ function idx(obj, key, def) {
   }
 }
 
-function assert(condition, message) {
-  if (!condition) {
-    message = message || 'Assertion failed';
-    if (typeof Error !== 'undefined') {
-      throw new Error(message);
-    }
-    throw message; // Fallback
-  }
-}
-
 function deepFreeze(o) {
   let prop, propKey;
   Object.freeze(o); // First freeze the object.
@@ -124,34 +98,37 @@ function deepFreeze(o) {
 //                                   CombatSim
 // =============================================================================
 function CombatSim() {}
-// Perform combat assuming each player is the attacker 50% of the time
+// Assume fights still unresolved after 100 rounds are draws.
+CombatSim.MAX_COMBAT_ROUNDS = 100;
+
+// Perform combat with player1 initiating each fight.
 CombatSim.simulateCombat = function(player1, player2, fights) {
   let player1_wins = 0;
   let player2_wins = 0;
+  let draws = 0;
 
   for (let i = 0; i < fights; i++) {
     let r;
 
-    if (player1.speed > player2.speed) {
-      r = this.fight(player1, player2);
-    } else if (player2.speed > player1.speed) {
+    if (player2.speed > player1.speed) {
       r = this.fight(player2, player1);
-    } else if (i <= (fights / 2)) {
-      r = this.fight(player1, player2);
     } else {
-      r = this.fight(player2, player1);
+      r = this.fight(player1, player2);
     }
 
     if (r === player1) {
       player1_wins++;
-    } else {
+    } else if (r === player2) {
       player2_wins++;
+    } else {
+      draws++;
     }
   }
 
   let results = {
     player1_wins: player1_wins,
     player2_wins: player2_wins,
+    draws: draws,
   };
   return results;
 };
@@ -161,16 +138,25 @@ CombatSim.fight = function(att, def) {
   let att_hp = att.max_hp;
   let def_hp = def.max_hp;
 
-  while (att_hp > 0 && def_hp > 0) {
+  for (let round = 0; round < this.MAX_COMBAT_ROUNDS; round++) {
     def_hp -=
       this.attemptHit(att, def, att.weapon1) +
       this.attemptHit(att, def, att.weapon2);
+
+    if (def_hp <= 0) {
+      return att;
+    }
+
     att_hp -=
       this.attemptHit(def, att, def.weapon1) +
       this.attemptHit(def, att, def.weapon2);
+
+    if (att_hp <= 0) {
+      return def;
+    }
   }
 
-  return def_hp > 0 ? def : att;
+  return null;
 };
 
 // Returns damage given to p2 by p1 in one hit
@@ -181,9 +167,10 @@ CombatSim.attemptHit = function(att, def, weapon) {
   if (this.rollCombat(att.accuracy, def.dodge) &&
       this.rollCombat(att[weapon.skill], def.def_skill)) {
     let base_damage = getRandom(weapon.min_damage, weapon.max_damage);
-    // Damage absorbption is capped at 60% of base damage dealt.
-    let absorb = Math.min(def.armor, Math.floor(base_damage * 0.6));
-    net_damage = Math.max(base_damage - absorb, 1);
+    let level_modifier = Math.min(att.level, 80) * 7 / 2;
+    // The current formula does not specify how to handle fractional final damage;
+    // assume it is rounded to the nearest integer.
+    net_damage = Math.round(base_damage * (level_modifier / (level_modifier + def.armor)));
   }
 
   return net_damage;
@@ -191,7 +178,24 @@ CombatSim.attemptHit = function(att, def, weapon) {
 
 // Rolls stats against each other
 CombatSim.rollCombat = function(stat1, stat2) {
-  return getRandom(stat1 / 4, stat1) > getRandom(stat2 / 4, stat2);
+  return Math.random() < this.combatProbability(stat1, stat2);
+};
+
+CombatSim.combatProbability = function(offense, defense) {
+  // Assume PHP division preserves the fractional offense / 4 and defense / 4
+  // values used by the documented combat-percentage formula.
+  let offense_range = (offense + 1) - (offense / 4);
+  let defense_range = (defense + 1) - (defense / 4);
+  let combinations = offense_range * defense_range;
+  let overlap;
+
+  if (defense > offense) {
+    overlap = Math.max((offense + 1) - (defense / 4), 0);
+    return (overlap * (overlap / 2)) / combinations;
+  }
+
+  overlap = Math.max((defense + 1) - (offense / 4), 0);
+  return (combinations - (overlap * (overlap / 2))) / combinations;
 };
 
 let WEAPON_TYPE_TO_SKILL = Object.freeze({
@@ -201,6 +205,25 @@ let WEAPON_TYPE_TO_SKILL = Object.freeze({
   unarmed:    'def_skill',
 });
 
+let ATTACK_TYPE_MULTIPLIERS = deepFreeze({
+  normal: {},
+  quick: {
+    speed: 1.2,
+    accuracy: 0.9,
+    dodge: 0.9,
+  },
+  aimed: {
+    speed: 0.9,
+    accuracy: 1.2,
+    dodge: 0.9,
+  },
+  cover: {
+    speed: 0.9,
+    accuracy: 0.9,
+    dodge: 1.2,
+  },
+});
+
 // =============================================================================
 //                                    Player
 // =============================================================================
@@ -208,6 +231,7 @@ function Player() {}
 
 Player.emptyStats = function() {
   return {
+    level:       80,
     max_hp:      0,
     armor:       0,
     speed:       0,
@@ -224,6 +248,7 @@ Player.emptyStats = function() {
 
 Player.fullyTrainedStats = function() {
   return {
+    level:       80,
     max_hp:      0,                  // Base 0
     armor:       5,                  // 5 from 'Resilience' Ability
     speed:       50,                 // 50 from 'Time Control' Ability
@@ -238,7 +263,7 @@ Player.fullyTrainedStats = function() {
   };
 };
 
-Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
+Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type) {
   let hp_points       = stat_points.hp;
   let speed_points    = stat_points.speed;
   let dodge_points    = stat_points.dodge;
@@ -272,11 +297,11 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
   stats.dodge    += dodge_points;
   stats.accuracy += accuracy_points;
 
-  let player = this.generatePlayer(name, stats, items);
+  let player = this.generatePlayer(name, stats, items, attack_type);
   return player;
 };
 
-Player.generatePlayer = function(name, raw_stats, items) {
+Player.generatePlayer = function(name, raw_stats, items, attack_type) {
   let stats = Object.assign(this.emptyStats(), raw_stats);
   stats.name = name;
 
@@ -291,6 +316,17 @@ Player.generatePlayer = function(name, raw_stats, items) {
   stats.gun_skill   += idx(equip_stats, 'gun_skill',   0);
   stats.proj_skill  += idx(equip_stats, 'proj_skill',  0);
   stats.def_skill   += idx(equip_stats, 'def_skill',   0);
+
+  let selected_attack_type = attack_type || 'normal';
+  let attack_type_multipliers = ATTACK_TYPE_MULTIPLIERS[selected_attack_type];
+  if (!attack_type_multipliers) {
+    throw new Error('Unknown attack type: ' + attack_type + '.');
+  }
+  for (let stat in attack_type_multipliers) {
+    // Assume all attack-type adjustments happen before the final result is
+    // rounded up.
+    stats[stat] = ceil(stats[stat] * attack_type_multipliers[stat]);
+  }
 
   // Weapon 1
   stats.weapon1.type = idx(equip_stats.weapon1, 'type', stats.weapon1.type);
@@ -308,6 +344,10 @@ Player.generatePlayer = function(name, raw_stats, items) {
 };
 
 Player.generateBuild = function(build) {
+  if (build.level !== 80) {
+    throw new Error('Builds require level 80.');
+  }
+
   let slots = [
     build.equipment.armor,
     build.equipment.weapon1,
@@ -330,7 +370,7 @@ Player.generateBuild = function(build) {
     return item;
   });
 
-  return Player.generateFullyTrainedPlayer(build.name, build.stats, items);
+  return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
 };
 
 Player.generateReferencePlayers = function() {

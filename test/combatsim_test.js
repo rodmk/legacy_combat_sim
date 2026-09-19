@@ -7,6 +7,7 @@ let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
+let CombatSim = src.CombatSim;
 
 let jsondiffpatch = require('jsondiffpatch');
 
@@ -19,6 +20,149 @@ let testDeepEqualWithDiff = function(test, a, b) {
     own_props_b,
     'Difference: ' + JSON.stringify(jsondiffpatch.diff(own_props_a, own_props_b))
   );
+};
+
+exports.testCombatInitiative = function(test) {
+  let slower = { name: 'Slower', speed: 100 };
+  let faster = { name: 'Faster', speed: 101 };
+  let originalFight = CombatSim.fight;
+  let attackers = [];
+
+  CombatSim.fight = function(attacker) {
+    attackers.push(attacker);
+    return attacker;
+  };
+
+  try {
+    CombatSim.simulateCombat(slower, faster, 4);
+    test.deepEqual(attackers, [ faster, faster, faster, faster ]);
+
+    attackers = [];
+    CombatSim.simulateCombat(faster, slower, 4);
+    test.deepEqual(attackers, [ faster, faster, faster, faster ]);
+
+    attackers = [];
+    faster.speed = slower.speed;
+    CombatSim.simulateCombat(slower, faster, 4);
+    test.deepEqual(attackers, [ slower, slower, slower, slower ]);
+  } finally {
+    CombatSim.fight = originalFight;
+  }
+
+  test.done();
+};
+
+exports.testDefeatedPlayerCannotRetaliate = function(test) {
+  let attacker = {
+    name: 'Attacker',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let defender = {
+    name: 'Defender',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attacks = [];
+
+  CombatSim.attemptHit = function(player) {
+    attacks.push(player.name);
+    return 5;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(attacker, defender), attacker);
+    test.deepEqual(attacks, [ 'Attacker', 'Attacker' ]);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
+exports.testSurvivingPlayerCounterattacksWithBothWeapons = function(test) {
+  let attacker = {
+    name: 'Attacker',
+    max_hp: 5,
+    weapon1: {},
+    weapon2: {},
+  };
+  let defender = {
+    name: 'Defender',
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attacks = [];
+
+  CombatSim.attemptHit = function(player) {
+    attacks.push(player.name);
+    return player === attacker ? 1 : 3;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(attacker, defender), defender);
+    test.deepEqual(attacks, [ 'Attacker', 'Attacker', 'Defender', 'Defender' ]);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
+exports.testCombatRoundLimitProducesDraw = function(test) {
+  let player1 = {
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let player2 = {
+    max_hp: 10,
+    weapon1: {},
+    weapon2: {},
+  };
+  let originalAttemptHit = CombatSim.attemptHit;
+  let attempts = 0;
+
+  CombatSim.attemptHit = function() {
+    attempts++;
+    return 0;
+  };
+
+  try {
+    test.strictEqual(CombatSim.fight(player1, player2), null);
+    test.equal(attempts, CombatSim.MAX_COMBAT_ROUNDS * 4);
+  } finally {
+    CombatSim.attemptHit = originalAttemptHit;
+  }
+
+  test.done();
+};
+
+exports.testCombatResultsIncludeDraws = function(test) {
+  let player1 = { speed: 1 };
+  let player2 = { speed: 1 };
+  let originalFight = CombatSim.fight;
+
+  CombatSim.fight = function() {
+    return null;
+  };
+
+  try {
+    test.deepEqual(CombatSim.simulateCombat(player1, player2, 3), {
+      player1_wins: 0,
+      player2_wins: 0,
+      draws: 3,
+    });
+  } finally {
+    CombatSim.fight = originalFight;
+  }
+
+  test.done();
 };
 
 exports.testPlayerGeneration = function(test) {
@@ -40,6 +184,7 @@ exports.testPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 50,
     armor: 10,
     speed: 11,
@@ -77,6 +222,7 @@ exports.testNullPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 0,
     speed: 0,
@@ -114,6 +260,7 @@ exports.testFullyTrainedPlayerGeneration = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 350,
     armor: 5,
     speed: 100,
@@ -188,6 +335,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   let expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 10,
     speed: 100,
@@ -230,6 +378,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 0,
     armor: 0,
     speed: 100,
@@ -265,6 +414,7 @@ exports.testPlayerGenerationWithItem = function(test) {
 
   expected_stats = {
     name: 'Test Player',
+    level: 80,
     max_hp: 350,
     armor: 15,
     speed: 200,
@@ -290,6 +440,112 @@ exports.testPlayerGenerationWithItem = function(test) {
   };
 
   testDeepEqualWithDiff(test, test_player, expected_stats);
+
+  test.done();
+};
+
+exports.testCurrentArmorDamageFormula = function(test) {
+  let attacker = {
+    level: 80,
+    accuracy: 1,
+    gun_skill: 1,
+  };
+  let defender = {
+    armor: 280,
+    dodge: 1,
+    def_skill: 1,
+  };
+  let weapon = {
+    skill: 'gun_skill',
+    min_damage: 101,
+    max_damage: 101,
+  };
+  let originalRollCombat = CombatSim.rollCombat;
+
+  CombatSim.rollCombat = function() {
+    return true;
+  };
+
+  try {
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 51);
+
+    defender.armor = 0;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 101);
+
+    attacker.level = 100;
+    defender.armor = 280;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 51);
+
+    defender.armor = 100000;
+    test.equal(CombatSim.attemptHit(attacker, defender, weapon), 0);
+  } finally {
+    CombatSim.rollCombat = originalRollCombat;
+  }
+
+  test.done();
+};
+
+exports.testAttackTypes = function(test) {
+  let raw_stats = {
+    speed: 101,
+    accuracy: 101,
+    dodge: 101,
+  };
+  let items = [ Item.none, Item.none, Item.none, Item.none, Item.none ];
+
+  let normal = Player.generatePlayer('Normal', raw_stats, items, 'normal');
+  test.equal(normal.speed, 101);
+  test.equal(normal.accuracy, 101);
+  test.equal(normal.dodge, 101);
+
+  let quick = Player.generatePlayer('Quick', raw_stats, items, 'quick');
+  test.equal(quick.speed, 122);
+  test.equal(quick.accuracy, 91);
+  test.equal(quick.dodge, 91);
+
+  let aimed = Player.generatePlayer('Aimed', raw_stats, items, 'aimed');
+  test.equal(aimed.speed, 91);
+  test.equal(aimed.accuracy, 122);
+  test.equal(aimed.dodge, 91);
+
+  let cover = Player.generatePlayer('Cover', raw_stats, items, 'cover');
+  test.equal(cover.speed, 91);
+  test.equal(cover.accuracy, 91);
+  test.equal(cover.dodge, 122);
+
+  test.throws(function() {
+    Player.generatePlayer('Unknown', raw_stats, items, 'unknown');
+  }, /Unknown attack type/);
+
+  test.done();
+};
+
+exports.testCombatProbability = function(test) {
+  test.equal(CombatSim.combatProbability(100, 100), 0.5);
+  test.equal(CombatSim.combatProbability(101, 101), 0.5);
+
+  let expected = ((51 * (51 / 2)) / (151 * 76));
+  test.equal(CombatSim.combatProbability(100, 200), expected);
+  test.equal(CombatSim.combatProbability(200, 100), 1 - expected);
+
+  test.equal(CombatSim.combatProbability(100, 500), 0);
+  test.equal(CombatSim.combatProbability(500, 100), 1);
+
+  test.done();
+};
+
+exports.testCombatRollUsesDocumentedProbability = function(test) {
+  let originalRandom = Math.random;
+
+  try {
+    Math.random = function() { return 0.499; };
+    test.equal(CombatSim.rollCombat(100, 100), true);
+
+    Math.random = function() { return 0.5; };
+    test.equal(CombatSim.rollCombat(100, 100), false);
+  } finally {
+    Math.random = originalRandom;
+  }
 
   test.done();
 };
@@ -425,6 +681,17 @@ exports.testJsonBuild = function(test) {
     max_damage: 180,
   });
 
+  let quickBuild = JSON.parse(JSON.stringify(Build.DualVoidBowsWithScouts));
+  quickBuild.attack_type = 'quick';
+  let quickPlayer = Player.generateBuild(quickBuild);
+  test.equal(quickPlayer.speed, 360);
+  test.equal(quickPlayer.accuracy, 170);
+
+  quickBuild.level = 79;
+  test.throws(function() {
+    Player.generateBuild(quickBuild);
+  }, /Builds require level 80/);
+
   let livePlayer = Player.generateBuild(Build.DualRiftsWithBiosAbyss);
   test.equal(livePlayer.max_hp, 750);
   test.equal(livePlayer.armor, 83);
@@ -452,6 +719,7 @@ exports.testCatalogIntegration = function(test) {
 
   let expectedStats = {
     name: 'Catalog Player',
+    level: 80,
     max_hp: 0,
     armor: 69,
     speed: 197,

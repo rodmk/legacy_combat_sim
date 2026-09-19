@@ -53,9 +53,13 @@ export interface BuildWeaponDefinition extends BuildItemDefinition {
   mods?: readonly string[];
 }
 
+export type AttackType = 'normal' | 'quick' | 'aimed' | 'cover';
+
 export interface BuildDefinition {
   name: string;
+  level: number;
   reference?: boolean;
+  attack_type?: AttackType;
   stats: {
     hp: number;
     speed: number;
