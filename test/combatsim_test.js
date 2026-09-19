@@ -1247,9 +1247,32 @@ exports.testEquipmentNeighborhood = function(test) {
     }
   );
   test.equal(response.candidate_count, response.evaluated_matchups);
+  test.ok(response.finalist_count <= response.candidate_count);
+  test.equal(response.exact_matchups, response.finalist_count);
   test.ok(response.best_response.weighted_score >= 0 &&
     response.best_response.weighted_score <= 1);
   test.equal(response.best_response.sources[0].slot, 'weapon1');
+  let exact_neighborhood = BuildSearch.equipmentNeighborhood(build, {
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  let exhaustive_response = MatchupGame.candidateFrontiers(
+    exact_neighborhood.groups, [ opponent ], [ 'opponent' ], { opponentWeights: [ 1 ] }
+  );
+  test.equal(response.best_response.signature, exhaustive_response.best_weighted.signature);
+
+  let other_opponent = Player.generateBuild(Build.ShadowDojoHFCoreVoid);
+  let approximate_matchup = MatchupGame.candidateMatchup(
+    opponent,
+    other_opponent,
+    CombatSim.createDefeatRoundCache(0.1)
+  );
+  let exact_matchup = MatchupGame.candidateMatchup(opponent, other_opponent);
+  test.ok(approximate_matchup.score_error_bound > 0);
+  test.ok(Math.abs(approximate_matchup.score - exact_matchup.score) <=
+    approximate_matchup.score_error_bound);
   let adaptive_response = MatchupGame.adaptiveEquipmentBestResponse(
     build, [ opponent ], [ 'opponent' ], [ 1 ], {
       slots: [ 'weapon1' ],
@@ -1407,6 +1430,7 @@ exports.testRestrictedMatchupGame = function(test) {
   test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
   test.deepEqual(MatchupGame.candidateMatchup(player1, player2), {
     score: 0.5,
+    score_error_bound: 0,
     win_probability: 0.5,
     expected_healing_cost: 3.5,
   });

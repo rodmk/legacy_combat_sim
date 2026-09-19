@@ -309,6 +309,7 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
   surviving_hp_by_round[0] = def.max_hp;
   full_hp_probability_by_round[0] = 1;
   let survives = 1;
+  let truncated = false;
 
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     let next_remaining_hp = new Float64Array(def.max_hp + 1);
@@ -367,6 +368,7 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
       surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_hp;
       surviving_healing_cost_by_round[this.MAX_COMBAT_ROUNDS] = next_surviving_healing_cost;
       full_hp_probability_by_round[this.MAX_COMBAT_ROUNDS] = next_full_hp_probability;
+      truncated = true;
       break;
     }
   }
@@ -374,6 +376,7 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
   let result = {
     defeat_rounds: defeat_rounds,
     survives: survives,
+    truncated: truncated,
     surviving_hp_by_round: surviving_hp_by_round,
     surviving_healing_cost_by_round: surviving_healing_cost_by_round,
     full_hp_probability_by_round: full_hp_probability_by_round,
@@ -428,6 +431,8 @@ CombatSim.combatResultDistribution = function(player1, player2, cache) {
   }
 
   let draws = first_defeats_second.survives * second_defeats_first.survives;
+  let first_tail = first_defeats_second.truncated ? first_defeats_second.survives : 0;
+  let second_tail = second_defeats_first.truncated ? second_defeats_first.survives : 0;
   let first_draw_hp = second_defeats_first.surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] *
     first_defeats_second.survives;
   let second_draw_hp = first_defeats_second.surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] *
@@ -463,6 +468,7 @@ CombatSim.combatResultDistribution = function(player1, player2, cache) {
       player2_wins: first_is_player1 ? second_wins : first_wins,
       draws: draws,
     },
+    outcome_error_bound: first_tail + second_tail - (first_tail * second_tail),
     player1: first_is_player1 ? first_result : second_result,
     player2: first_is_player1 ? second_result : first_result,
   };
@@ -1474,6 +1480,7 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
   let forward = CombatSim.combatResultDistribution(player, opponent, cache);
   let results = [ forward.player1 ];
   let outcomes = [ forward.outcome ];
+  let error_bounds = [ forward.outcome_error_bound ];
 
   if (player.speed === opponent.speed) {
     let reverse = CombatSim.combatResultDistribution(opponent, player, cache);
@@ -1483,6 +1490,7 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
       player2_wins: reverse.outcome.player1_wins,
       draws: reverse.outcome.draws,
     });
+    error_bounds.push(reverse.outcome_error_bound);
   }
 
   let total_wins = results.reduce(function(sum, result) { return sum + result.wins; }, 0);
@@ -1490,6 +1498,9 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
     score: outcomes.reduce(function(sum, outcome) {
       return sum + outcome.player1_wins + (outcome.draws / 2);
     }, 0) / outcomes.length,
+    score_error_bound: error_bounds.reduce(function(sum, error) {
+      return sum + error;
+    }, 0) / error_bounds.length,
     win_probability: total_wins / results.length,
     expected_healing_cost: results.reduce(function(sum, result) {
       return sum + result.expected_healing_cost;
@@ -1548,6 +1559,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
   let cheapest_per_win = previous_result ? previous_result.cheapest_per_win : null;
   let cheapest_average_winner = previous_result ? previous_result.cheapest_average_winner : null;
   let best_weighted = previous_result ? previous_result.best_weighted : null;
+  let candidates = [];
   groups.forEach(function(group) {
     let group_signature = group.signature || CombatSim.combatSignature(group.representative);
     let matchups = opponents.map(function(opponent) {
@@ -1567,6 +1579,9 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       return matchup;
     });
     let matchup_scores = matchups.map(function(matchup) { return matchup.score; });
+    let matchup_error_bounds = matchups.map(function(matchup) {
+      return matchup.score_error_bound;
+    });
     let total_wins = matchups.reduce(function(sum, matchup) {
       return sum + matchup.win_probability;
     }, 0);
@@ -1584,6 +1599,9 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       }, 0) / matchup_scores.length,
       weighted_score: matchup_scores.reduce(function(sum, score, opponent) {
         return sum + (score * opponent_weights[opponent]);
+      }, 0),
+      weighted_score_error_bound: matchup_error_bounds.reduce(function(sum, error, opponent) {
+        return sum + (error * opponent_weights[opponent]);
       }, 0),
       average_win_probability: total_wins / matchups.length,
       average_healing_cost: total_healing_cost / matchups.length,
@@ -1608,6 +1626,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
         candidate.healing_credits_per_win < cheapest_average_winner.healing_credits_per_win)) {
       cheapest_average_winner = candidate;
     }
+    candidates.push(candidate);
     candidate_count++;
   });
 
@@ -1632,6 +1651,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
     best_worst_case: best_worst_case,
     best_average: best_average,
     best_weighted: best_weighted,
+    candidates: options.includeCandidates ? candidates : undefined,
     cheapest_per_win: cheapest_per_win,
     cheapest_average_winner: cheapest_average_winner,
   };
@@ -1641,19 +1661,31 @@ MatchupGame.equipmentBestResponse = function(
   build, opponents, opponent_ids, opponent_weights, options
 ) {
   options = options || {};
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
   let neighborhood = BuildSearch.equipmentNeighborhood(build, options);
   let approximate = this.candidateFrontiers(
     neighborhood.groups, opponents, opponent_ids, {
       defeatCache: options.defeatCache,
       matchupCache: options.matchupCache,
-      minimumSurvivalProbability: options.minimumSurvivalProbability,
+      minimumSurvivalProbability: minimum_survival_probability,
       opponentWeights: opponent_weights,
+      includeCandidates: true,
     }
   );
-  let finalist = neighborhood.groups.find(function(group) {
-    return group.signature === approximate.best_weighted.signature;
+  let incumbent_lower_bound = Math.max.apply(null, approximate.candidates.map(function(candidate) {
+    return candidate.weighted_score - candidate.weighted_score_error_bound;
+  }));
+  let survivor_signatures = new Set(approximate.candidates.filter(function(candidate) {
+    return candidate.weighted_score + candidate.weighted_score_error_bound >=
+      incumbent_lower_bound - 1e-12;
+  }).map(function(candidate) {
+    return candidate.signature;
+  }));
+  let finalists = neighborhood.groups.filter(function(group) {
+    return survivor_signatures.has(group.signature);
   });
-  let exact = this.candidateFrontiers([ finalist ], opponents, opponent_ids, {
+  let exact = this.candidateFrontiers(finalists, opponents, opponent_ids, {
     defeatCache: options.exactDefeatCache,
     matchupCache: options.exactMatchupCache,
     opponentWeights: opponent_weights,
@@ -1664,6 +1696,8 @@ MatchupGame.equipmentBestResponse = function(
     slot_variants: neighborhood.counts.slot_variants,
     candidate_count: neighborhood.counts.unique_combat_signatures,
     evaluated_matchups: approximate.evaluated_matchups,
+    finalist_count: finalists.length,
+    exact_matchups: exact.evaluated_matchups,
   };
 };
 
@@ -1671,7 +1705,8 @@ MatchupGame.adaptiveEquipmentBestResponse = function(
   build, opponents, opponent_ids, opponent_weights, options
 ) {
   options = options || {};
-  let minimum_survival_probability = options.minimumSurvivalProbability || 0;
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
     defeatCache: options.defeatCache ||
       CombatSim.createDefeatRoundCache(minimum_survival_probability),

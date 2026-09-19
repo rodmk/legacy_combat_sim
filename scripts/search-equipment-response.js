@@ -11,7 +11,7 @@ let result = src.MatchupGame.equipmentBestResponse(
   [ opponent ],
   [ 'ShadowDojoDLGunBuild3' ],
   [ 1 ],
-  { minimumSurvivalProbability: 1e-6 }
+  { minimumSurvivalProbability: 0.01 }
 );
 result.elapsed_ms = Date.now() - started;
 console.log(JSON.stringify(result, null, 2));
