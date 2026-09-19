@@ -222,6 +222,11 @@ CombatSim.combatSignature = function(player) {
   let weapons = [ player.weapon1, player.weapon2 ].map(function(weapon) {
     return [ weapon.skill, weapon.min_damage, weapon.max_damage ];
   });
+  let active_skills = Array.from(new Set(weapons.map(function(weapon) {
+    return weapon[0];
+  }))).sort().map(function(skill) {
+    return [ skill, player[skill] ];
+  });
   weapons.sort(function(a, b) {
     return JSON.stringify(a).localeCompare(JSON.stringify(b));
   });
@@ -233,10 +238,8 @@ CombatSim.combatSignature = function(player) {
     player.speed,
     player.accuracy,
     player.dodge,
-    player.melee_skill,
-    player.gun_skill,
-    player.proj_skill,
     player.def_skill,
+    active_skills,
     weapons,
   ]);
 };
@@ -719,6 +722,154 @@ let Crystals = deepFreeze({
 });
 
 // =============================================================================
+//                                  BuildSearch
+// =============================================================================
+function BuildSearch() {}
+
+BuildSearch.crystalMultisets = function(crystal_keys, socket_capacity) {
+  let multisets = [];
+
+  let addMultisets = function(start, remaining, selected) {
+    multisets.push(selected.slice());
+    if (remaining === 0) {
+      return;
+    }
+
+    for (let i = start; i < crystal_keys.length; i++) {
+      selected.push(crystal_keys[i]);
+      addMultisets(i, remaining - 1, selected);
+      selected.pop();
+    }
+  };
+
+  addMultisets(0, socket_capacity, []);
+  return multisets;
+};
+
+BuildSearch.modCombinations = function(item) {
+  let mod_slots = idx(item, 'mod_slots', 0);
+  let combinations = [ [] ];
+
+  for (let slot = 1; slot <= mod_slots; slot++) {
+    let compatible_mods = Object.keys(WeaponMod).filter(function(key) {
+      return WeaponMod[key].slot === slot && WeaponMod[key].compatible.includes(item.catalogKey);
+    });
+    let next_combinations = [];
+
+    combinations.forEach(function(combination) {
+      next_combinations.push(combination.slice());
+      compatible_mods.forEach(function(key) {
+        next_combinations.push(combination.concat([ key ]));
+      });
+    });
+    combinations = next_combinations;
+  }
+
+  return combinations;
+};
+
+BuildSearch.usefulCrystalKeys = function(item, crystal_keys, active_weapon_types) {
+  let active_skills = new Set(active_weapon_types.map(function(type) {
+    return WEAPON_TYPE_TO_SKILL[type];
+  }));
+
+  return crystal_keys.filter(function(key) {
+    return Object.keys(Item[key].mult).some(function(stat) {
+      let is_weapon_skill = stat === 'melee_skill' || stat === 'gun_skill' ||
+        stat === 'proj_skill';
+      let is_relevant_skill = !is_weapon_skill || active_skills.has(stat);
+      return is_relevant_skill && typeof item[stat] === 'number' && item[stat] !== 0;
+    });
+  });
+};
+
+BuildSearch.itemVariantSignature = function(item, active_weapon_types) {
+  let active_skills = new Set(active_weapon_types.map(function(type) {
+    return WEAPON_TYPE_TO_SKILL[type];
+  }));
+  let stats = Object.keys(item).filter(function(stat) {
+    let is_weapon_skill = stat === 'melee_skill' || stat === 'gun_skill' ||
+      stat === 'proj_skill';
+    return typeof item[stat] === 'number' && (!is_weapon_skill || active_skills.has(stat));
+  }).sort().map(function(stat) {
+    return [ stat, item[stat] ];
+  });
+  return JSON.stringify([ idx(item, 'type', null), stats ]);
+};
+
+BuildSearch.generateItemVariants = function(item_key, options) {
+  let item = Item[item_key];
+  let settings = options || {};
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let crystal_keys = settings.crystalKeys || Object.keys(crystalDefinitions);
+  let socket_capacity = idx(settings, 'socketCapacity', 4);
+  let useful_crystals = this.usefulCrystalKeys(item, crystal_keys, active_weapon_types);
+  let crystal_multisets = this.crystalMultisets(useful_crystals, socket_capacity);
+  let mod_combinations = this.modCombinations(item);
+  let groups_by_signature = new Map();
+
+  mod_combinations.forEach(function(mod_keys) {
+    let modded_item = item.applyMods(mod_keys.map(function(key) { return WeaponMod[key]; }));
+
+    crystal_multisets.forEach(function(selected_crystals) {
+      let variant = modded_item.socket(selected_crystals.map(function(key) { return Item[key]; }));
+      let signature = BuildSearch.itemVariantSignature(variant, active_weapon_types);
+      let group = groups_by_signature.get(signature);
+
+      if (!group) {
+        group = { signature: signature, representative: variant, sources: [] };
+        groups_by_signature.set(signature, group);
+      }
+
+      group.sources.push({
+        item: item_key,
+        mods: mod_keys.slice(),
+        crystals: selected_crystals.slice(),
+      });
+    });
+  });
+
+  return Array.from(groups_by_signature.values());
+};
+
+BuildSearch.generateItemVariantsForWeapons = function(item_key, weapon_keys, options) {
+  let active_weapon_types = Array.from(new Set(weapon_keys.map(function(key) {
+    return Item[key].type;
+  })));
+  let settings = Object.assign({}, options, { activeWeaponTypes: active_weapon_types });
+  return this.generateItemVariants(item_key, settings);
+};
+
+BuildSearch.itemVariantReport = function(item_key, options) {
+  let item = Item[item_key];
+  let settings = options || {};
+  let active_weapon_types = settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ];
+  let crystal_keys = settings.crystalKeys || Object.keys(crystalDefinitions);
+  let socket_capacity = idx(settings, 'socketCapacity', 4);
+  let useful_crystals = this.usefulCrystalKeys(item, crystal_keys, active_weapon_types);
+  let mod_count = this.modCombinations(item).length;
+  let groups = this.generateItemVariants(item_key, settings);
+  let orderedCount = function(crystal_count) {
+    let count = 0;
+    for (let sockets = 0; sockets <= socket_capacity; sockets++) {
+      count += Math.pow(crystal_count, sockets);
+    }
+    return count * mod_count;
+  };
+
+  return {
+    groups: groups,
+    counts: {
+      unfiltered_ordered: orderedCount(crystal_keys.length),
+      filtered_ordered: orderedCount(useful_crystals.length),
+      canonical: groups.reduce(function(sum, group) { return sum + group.sources.length; }, 0),
+      unique_effective: groups.length,
+    },
+    useful_crystals: useful_crystals,
+  };
+};
+
+// =============================================================================
 
 // Main entry point
 if (typeof require === 'undefined' || require.main === module) {
@@ -733,5 +884,6 @@ if (typeof module !== 'undefined') {
     Item: Item,
     WeaponMod: WeaponMod,
     Build: Build,
+    BuildSearch: BuildSearch,
   };
 }

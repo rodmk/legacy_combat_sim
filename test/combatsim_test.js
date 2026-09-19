@@ -7,6 +7,7 @@ let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
+let BuildSearch = src.BuildSearch;
 let CombatSim = src.CombatSim;
 
 let jsondiffpatch = require('jsondiffpatch');
@@ -999,6 +1000,49 @@ exports.testEquivalentBuildGrouping = function(test) {
     CombatSim.combatSignature(Player.generateBuild(original)),
     CombatSim.combatSignature(Player.generateBuild(distinct))
   );
+
+  test.done();
+};
+
+exports.testCanonicalEquipmentVariantGeneration = function(test) {
+  test.deepEqual(
+    BuildSearch.crystalMultisets([ 'A', 'B' ], 2),
+    [ [], [ 'A' ], [ 'A', 'A' ], [ 'A', 'B' ], [ 'B' ], [ 'B', 'B' ] ]
+  );
+
+  let variants = BuildSearch.generateItemVariantsForWeapons('RiftGun', [ 'RiftGun', 'VoidBow' ], {
+    crystalKeys: [ 'PerfectGreen', 'PerfectOrange', 'PerfectYellow', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  let sources = variants.reduce(function(all_sources, group) {
+    return all_sources.concat(group.sources);
+  }, []);
+  let crystal_selections = sources.map(function(source) {
+    return source.crystals;
+  });
+
+  test.deepEqual(crystal_selections, [ [], [ 'PerfectGreen' ], [ 'PerfectFire' ] ]);
+  test.equal(variants.length, 3);
+
+  let report = BuildSearch.itemVariantReport('RiftGun', {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectOrange', 'PerfectYellow', 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  test.deepEqual(report.counts, {
+    unfiltered_ordered: 5,
+    filtered_ordered: 3,
+    canonical: 3,
+    unique_effective: 3,
+  });
+  test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
+
+  let mod_combinations = BuildSearch.modCombinations(Item.BioGunMk4);
+  test.equal(mod_combinations.length, 9);
+  mod_combinations.forEach(function(mods) {
+    let occupied_slots = mods.map(function(key) { return WeaponMod[key].slot; });
+    test.equal(new Set(occupied_slots).size, occupied_slots.length);
+  });
 
   test.done();
 };
