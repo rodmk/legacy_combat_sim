@@ -1286,6 +1286,34 @@ exports.testStatAllocationGeneration = function(test) {
   test.equal(adaptive.exact_finalist_count, 2);
   test.equal(adaptive.converged, true);
   test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
+
+  let sparse_adaptive = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], pointStrides: [ 8 ], minimumSurvivalProbability: 1e-6 }
+  );
+  test.ok(sparse_adaptive.convergence[0].added_allocations > 0);
+  test.equal(
+    sparse_adaptive.convergence[sparse_adaptive.convergence.length - 1].added_allocations,
+    0
+  );
+  test.deepEqual(
+    frontierSources(sparse_adaptive, 'combat_frontier'),
+    frontierSources(exhaustive, 'combat_frontier')
+  );
+  test.deepEqual(
+    frontierSources(sparse_adaptive, 'combat_economy_frontier'),
+    frontierSources(exhaustive, 'combat_economy_frontier')
+  );
+  test.equal(
+    sparse_adaptive.search_candidate_count,
+    sparse_adaptive.stages[0].candidate_count +
+      sparse_adaptive.convergence.reduce(function(sum, iteration) {
+        return sum + iteration.added_allocations;
+      }, 0)
+  );
   test.done();
 };
 
