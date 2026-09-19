@@ -7,6 +7,8 @@ let Equipment = src.Equipment;
 let Item = src.Item;
 let WeaponMod = src.WeaponMod;
 let Build = src.Build;
+let BuildCatalogs = src.BuildCatalogs;
+let mergeBuildCatalogs = src.mergeBuildCatalogs;
 let BuildSearch = src.BuildSearch;
 let MatchupGame = src.MatchupGame;
 let CombatSim = src.CombatSim;
@@ -1001,6 +1003,26 @@ exports.testEquivalentBuildGrouping = function(test) {
     CombatSim.combatSignature(Player.generateBuild(original)),
     CombatSim.combatSignature(Player.generateBuild(distinct))
   );
+
+  test.done();
+};
+
+exports.testMultipleBuildCatalogs = function(test) {
+  test.equal(BuildCatalogs.length, 2);
+  test.equal(Object.keys(BuildCatalogs[1]).length, 15);
+  test.equal(Object.keys(Build).length, 20);
+  test.equal(Player.generateReferencePlayers(BuildCatalogs).length, 19);
+
+  let q15_player = Player.generateBuild(Build.ShadowDojoDLGunBuild2);
+  test.deepEqual(q15_player.weapon2, {
+    type: 'gun',
+    skill: 'gun_skill',
+    min_damage: 120,
+    max_damage: 138,
+  });
+  test.throws(function() {
+    mergeBuildCatalogs([ { Duplicate: {} }, { Duplicate: {} } ]);
+  }, /Duplicate build key/);
 
   test.done();
 };

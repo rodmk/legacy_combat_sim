@@ -3,7 +3,7 @@
 const equipment = require('./equipment');
 const crystals = require('./crystals');
 const weaponMods = require('./weapon-mods');
-const builds = require('./builds');
+const buildCatalogs = require('./build-catalogs');
 
 /** @param {import('../types').WeaponModDefinition} mod */
 function compatibilityClass(mod) {
@@ -91,16 +91,24 @@ function validateBuildSlot(buildKey, slotName, slot, group) {
   });
 }
 
-Object.keys(builds).forEach(function(buildKey) {
-  let build = builds[buildKey];
-  let statTotal = build.stats.hp + build.stats.speed + build.stats.accuracy + build.stats.dodge;
-  if (statTotal !== 183) {
-    throw new Error(buildKey + ' allocates ' + statTotal + ' stats instead of 183.');
-  }
+let buildKeys = new Set();
+buildCatalogs.forEach(function(builds) {
+  Object.keys(builds).forEach(function(buildKey) {
+    if (buildKeys.has(buildKey)) {
+      throw new Error('Duplicate build key: ' + buildKey + '.');
+    }
+    buildKeys.add(buildKey);
 
-  validateBuildSlot(buildKey, 'armor', build.equipment.armor, equipment.armor);
-  validateBuildSlot(buildKey, 'weapon1', build.equipment.weapon1, equipment.weapons);
-  validateBuildSlot(buildKey, 'weapon2', build.equipment.weapon2, equipment.weapons);
-  validateBuildSlot(buildKey, 'misc1', build.equipment.misc1, equipment.miscs);
-  validateBuildSlot(buildKey, 'misc2', build.equipment.misc2, equipment.miscs);
+    let build = builds[buildKey];
+    let statTotal = build.stats.hp + build.stats.speed + build.stats.accuracy + build.stats.dodge;
+    if (statTotal !== 183) {
+      throw new Error(buildKey + ' allocates ' + statTotal + ' stats instead of 183.');
+    }
+
+    validateBuildSlot(buildKey, 'armor', build.equipment.armor, equipment.armor);
+    validateBuildSlot(buildKey, 'weapon1', build.equipment.weapon1, equipment.weapons);
+    validateBuildSlot(buildKey, 'weapon2', build.equipment.weapon2, equipment.weapons);
+    validateBuildSlot(buildKey, 'misc1', build.equipment.misc1, equipment.miscs);
+    validateBuildSlot(buildKey, 'misc2', build.equipment.misc2, equipment.miscs);
+  });
 });

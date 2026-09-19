@@ -551,13 +551,14 @@ Player.groupEquivalentBuilds = function(builds) {
   return Array.from(groups_by_signature.values());
 };
 
-Player.generateReferencePlayers = function() {
-  return Object.keys(Build)
+Player.generateReferencePlayers = function(catalogs) {
+  let builds = catalogs ? mergeBuildCatalogs(catalogs) : Build;
+  return Object.keys(builds)
     .filter(function(key) {
-      return Build[key].reference !== false;
+      return builds[key].reference !== false;
     })
     .map(function(key) {
-      return Player.generateBuild(Build[key]);
+      return Player.generateBuild(builds[key]);
     });
 };
 
@@ -702,7 +703,22 @@ Object.keys(weaponModDefinitions).forEach(function(key) {
 });
 let WeaponMod = deepFreeze(weaponModDefinitions);
 
-let Build = deepFreeze(require('./data/builds'));
+let BuildCatalogs = deepFreeze(require('./data/build-catalogs'));
+
+let mergeBuildCatalogs = function(catalogs) {
+  let merged = {};
+  catalogs.forEach(function(catalog) {
+    Object.keys(catalog).forEach(function(key) {
+      if (merged[key]) {
+        throw new Error('Duplicate build key: ' + key + '.');
+      }
+      merged[key] = catalog[key];
+    });
+  });
+  return merged;
+};
+
+let Build = deepFreeze(mergeBuildCatalogs(BuildCatalogs));
 
 /**
  * For convenience when socketing items, below are 4x crystal arrays for all
@@ -1062,6 +1078,8 @@ if (typeof module !== 'undefined') {
     Item: Item,
     WeaponMod: WeaponMod,
     Build: Build,
+    BuildCatalogs: BuildCatalogs,
+    mergeBuildCatalogs: mergeBuildCatalogs,
     BuildSearch: BuildSearch,
     MatchupGame: MatchupGame,
   };
