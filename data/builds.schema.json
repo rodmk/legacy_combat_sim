@@ -13,6 +13,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "reference": { "type": "boolean" },
+        "attack_type": { "enum": ["normal", "quick", "aimed", "cover"] },
         "stats": { "$ref": "#/$defs/stats" },
         "equipment": { "$ref": "#/$defs/loadout" }
       }

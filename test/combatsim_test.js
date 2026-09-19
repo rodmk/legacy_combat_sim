@@ -434,6 +434,41 @@ exports.testCurrentArmorDamageFormula = function(test) {
   test.done();
 };
 
+exports.testAttackTypes = function(test) {
+  let raw_stats = {
+    speed: 101,
+    accuracy: 101,
+    dodge: 101,
+  };
+  let items = [ Item.none, Item.none, Item.none, Item.none, Item.none ];
+
+  let normal = Player.generatePlayer('Normal', raw_stats, items, 'normal');
+  test.equal(normal.speed, 101);
+  test.equal(normal.accuracy, 101);
+  test.equal(normal.dodge, 101);
+
+  let quick = Player.generatePlayer('Quick', raw_stats, items, 'quick');
+  test.equal(quick.speed, 122);
+  test.equal(quick.accuracy, 91);
+  test.equal(quick.dodge, 91);
+
+  let aimed = Player.generatePlayer('Aimed', raw_stats, items, 'aimed');
+  test.equal(aimed.speed, 91);
+  test.equal(aimed.accuracy, 122);
+  test.equal(aimed.dodge, 91);
+
+  let cover = Player.generatePlayer('Cover', raw_stats, items, 'cover');
+  test.equal(cover.speed, 91);
+  test.equal(cover.accuracy, 91);
+  test.equal(cover.dodge, 122);
+
+  test.throws(function() {
+    Player.generatePlayer('Unknown', raw_stats, items, 'unknown');
+  }, /Unknown attack type/);
+
+  test.done();
+};
+
 exports.testCombatProbability = function(test) {
   test.equal(CombatSim.combatProbability(100, 100), 0.5);
   test.equal(CombatSim.combatProbability(101, 101), 0.5);
@@ -594,6 +629,12 @@ exports.testJsonBuild = function(test) {
     min_damage: 19,
     max_damage: 180,
   });
+
+  let quickBuild = JSON.parse(JSON.stringify(Build.DualVoidBowsWithScouts));
+  quickBuild.attack_type = 'quick';
+  let quickPlayer = Player.generateBuild(quickBuild);
+  test.equal(quickPlayer.speed, 360);
+  test.equal(quickPlayer.accuracy, 170);
 
   let livePlayer = Player.generateBuild(Build.DualRiftsWithBiosAbyss);
   test.equal(livePlayer.max_hp, 750);

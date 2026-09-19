@@ -194,6 +194,25 @@ let WEAPON_TYPE_TO_SKILL = Object.freeze({
   unarmed:    'def_skill',
 });
 
+let ATTACK_TYPE_MULTIPLIERS = deepFreeze({
+  normal: {},
+  quick: {
+    speed: 1.2,
+    accuracy: 0.9,
+    dodge: 0.9,
+  },
+  aimed: {
+    speed: 0.9,
+    accuracy: 1.2,
+    dodge: 0.9,
+  },
+  cover: {
+    speed: 0.9,
+    accuracy: 0.9,
+    dodge: 1.2,
+  },
+});
+
 // =============================================================================
 //                                    Player
 // =============================================================================
@@ -232,7 +251,7 @@ Player.fullyTrainedStats = function() {
   };
 };
 
-Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
+Player.generateFullyTrainedPlayer = function(name, stat_points, items, attack_type) {
   let hp_points       = stat_points.hp;
   let speed_points    = stat_points.speed;
   let dodge_points    = stat_points.dodge;
@@ -266,11 +285,11 @@ Player.generateFullyTrainedPlayer = function(name, stat_points, items) {
   stats.dodge    += dodge_points;
   stats.accuracy += accuracy_points;
 
-  let player = this.generatePlayer(name, stats, items);
+  let player = this.generatePlayer(name, stats, items, attack_type);
   return player;
 };
 
-Player.generatePlayer = function(name, raw_stats, items) {
+Player.generatePlayer = function(name, raw_stats, items, attack_type) {
   let stats = Object.assign(this.emptyStats(), raw_stats);
   stats.name = name;
 
@@ -285,6 +304,17 @@ Player.generatePlayer = function(name, raw_stats, items) {
   stats.gun_skill   += idx(equip_stats, 'gun_skill',   0);
   stats.proj_skill  += idx(equip_stats, 'proj_skill',  0);
   stats.def_skill   += idx(equip_stats, 'def_skill',   0);
+
+  let selected_attack_type = attack_type || 'normal';
+  let attack_type_multipliers = ATTACK_TYPE_MULTIPLIERS[selected_attack_type];
+  if (!attack_type_multipliers) {
+    throw new Error('Unknown attack type: ' + attack_type + '.');
+  }
+  for (let stat in attack_type_multipliers) {
+    // Assume all attack-type adjustments happen before the final result is
+    // rounded up.
+    stats[stat] = ceil(stats[stat] * attack_type_multipliers[stat]);
+  }
 
   // Weapon 1
   stats.weapon1.type = idx(equip_stats.weapon1, 'type', stats.weapon1.type);
@@ -324,7 +354,7 @@ Player.generateBuild = function(build) {
     return item;
   });
 
-  return Player.generateFullyTrainedPlayer(build.name, build.stats, items);
+  return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
 };
 
 Player.generateReferencePlayers = function() {
