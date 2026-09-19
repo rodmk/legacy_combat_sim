@@ -180,6 +180,12 @@ CombatSim.damageAfterArmor = function(attacker_level, defender_armor, base_damag
   return Math.round(base_damage * (level_modifier / (level_modifier + defender_armor)));
 };
 
+CombatSim.healingCost = function(current_hp, max_hp) {
+  // Assume healing costs the rounded missing HP divided by six, plus five
+  // credits when reviving from zero HP.
+  return Math.round((max_hp - current_hp) / 6) + (current_hp === 0 ? 5 : 0);
+};
+
 CombatSim.weaponDamageDistribution = function(att, def, weapon) {
   let accuracy_probability = this.combatProbability(att.accuracy, def.dodge);
   let skill_probability = this.combatProbability(att[weapon.skill], def.def_skill);
@@ -247,13 +253,16 @@ CombatSim.combatSignature = function(player) {
 CombatSim.defeatRoundDistribution = function(att, def) {
   let attack = Array.from(this.attackDamageDistribution(att, def));
   let lethal_probability = new Float64Array(def.max_hp + 1);
+  let healing_cost = new Uint32Array(def.max_hp + 1);
   let remaining_hp = new Float64Array(def.max_hp + 1);
   let defeat_rounds = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   let surviving_hp_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
+  let surviving_healing_cost_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   let full_hp_probability_by_round = new Array(this.MAX_COMBAT_ROUNDS + 1).fill(0);
   attack.sort(function(a, b) { return a[0] - b[0]; });
 
   for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+    healing_cost[hit_points] = this.healingCost(hit_points, def.max_hp);
     for (let outcome = 0; outcome < attack.length; outcome++) {
       if (attack[outcome][0] >= hit_points) {
         lethal_probability[hit_points] += attack[outcome][1];
@@ -268,6 +277,7 @@ CombatSim.defeatRoundDistribution = function(att, def) {
   for (let round = 1; round <= this.MAX_COMBAT_ROUNDS; round++) {
     let next_remaining_hp = new Float64Array(def.max_hp + 1);
     let next_surviving_hp = 0;
+    let next_surviving_healing_cost = 0;
     let next_full_hp_probability = 0;
     let has_survivors = false;
 
@@ -288,6 +298,7 @@ CombatSim.defeatRoundDistribution = function(att, def) {
         let next_hit_points = hit_points - damage;
         next_remaining_hp[next_hit_points] += probability;
         next_surviving_hp += next_hit_points * probability;
+        next_surviving_healing_cost += healing_cost[next_hit_points] * probability;
         if (next_hit_points === def.max_hp) {
           next_full_hp_probability += probability;
         }
@@ -297,6 +308,7 @@ CombatSim.defeatRoundDistribution = function(att, def) {
 
     remaining_hp = next_remaining_hp;
     surviving_hp_by_round[round] = next_surviving_hp;
+    surviving_healing_cost_by_round[round] = next_surviving_healing_cost;
     full_hp_probability_by_round[round] = next_full_hp_probability;
     if (!has_survivors) {
       break;
@@ -312,6 +324,7 @@ CombatSim.defeatRoundDistribution = function(att, def) {
     defeat_rounds: defeat_rounds,
     survives: survives,
     surviving_hp_by_round: surviving_hp_by_round,
+    surviving_healing_cost_by_round: surviving_healing_cost_by_round,
     full_hp_probability_by_round: full_hp_probability_by_round,
   };
 };
@@ -335,6 +348,8 @@ CombatSim.combatResultDistribution = function(player1, player2) {
   let second_win_hp = 0;
   let first_zero_damage_wins = 0;
   let second_zero_damage_wins = 0;
+  let first_win_healing_cost = 0;
+  let second_win_healing_cost = 0;
   let first_survival_probability = 1;
   let second_survival_probability = 1;
 
@@ -344,12 +359,16 @@ CombatSim.combatResultDistribution = function(player1, player2) {
       second_defeats_first.surviving_hp_by_round[round - 1];
     first_zero_damage_wins += first_defeats_second.defeat_rounds[round] *
       second_defeats_first.full_hp_probability_by_round[round - 1];
+    first_win_healing_cost += first_defeats_second.defeat_rounds[round] *
+      second_defeats_first.surviving_healing_cost_by_round[round - 1];
     first_survival_probability -= first_defeats_second.defeat_rounds[round];
     second_wins += second_defeats_first.defeat_rounds[round] * first_survival_probability;
     second_win_hp += second_defeats_first.defeat_rounds[round] *
       first_defeats_second.surviving_hp_by_round[round];
     second_zero_damage_wins += second_defeats_first.defeat_rounds[round] *
       first_defeats_second.full_hp_probability_by_round[round];
+    second_win_healing_cost += second_defeats_first.defeat_rounds[round] *
+      first_defeats_second.surviving_healing_cost_by_round[round];
     second_survival_probability -= second_defeats_first.defeat_rounds[round];
   }
 
@@ -358,17 +377,27 @@ CombatSim.combatResultDistribution = function(player1, player2) {
     first_defeats_second.survives;
   let second_draw_hp = first_defeats_second.surviving_hp_by_round[this.MAX_COMBAT_ROUNDS] *
     second_defeats_first.survives;
+  let first_draw_healing_cost = second_defeats_first
+    .surviving_healing_cost_by_round[this.MAX_COMBAT_ROUNDS] * first_defeats_second.survives;
+  let second_draw_healing_cost = first_defeats_second
+    .surviving_healing_cost_by_round[this.MAX_COMBAT_ROUNDS] * second_defeats_first.survives;
   let first_result = {
     wins: first_wins,
     expected_hp_remaining: first_win_hp + first_draw_hp,
     expected_hp_lost_on_win: first_wins > 0 ? first.max_hp - (first_win_hp / first_wins) : null,
     zero_damage_win_probability: first_wins > 0 ? first_zero_damage_wins / first_wins : null,
+    expected_healing_cost_on_win: first_wins > 0 ? first_win_healing_cost / first_wins : null,
+    expected_healing_cost: first_win_healing_cost + first_draw_healing_cost +
+      (second_wins * this.healingCost(0, first.max_hp)),
   };
   let second_result = {
     wins: second_wins,
     expected_hp_remaining: second_win_hp + second_draw_hp,
     expected_hp_lost_on_win: second_wins > 0 ? second.max_hp - (second_win_hp / second_wins) : null,
     zero_damage_win_probability: second_wins > 0 ? second_zero_damage_wins / second_wins : null,
+    expected_healing_cost_on_win: second_wins > 0 ? second_win_healing_cost / second_wins : null,
+    expected_healing_cost: second_win_healing_cost + second_draw_healing_cost +
+      (first_wins * this.healingCost(0, second.max_hp)),
   };
   first_result.expected_hp_lost = first.max_hp - first_result.expected_hp_remaining;
   second_result.expected_hp_lost = second.max_hp - second_result.expected_hp_remaining;
@@ -1172,10 +1201,17 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
   let groups = Array.from(groups_by_signature.values());
   let players = groups.map(function(group) { return group.player; });
   let score_matrix = players.map(function() { return new Array(players.length).fill(0); });
+  let win_probability_matrix = players.map(function() {
+    return new Array(players.length).fill(0);
+  });
   let draw_matrix = players.map(function() { return new Array(players.length).fill(0); });
   let hp_loss_matrix = players.map(function() { return new Array(players.length).fill(0); });
   let win_hp_loss_matrix = players.map(function() { return new Array(players.length).fill(null); });
   let zero_damage_win_matrix = players.map(function() { return new Array(players.length).fill(null); });
+  let healing_cost_matrix = players.map(function() { return new Array(players.length).fill(0); });
+  let win_healing_cost_matrix = players.map(function() {
+    return new Array(players.length).fill(null);
+  });
   let average = function(left, right) { return (left + right) / 2; };
   let combinedWinMetric = function(left, right, metric) {
     let wins = left.wins + right.wins;
@@ -1191,6 +1227,10 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
   for (let i = 0; i < players.length; i++) {
     let self_result = CombatSim.combatResultDistribution(players[i], players[i]);
     score_matrix[i][i] = 0.5;
+    win_probability_matrix[i][i] = average(
+      self_result.outcome.player1_wins,
+      self_result.outcome.player2_wins
+    );
     draw_matrix[i][i] = self_result.outcome.draws;
     hp_loss_matrix[i][i] = average(
       self_result.player1.expected_hp_lost,
@@ -1201,6 +1241,13 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     );
     zero_damage_win_matrix[i][i] = combinedWinMetric(
       self_result.player1, self_result.player2, 'zero_damage_win_probability'
+    );
+    healing_cost_matrix[i][i] = average(
+      self_result.player1.expected_healing_cost,
+      self_result.player2.expected_healing_cost
+    );
+    win_healing_cost_matrix[i][i] = combinedWinMetric(
+      self_result.player1, self_result.player2, 'expected_healing_cost_on_win'
     );
 
     for (let j = i + 1; j < players.length; j++) {
@@ -1215,6 +1262,12 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       let draws = (forward.draws + reverse.draws) / 2;
       score_matrix[i][j] = score;
       score_matrix[j][i] = 1 - score;
+      win_probability_matrix[i][j] = average(
+        forward.player1_wins, reverse.player2_wins
+      );
+      win_probability_matrix[j][i] = average(
+        forward.player2_wins, reverse.player1_wins
+      );
       draw_matrix[i][j] = draws;
       draw_matrix[j][i] = draws;
       hp_loss_matrix[i][j] = average(
@@ -1237,6 +1290,20 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       zero_damage_win_matrix[j][i] = combinedWinMetric(
         forward_result.player2, reverse_result.player1, 'zero_damage_win_probability'
       );
+      healing_cost_matrix[i][j] = average(
+        forward_result.player1.expected_healing_cost,
+        reverse_result.player2.expected_healing_cost
+      );
+      healing_cost_matrix[j][i] = average(
+        forward_result.player2.expected_healing_cost,
+        reverse_result.player1.expected_healing_cost
+      );
+      win_healing_cost_matrix[i][j] = combinedWinMetric(
+        forward_result.player1, reverse_result.player2, 'expected_healing_cost_on_win'
+      );
+      win_healing_cost_matrix[j][i] = combinedWinMetric(
+        forward_result.player2, reverse_result.player1, 'expected_healing_cost_on_win'
+      );
     }
   }
 
@@ -1248,6 +1315,9 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     let average_score = score_matrix[player].reduce(function(sum, score) {
       return sum + score;
     }, 0) / score_matrix[player].length;
+    let average_win_probability = win_probability_matrix[player].reduce(function(sum, wins) {
+      return sum + wins;
+    }, 0) / win_probability_matrix[player].length;
     let average_draw_rate = draw_matrix[player].reduce(function(sum, draw_rate) {
       return sum + draw_rate;
     }, 0) / draw_matrix[player].length;
@@ -1262,6 +1332,10 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
     };
     let average_hp_lost_on_win = meanDefined(win_hp_loss_matrix[player]);
     let average_zero_damage_win_probability = meanDefined(zero_damage_win_matrix[player]);
+    let average_healing_cost = healing_cost_matrix[player].reduce(function(sum, cost) {
+      return sum + cost;
+    }, 0) / healing_cost_matrix[player].length;
+    let average_healing_cost_on_win = meanDefined(win_healing_cost_matrix[player]);
     let best_response_score = Math.max.apply(null, score_matrix.map(function(row) {
       return row[player];
     }));
@@ -1277,10 +1351,15 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       dominated_by: frontier.dominated_by[player].map(function(other) { return ids[other]; }),
       worst_score: worst_score,
       average_score: average_score,
+      average_win_probability: average_win_probability,
       average_draw_rate: average_draw_rate,
       average_hp_lost: average_hp_lost,
       average_hp_lost_on_win: average_hp_lost_on_win,
       average_zero_damage_win_probability: average_zero_damage_win_probability,
+      average_healing_cost: average_healing_cost,
+      average_healing_cost_on_win: average_healing_cost_on_win,
+      healing_credits_per_win: average_win_probability > 0 ?
+        average_healing_cost / average_win_probability : null,
       exploitability: best_response_score - 0.5,
       limiting_opponents: limiting_opponents,
     };
@@ -1297,10 +1376,13 @@ MatchupGame.analyzeBuildCatalog = function(catalog) {
       candidates: maximin.players.map(function(player) { return ids[player]; }),
     },
     score_matrix: score_matrix,
+    win_probability_matrix: win_probability_matrix,
     draw_matrix: draw_matrix,
     hp_loss_matrix: hp_loss_matrix,
     win_hp_loss_matrix: win_hp_loss_matrix,
     zero_damage_win_matrix: zero_damage_win_matrix,
+    healing_cost_matrix: healing_cost_matrix,
+    win_healing_cost_matrix: win_healing_cost_matrix,
   };
 };
 

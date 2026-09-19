@@ -48,7 +48,7 @@ Analyze the imported game-simulator builds with exact, initiative-neutral matchu
 yarn analyze:seed > seed-analysis.json
 ```
 
-The report groups combat-equivalent builds, identifies the matchup-vector frontier and pure maximin candidates, and includes scores, draw rates, exploitability, limiting opponents, HP loss, and the restricted matchup matrices. Overall expected HP loss treats defeat as zero remaining HP; the separate win metric reports expected HP spent conditional on winning.
+The report groups combat-equivalent builds, identifies the matchup-vector frontier and pure maximin candidates, and includes scores, draw rates, exploitability, limiting opponents, HP loss, healing cost, credits per win, and the restricted matchup matrices. Overall expected HP loss treats defeat as zero remaining HP; separate win metrics report expected HP and credits spent conditional on winning. Healing cost is modeled as the missing HP divided by six and rounded to the nearest credit, with a five-credit premium when reviving from zero HP.
 
 Development
 ===========

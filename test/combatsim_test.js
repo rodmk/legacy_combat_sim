@@ -715,12 +715,20 @@ exports.testCombatHealthLossDistribution = function(test) {
   let player2 = Object.assign({}, player1);
   let result = CombatSim.combatResultDistribution(player1, player2);
 
+  test.equal(CombatSim.healingCost(0, 10), 7);
+  test.equal(CombatSim.healingCost(0, 20), 8);
+  test.equal(CombatSim.healingCost(20, 100), 13);
+  test.equal(CombatSim.healingCost(20, 815), 133);
+  test.equal(CombatSim.healingCost(0, 815), 141);
+
   test.deepEqual(result.outcome, { player1_wins: 1, player2_wins: 0, draws: 0 });
   test.deepEqual(result.player1, {
     wins: 1,
     expected_hp_remaining: 10,
     expected_hp_lost_on_win: 0,
     zero_damage_win_probability: 1,
+    expected_healing_cost_on_win: 0,
+    expected_healing_cost: 0,
     expected_hp_lost: 0,
   });
   test.deepEqual(result.player2, {
@@ -728,6 +736,8 @@ exports.testCombatHealthLossDistribution = function(test) {
     expected_hp_remaining: 0,
     expected_hp_lost_on_win: null,
     zero_damage_win_probability: null,
+    expected_healing_cost_on_win: null,
+    expected_healing_cost: 7,
     expected_hp_lost: 10,
   });
 
@@ -747,6 +757,8 @@ exports.testCombatHealthLossDistribution = function(test) {
   test.equal(result.player1.expected_hp_lost, 3);
   test.equal(result.player1.expected_hp_lost_on_win, 3);
   test.equal(result.player1.zero_damage_win_probability, 0);
+  test.equal(result.player1.expected_healing_cost_on_win, 1);
+  test.equal(result.player1.expected_healing_cost, 1);
   test.done();
 };
 
@@ -1246,11 +1258,15 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
   analysis.candidates.forEach(function(candidate, player) {
     test.equal(candidate.frontier, candidate.dominated_by.length === 0);
     test.ok(candidate.worst_score <= candidate.average_score);
+    test.ok(candidate.average_win_probability >= 0 && candidate.average_win_probability <= 1);
     test.ok(candidate.average_draw_rate >= 0 && candidate.average_draw_rate <= 1);
     test.ok(candidate.average_hp_lost >= 0);
     test.ok(candidate.average_hp_lost_on_win >= 0);
     test.ok(candidate.average_zero_damage_win_probability >= 0 &&
       candidate.average_zero_damage_win_probability <= 1);
+    test.ok(candidate.average_healing_cost >= 0);
+    test.ok(candidate.average_healing_cost_on_win >= 0);
+    test.ok(candidate.healing_credits_per_win >= candidate.average_healing_cost);
     test.ok(candidate.exploitability >= 0 && candidate.exploitability <= 0.5);
     test.ok(candidate.limiting_opponents.length > 0);
     test.ok(Math.abs(
