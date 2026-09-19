@@ -308,17 +308,19 @@ exports.testCrystalSocketing = function(test) {
   });
 
   let crystal = new Equipment({
-    name:             'crystal',
-    min_damage_mult:  1.1,
-    max_damage_mult:  1.2,
-    armor_mult:       1.3,
-    dodge_mult:       1.4,
-    accuracy_mult:    1.5,
-    speed_mult:       1.6,
-    def_skill_mult:   1.7,
-    melee_skill_mult: 1.8,
-    gun_skill_mult:   1.9,
-    proj_skill_mult:  2.0,
+    name: 'crystal',
+    mult: {
+      min_damage:  1.1,
+      max_damage:  1.2,
+      armor:       1.3,
+      dodge:       1.4,
+      accuracy:    1.5,
+      speed:       1.6,
+      def_skill:   1.7,
+      melee_skill: 1.8,
+      gun_skill:   1.9,
+      proj_skill:  2.0,
+    },
   });
 
   let socketed_item = item.socket([ crystal ]);
@@ -359,7 +361,7 @@ exports.testCrystalSocketing = function(test) {
 };
 
 exports.testCrystalCatalog = function(test) {
-  let crystalDefinitions = require('../data/crystals.json');
+  let crystalDefinitions = require('../data/crystals');
 
   Object.keys(crystalDefinitions).forEach(function(key) {
     test.ok(Item[key] instanceof Equipment, key + ' should be equipment');

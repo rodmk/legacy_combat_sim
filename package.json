@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "Combat Simulator for Legacy (http://www.legacy-game.net)",
   "scripts": {
-    "verify": "yarn test && yarn validate:data",
+    "verify": "yarn test && yarn validate:data && yarn typecheck",
     "prepare": "husky",
     "test": "yarn test-eslint && yarn test-unittest",
     "test-eslint": "node_modules/eslint/bin/eslint.js combatsim.js test/*",
     "test-unittest": "node_modules/nodeunit/bin/nodeunit test/*",
+    "typecheck": "tsc --noEmit",
     "validate:data": "ajv validate --spec=draft2020 -s data/crystals.schema.json -d data/crystals.json"
   },
   "devDependencies": {
@@ -16,6 +17,7 @@
     "eslint": "^3.19.0",
     "husky": "^9.1.7",
     "jsondiffpatch": "0.1.38",
-    "nodeunit": "0.9.1"
+    "nodeunit": "0.9.1",
+    "typescript": "^5.9.2"
   }
 }

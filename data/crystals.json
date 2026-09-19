@@ -1,61 +1,63 @@
 {
   "PerfectFire": {
     "name": "Perfect Fire",
-    "min_damage_mult": 1.1,
-    "max_damage_mult": 1.1
+    "mult": { "min_damage": 1.1, "max_damage": 1.1 }
   },
   "GiantFire": {
     "name": "Giant Fire",
-    "min_damage_mult": 1.08,
-    "max_damage_mult": 1.08
+    "mult": { "min_damage": 1.08, "max_damage": 1.08 }
   },
   "PerfectVoid": {
     "name": "Perfect Void",
-    "armor_mult": 1.1
+    "mult": { "armor": 1.1 }
   },
   "PerfectWater": {
     "name": "Perfect Water",
-    "dodge_mult": 1.05
+    "mult": { "dodge": 1.05 }
   },
   "PerfectAir": {
     "name": "Perfect Air",
-    "accuracy_mult": 1.05
+    "mult": { "accuracy": 1.05 }
   },
   "PerfectPink": {
     "name": "Perfect Pink",
-    "def_skill_mult": 1.2
+    "mult": { "def_skill": 1.2 }
   },
   "PerfectOrange": {
     "name": "Perfect Orange",
-    "melee_skill_mult": 1.2
+    "mult": { "melee_skill": 1.2 }
   },
   "PerfectGreen": {
     "name": "Perfect Green",
-    "gun_skill_mult": 1.2
+    "mult": { "gun_skill": 1.2 }
   },
   "PerfectYellow": {
     "name": "Perfect Yellow",
-    "proj_skill_mult": 1.2
+    "mult": { "proj_skill": 1.2 }
   },
   "PerfectNull": {
     "name": "Perfect Null",
-    "speed_mult": 1.2
+    "mult": { "speed": 1.2 }
   },
   "AbyssCrystal": {
     "name": "Abyss Crystal",
-    "armor_mult": 1.05,
-    "dodge_mult": 1.04,
-    "speed_mult": 1.1,
-    "def_skill_mult": 1.05
+    "mult": {
+      "armor": 1.05,
+      "dodge": 1.04,
+      "speed": 1.1,
+      "def_skill": 1.05
+    }
   },
   "AmuletCrystal": {
     "name": "Amulet Crystal",
-    "min_damage_mult": 1.06,
-    "max_damage_mult": 1.06,
-    "accuracy_mult": 1.06,
-    "melee_skill_mult": 1.1,
-    "gun_skill_mult": 1.1,
-    "proj_skill_mult": 1.1,
-    "def_skill_mult": 1.1
+    "mult": {
+      "min_damage": 1.06,
+      "max_damage": 1.06,
+      "accuracy": 1.06,
+      "melee_skill": 1.1,
+      "gun_skill": 1.1,
+      "proj_skill": 1.1,
+      "def_skill": 1.1
+    }
   }
 }

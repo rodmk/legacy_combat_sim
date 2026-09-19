@@ -455,7 +455,7 @@ Equipment.prototype.socket = function(crystals) {
   let stat_bonuses = {};
   crystals.forEach(function(c) {
     for (let stat in new_stats) {
-      let stat_mult = idx(c, stat + '_mult', null);
+      let stat_mult = idx(c.mult, stat, null);
       if (stat_mult !== null) {
         stat_bonuses[stat] = idx(stat_bonuses, stat, 0) + (new_stats[stat] * (stat_mult - 1));
       }
@@ -693,7 +693,7 @@ let itemDefinitions = {
 
 };
 
-let crystalDefinitions = require('./data/crystals.json');
+let crystalDefinitions = require('./data/crystals');
 Object.keys(crystalDefinitions).forEach(function(key) {
   itemDefinitions[key] = new Equipment(crystalDefinitions[key]);
 });

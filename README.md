@@ -8,9 +8,9 @@ Combat simulator for Legacy (http://www.legacy-game.net).
 Development
 ===========
 
-Install dependencies with `yarn install`. Run linting, tests, and crystal data
-schema validation with `yarn verify`. The same checks run before each commit and
-in CI.
+Install dependencies with `yarn install`. Run linting, tests, crystal data
+schema validation, and static type checks with `yarn verify`. The same checks
+run before each commit and in CI.
 
 License
 =======
