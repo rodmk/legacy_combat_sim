@@ -218,6 +218,29 @@ CombatSim.attackDamageDistribution = function(att, def) {
   return distribution;
 };
 
+CombatSim.combatSignature = function(player) {
+  let weapons = [ player.weapon1, player.weapon2 ].map(function(weapon) {
+    return [ weapon.skill, weapon.min_damage, weapon.max_damage ];
+  });
+  weapons.sort(function(a, b) {
+    return JSON.stringify(a).localeCompare(JSON.stringify(b));
+  });
+
+  return JSON.stringify([
+    player.level,
+    player.max_hp,
+    player.armor,
+    player.speed,
+    player.accuracy,
+    player.dodge,
+    player.melee_skill,
+    player.gun_skill,
+    player.proj_skill,
+    player.def_skill,
+    weapons,
+  ]);
+};
+
 CombatSim.defeatRoundDistribution = function(att, def) {
   let attack = Array.from(this.attackDamageDistribution(att, def));
   let lethal_probability = new Float64Array(def.max_hp + 1);
@@ -500,6 +523,29 @@ Player.generateBuild = function(build) {
   });
 
   return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
+};
+
+Player.groupEquivalentBuilds = function(builds) {
+  let groups_by_signature = new Map();
+
+  builds.forEach(function(build) {
+    let player = Player.generateBuild(build);
+    let signature = CombatSim.combatSignature(player);
+    let group = groups_by_signature.get(signature);
+
+    if (!group) {
+      group = {
+        signature: signature,
+        representative: player,
+        builds: [],
+      };
+      groups_by_signature.set(signature, group);
+    }
+
+    group.builds.push(build);
+  });
+
+  return Array.from(groups_by_signature.values());
 };
 
 Player.generateReferencePlayers = function() {

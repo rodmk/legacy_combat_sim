@@ -970,6 +970,39 @@ exports.testJsonBuild = function(test) {
   test.done();
 };
 
+exports.testEquivalentBuildGrouping = function(test) {
+  let original = JSON.parse(JSON.stringify(Build.CoreStaffVoidSwordWithScouts));
+  let reordered = JSON.parse(JSON.stringify(original));
+  let distinct = JSON.parse(JSON.stringify(original));
+  let weapon1 = reordered.equipment.weapon1;
+  reordered.name = 'Reordered weapons';
+  reordered.equipment.weapon1 = reordered.equipment.weapon2;
+  reordered.equipment.weapon2 = weapon1;
+  distinct.name = 'Quick attack';
+  distinct.attack_type = 'quick';
+
+  let groups = Player.groupEquivalentBuilds([ original, reordered, distinct ]);
+  let equivalent_group = groups.filter(function(group) {
+    return group.builds.length === 2;
+  })[0];
+
+  test.equal(groups.length, 2);
+  test.ok(equivalent_group);
+  test.strictEqual(equivalent_group.builds[0], original);
+  test.strictEqual(equivalent_group.builds[1], reordered);
+  test.equal(
+    equivalent_group.signature,
+    CombatSim.combatSignature(Player.generateBuild(original))
+  );
+  test.equal(equivalent_group.representative.name, original.name);
+  test.notEqual(
+    CombatSim.combatSignature(Player.generateBuild(original)),
+    CombatSim.combatSignature(Player.generateBuild(distinct))
+  );
+
+  test.done();
+};
+
 exports.testCatalogIntegration = function(test) {
   let player = Player.generatePlayer(
     'Catalog Player',
