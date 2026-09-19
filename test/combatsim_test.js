@@ -1356,6 +1356,38 @@ exports.testRestrictedMatchupGame = function(test) {
     return candidate.sources[0];
   }), [ 'viable' ]);
 
+  let defeat_cache = CombatSim.createDefeatRoundCache();
+  let matchup_cache = { values: new Map(), hits: 0, misses: 0 };
+  let incremental = MatchupGame.candidateFrontiers([
+    { representative: helpless, sources: [ 'helpless' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  incremental = MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+    previousResult: incremental,
+  });
+  test.equal(incremental.candidate_count, 2);
+  test.equal(incremental.evaluated_matchups, 2);
+  test.deepEqual(incremental.combat_economy_frontier.map(function(candidate) {
+    return candidate.sources[0];
+  }), [ 'viable' ]);
+  MatchupGame.candidateFrontiers([
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ], {
+    defeatCache: defeat_cache,
+    matchupCache: matchup_cache,
+  });
+  test.deepEqual({
+    entries: matchup_cache.values.size,
+    hits: matchup_cache.hits,
+    misses: matchup_cache.misses,
+  }, { entries: 2, hits: 1, misses: 2 });
+
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],
     [ 1, 0.5, 0 ],

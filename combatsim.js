@@ -1346,11 +1346,14 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
 
 MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, options) {
   options = options || {};
-  let combat_frontier = [];
-  let economy_frontier = [];
-  let evaluated_matchups = 0;
+  let previous_result = options.previousResult;
+  let combat_frontier = previous_result ? previous_result.combat_frontier : [];
+  let economy_frontier = previous_result ? previous_result.combat_economy_frontier : [];
+  let candidate_count = previous_result ? previous_result.candidate_count : 0;
+  let evaluated_matchups = previous_result ? previous_result.evaluated_matchups : 0;
   let defeat_cache = options.defeatCache ||
     CombatSim.createDefeatRoundCache(options.minimumSurvivalProbability);
+  let matchup_cache = options.matchupCache || { values: new Map(), hits: 0, misses: 0 };
   let dominates = function(left, right, include_economy) {
     let strictly_better = false;
     for (let opponent = 0; opponent < left.matchup_scores.length; opponent++) {
@@ -1378,10 +1381,23 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
     }).concat([ candidate ]);
   };
 
-  let candidates = groups.map(function(group) {
-    let matchups = opponents.map(function(opponent) {
+  let best_worst_case = previous_result ? previous_result.best_worst_case : null;
+  let best_average = previous_result ? previous_result.best_average : null;
+  let cheapest_per_win = previous_result ? previous_result.cheapest_per_win : null;
+  let cheapest_average_winner = previous_result ? previous_result.cheapest_average_winner : null;
+  groups.forEach(function(group) {
+    let group_signature = group.signature || CombatSim.combatSignature(group.representative);
+    let matchups = opponents.map(function(opponent, opponent_index) {
+      let matchup_key = group_signature + ':' + opponent_index;
+      if (matchup_cache.values.has(matchup_key)) {
+        matchup_cache.hits++;
+        return matchup_cache.values.get(matchup_key);
+      }
+      matchup_cache.misses++;
       evaluated_matchups++;
-      return MatchupGame.candidateMatchup(group.representative, opponent, defeat_cache);
+      let matchup = MatchupGame.candidateMatchup(group.representative, opponent, defeat_cache);
+      matchup_cache.values.set(matchup_key, matchup);
+      return matchup;
     });
     let matchup_scores = matchups.map(function(matchup) { return matchup.score; });
     let total_wins = matchups.reduce(function(sum, matchup) {
@@ -1403,17 +1419,26 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
     };
     combat_frontier = addToFrontier(combat_frontier, candidate, false);
     economy_frontier = addToFrontier(economy_frontier, candidate, true);
-    return candidate;
+    if (!best_worst_case || candidate.worst_score > best_worst_case.worst_score) {
+      best_worst_case = candidate;
+    }
+    if (!best_average || candidate.average_score > best_average.average_score) {
+      best_average = candidate;
+    }
+    if (!cheapest_per_win ||
+        candidate.healing_credits_per_win < cheapest_per_win.healing_credits_per_win) {
+      cheapest_per_win = candidate;
+    }
+    if (candidate.average_score >= 0.5 && (!cheapest_average_winner ||
+        candidate.healing_credits_per_win < cheapest_average_winner.healing_credits_per_win)) {
+      cheapest_average_winner = candidate;
+    }
+    candidate_count++;
   });
-  let select = function(compare, filter) {
-    return candidates.filter(filter || function() { return true; }).reduce(function(best, candidate) {
-      return !best || compare(candidate, best) < 0 ? candidate : best;
-    }, null);
-  };
 
   return {
     opponent_ids: opponent_ids,
-    candidate_count: candidates.length,
+    candidate_count: candidate_count,
     evaluated_matchups: evaluated_matchups,
     defeat_cache: {
       entries: defeat_cache.values.size,
@@ -1421,20 +1446,17 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       misses: defeat_cache.misses,
       minimum_survival_probability: defeat_cache.minimum_survival_probability,
     },
+    matchup_cache: {
+      entries: matchup_cache.values.size,
+      hits: matchup_cache.hits,
+      misses: matchup_cache.misses,
+    },
     combat_frontier: combat_frontier,
     combat_economy_frontier: economy_frontier,
-    best_worst_case: select(function(left, right) {
-      return right.worst_score - left.worst_score;
-    }),
-    best_average: select(function(left, right) {
-      return right.average_score - left.average_score;
-    }),
-    cheapest_per_win: select(function(left, right) {
-      return left.healing_credits_per_win - right.healing_credits_per_win;
-    }),
-    cheapest_average_winner: select(function(left, right) {
-      return left.healing_credits_per_win - right.healing_credits_per_win;
-    }, function(candidate) { return candidate.average_score >= 0.5; }),
+    best_worst_case: best_worst_case,
+    best_average: best_average,
+    cheapest_per_win: cheapest_per_win,
+    cheapest_average_winner: cheapest_average_winner,
   };
 };
 
@@ -1446,6 +1468,8 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   let groups_by_signature = new Map();
   let source_keys = new Set();
   let search_cache = CombatSim.createDefeatRoundCache(minimum_survival_probability);
+  let matchup_cache = { values: new Map(), hits: 0, misses: 0 };
+  let pending_groups = [];
   let addSource = function(source) {
     if (source.stats.hp < 2 || source.stats.speed < 2 ||
         source.stats.accuracy < 4 || source.stats.dodge < 4 ||
@@ -1468,6 +1492,7 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
     if (!group) {
       group = { signature: signature, representative: player, sources: [] };
       groups_by_signature.set(signature, group);
+      pending_groups.push(group);
     }
     group.sources.push({
       attack_type: source.attack_type,
@@ -1515,11 +1540,16 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   let frontier_result;
   point_strides.forEach(function(point_stride, stage) {
     frontier_result = MatchupGame.candidateFrontiers(
-      Array.from(groups_by_signature.values()),
+      pending_groups,
       opponents,
       opponent_ids,
-      { defeatCache: search_cache }
+      {
+        defeatCache: search_cache,
+        matchupCache: matchup_cache,
+        previousResult: frontier_result,
+      }
     );
+    pending_groups = [];
     stages.push({
       point_stride: point_stride,
       candidate_count: frontier_result.candidate_count,
@@ -1553,11 +1583,16 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       continue;
     }
     frontier_result = MatchupGame.candidateFrontiers(
-      Array.from(groups_by_signature.values()),
+      pending_groups,
       opponents,
       opponent_ids,
-      { defeatCache: search_cache }
+      {
+        defeatCache: search_cache,
+        matchupCache: matchup_cache,
+        previousResult: frontier_result,
+      }
     );
+    pending_groups = [];
     convergence.push({
       iteration: convergence_iteration,
       added_allocations: added,
@@ -1583,6 +1618,7 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   exact_result.search_candidate_count = frontier_result.candidate_count;
   exact_result.search_evaluated_matchups = frontier_result.evaluated_matchups;
   exact_result.search_defeat_cache = frontier_result.defeat_cache;
+  exact_result.search_matchup_cache = frontier_result.matchup_cache;
   exact_result.minimum_survival_probability = minimum_survival_probability;
   exact_result.exact_finalist_count = finalists.length;
   exact_result.stages = stages;
