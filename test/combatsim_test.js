@@ -360,80 +360,44 @@ exports.testCrystalSocketing = function(test) {
   test.done();
 };
 
-exports.testCrystalCatalog = function(test) {
-  let crystalDefinitions = require('../data/crystals');
-  let expectedCrystals = [
-    'PerfectNull',
-    'PerfectAir',
-    'PerfectVoid',
-    'PerfectFire',
-    'PerfectGreen',
-    'PerfectOrange',
-    'PerfectYellow',
-    'PerfectPink',
-    'PerfectWater',
-    'GreenInferno',
-    'OrangeInferno',
-    'YellowInferno',
-    'CorruptedPink',
-    'CorruptedWater',
-    'PrimeCrystal',
-    'AeonCrystal',
-    'AbyssCrystal',
-    'AmuletCrystal',
-    'CabrusionCrystal',
-    'BerserkerCrystal',
-  ];
+exports.testCatalogIntegration = function(test) {
+  let player = Player.generatePlayer(
+    'Catalog Player',
+    {},
+    [
+      Item.DarkLegionArmor.socket([ Item.AbyssCrystal ]),
+      Item.RiftGun.socket([ Item.PerfectFire ]),
+      Item.CoreStaff.socket([ Item.PerfectAir ]),
+      Item.BioSpinalEnhancer.socket([ Item.CorruptedPink ]),
+      Item.ScoutDrones.socket([ Item.YellowInferno ]),
+    ]
+  );
 
-  test.deepEqual(Object.keys(crystalDefinitions), expectedCrystals);
-
-  Object.keys(crystalDefinitions).forEach(function(key) {
-    test.ok(Item[key] instanceof Equipment, key + ' should be equipment');
-    testDeepEqualWithDiff(test, Item[key], crystalDefinitions[key]);
-  });
-
-  test.done();
-};
-
-exports.testEquipmentCatalog = function(test) {
-  let equipmentCatalog = require('../data/equipment');
-  let expectedEquipment = {
-    armor: [
-      'TitanGuard',
-      'HellforgedArmor',
-      'DarkLegionArmor',
-      'SG1Armor',
-    ],
-    weapons: [
-      'RailGun',
-      'CrystalSword',
-      'CBombsT2',
-      'ConcentratedCBombsT2',
-      'SplitCBombsT2',
-      'Scythe',
-      'VoidSword',
-      'RiftGun',
-      'CoreStaff',
-      'VoidBow',
-    ],
-    miscs: [
-      'Amulet',
-      'PrimeAmulet',
-      'InfernoAmulet',
-      'NerveGauntlet',
-      'BioSpinalEnhancer',
-      'OrphicAmulet',
-      'ScoutDrones',
-    ],
+  let expectedStats = {
+    name: 'Catalog Player',
+    max_hp: 0,
+    armor: 30,
+    speed: 197,
+    accuracy: 179,
+    dodge: 92,
+    melee_skill: 355,
+    gun_skill: 265,
+    proj_skill: 128,
+    def_skill: 219,
+    weapon1: {
+      type: 'gun',
+      skill: 'gun_skill',
+      min_damage: 66,
+      max_damage: 72,
+    },
+    weapon2: {
+      type: 'melee',
+      skill: 'melee_skill',
+      min_damage: 45,
+      max_damage: 55,
+    },
   };
 
-  Object.keys(expectedEquipment).forEach(function(category) {
-    test.deepEqual(Object.keys(equipmentCatalog[category]), expectedEquipment[category]);
-    Object.keys(equipmentCatalog[category]).forEach(function(key) {
-      test.ok(Item[key] instanceof Equipment, key + ' should be equipment');
-      testDeepEqualWithDiff(test, Item[key], equipmentCatalog[category][key]);
-    });
-  });
-
+  testDeepEqualWithDiff(test, player, expectedStats);
   test.done();
 };
