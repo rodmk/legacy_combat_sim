@@ -98,9 +98,8 @@ function deepFreeze(o) {
 //                                   CombatSim
 // =============================================================================
 function CombatSim() {}
-// Assume fights end in a draw after the 1,500 rounds funded by the maximum
-// 7,500 stored energy at 5 energy per round, including in free-combat contexts.
-CombatSim.MAX_COMBAT_ROUNDS = 1500;
+// Assume fights still unresolved after 100 rounds are draws.
+CombatSim.MAX_COMBAT_ROUNDS = 100;
 
 // Perform combat with player1 initiating each fight.
 CombatSim.simulateCombat = function(player1, player2, fights) {
