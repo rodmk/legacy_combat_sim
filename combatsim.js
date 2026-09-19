@@ -342,6 +342,15 @@ CombatSim.defeatRoundDistribution = function(att, def, cache) {
       next_surviving_hp += hit_points * state_probability;
       next_surviving_healing_cost += healing_cost[hit_points] * state_probability;
     }
+    if (next_survives > survives) {
+      let survival_scale = survives / next_survives;
+      for (let hit_points = 1; hit_points <= def.max_hp; hit_points++) {
+        next_remaining_hp[hit_points] *= survival_scale;
+      }
+      next_surviving_hp *= survival_scale;
+      next_surviving_healing_cost *= survival_scale;
+      next_survives = survives;
+    }
     defeat_rounds[round] = survives - next_survives;
     survives = next_survives;
     next_full_hp_probability = next_remaining_hp[def.max_hp];
@@ -1378,7 +1387,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       }, 0) / matchup_scores.length,
       average_win_probability: total_wins / matchups.length,
       average_healing_cost: total_healing_cost / matchups.length,
-      healing_credits_per_win: total_wins > 0 ? total_healing_cost / total_wins : null,
+      healing_credits_per_win: total_wins > 0 ? total_healing_cost / total_wins : Infinity,
     };
     combat_frontier = addToFrontier(combat_frontier, candidate, false);
     economy_frontier = addToFrontier(economy_frontier, candidate, true);

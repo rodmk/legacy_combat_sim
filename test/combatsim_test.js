@@ -782,6 +782,10 @@ exports.testCombatHealthLossDistribution = function(test) {
     weapon1: { skill: 'gun_skill', min_damage: 10, max_damage: 10 },
   });
   let exact_tail = CombatSim.defeatRoundDistribution(tail_attacker, player2);
+  test.ok(exact_tail.defeat_rounds.every(function(probability) { return probability >= 0; }));
+  test.ok(Math.abs(exact_tail.defeat_rounds.reduce(function(sum, probability) {
+    return sum + probability;
+  }, exact_tail.survives) - 1) < 1e-12);
   let truncated_tail = CombatSim.defeatRoundDistribution(
     tail_attacker,
     player2,
@@ -1282,6 +1286,19 @@ exports.testRestrictedMatchupGame = function(test) {
     win_probability: 0.5,
     expected_healing_cost: 3.5,
   });
+
+  let helpless = Object.assign({}, player1, {
+    weapon1: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+    weapon2: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
+  });
+  let candidate_frontiers = MatchupGame.candidateFrontiers([
+    { representative: helpless, sources: [ 'helpless' ] },
+    { representative: player1, sources: [ 'viable' ] },
+  ], [ player2 ], [ 'opponent' ]);
+  test.deepEqual(candidate_frontiers.cheapest_per_win.sources, [ 'viable' ]);
+  test.deepEqual(candidate_frontiers.combat_economy_frontier.map(function(candidate) {
+    return candidate.sources[0];
+  }), [ 'viable' ]);
 
   let cyclic_matrix = [
     [ 0.5, 0, 1 ],
