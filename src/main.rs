@@ -35,7 +35,7 @@ enum Command {
         /// Number of fights per enemy.
         #[arg(long, default_value_t = 100_000)]
         fights: u64,
-        /// Seed for reproducible simulations.
+        /// Seed for runs reproducible with the same compiled dependency versions.
         #[arg(long)]
         seed: Option<u64>,
         /// Report format.

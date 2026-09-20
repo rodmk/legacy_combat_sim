@@ -128,6 +128,16 @@ impl Catalogs {
     ///
     /// [`CombatRole::Attacker`] applies the build's selected attack mode.
     /// [`CombatRole::Defender`] uses normal-mode speed, accuracy, and dodge.
+    /// Builds must be level 80, allocate exactly 183 points, and respect the
+    /// minimum allocation for each statistic. HP and speed points grant five
+    /// points each; fully trained base statistics and the five-damage Combat
+    /// Tactics bonus are added before equipment.
+    ///
+    /// Equipment bonuses are additive. With mixed weapon families, each weapon's
+    /// contribution to its own skill is doubled. Weapon modifications are applied
+    /// before crystals. Within each modifier group, bonuses are calculated from
+    /// the same pre-group value, summed, rounded up, and then added. Attack-mode
+    /// multipliers are applied last and rounded up.
     pub fn materialize(&self, build: &BuildDefinition, role: CombatRole) -> Result<Player> {
         if build.level != 80 {
             bail!("builds require level 80");
