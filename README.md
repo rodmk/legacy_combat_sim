@@ -5,6 +5,32 @@ Legacy Combat Simulator
 
 Combat simulator for Legacy (http://www.legacy-game.net).
 
+Rust CLI
+========
+
+The Rust rewrite starts with a modular Monte Carlo simulator. Run a catalog
+build against the bundled Shadow Dojo enemy set with a reproducible seed:
+
+```sh
+cargo run --release -- simulate \
+  --build DualVoidBowsWithScouts \
+  --enemy-set shadow-dojo \
+  --fights 100000 \
+  --seed 42
+```
+
+Use `--format json` for machine-readable output, or select individual enemies
+by repeating `--enemy`. Additional schema-compatible build catalogs can be
+loaded by repeating `--catalog path/to/builds.json`. The catalog, player
+materialization, and combat modules are library APIs so later inference-engine
+work can reuse the same rules without going through the CLI.
+
+List all bundled build keys with:
+
+```sh
+cargo run -- list-builds
+```
+
 Weapon Mods
 ===========
 

@@ -18,5 +18,11 @@ jobs:
         with:
           node-version: 24
           cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - run: yarn install --frozen-lockfile
       - run: yarn verify
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
