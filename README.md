@@ -89,7 +89,7 @@ Treat the five base equipment items and weapon mods as a signature, with crystal
 yarn --silent analyze:regions > attainable-regions.json
 ```
 
-The report counts the complete equipment-signature space, samples strict region-envelope dominance, and compares a safe opponent-conditioned relaxation with configured crystal and stat specialization. The relaxation combines independently attainable maxima, so its score is an upper bound rather than a legal build. It first scores every signature with a cheap matchup proxy and retains both global leaders and leaders within armor-and-weapon diversity buckets. A second proxy pass evaluates legal directional crystal loadouts jointly with representative stat allocations and attack types, retaining global leaders plus one representative from each weapon-pair family. Promoted signatures are then configured with the more expensive search and compared with control samples; this measures screening yield, not exhaustive recall.
+The report counts the complete equipment-signature space, samples strict region-envelope dominance, and compares a safe opponent-conditioned relaxation with configured crystal and stat specialization. The relaxation combines independently attainable maxima, so its score is an upper bound rather than a legal build. It first scores every signature with a cheap matchup proxy and retains both global leaders and leaders within armor-and-weapon diversity buckets. A second proxy pass evaluates legal directional crystal loadouts jointly with representative stat allocations and attack types, retaining global leaders plus one representative from each weapon-pair family. Conditioned proxy screens drop at most 2% opponent weight by default; promoted signatures are configured against the more precise meta support. Promoted signatures are then configured with the more expensive search and compared with control samples; this measures screening yield, not exhaustive recall.
 
 Export the second-stage finalists and solve their restricted game with a checkpointed best-response search:
 
@@ -125,7 +125,7 @@ GLOBAL_CHALLENGE_CATALOG=global-challengers.json \
 yarn --silent search:global-meta-challenge
 ```
 
-The global challenge admits at most two profitable responses with distinct five-item equipment signatures. Continue the equilibrium from the preceding artifact by passing its challenger catalog to the configuration-meta search:
+The global challenge jointly configures three leaders per weapon profile by default, preferring distinct weapon pairs before filling the remaining places by score. It admits at most two profitable responses with distinct five-item equipment signatures. Continue the equilibrium from the preceding artifact by passing its challenger catalog to the configuration-meta search:
 
 ```sh
 CONFIGURATION_META_INITIAL_REPORT=data/configuration-meta.json \
@@ -135,7 +135,9 @@ CONFIGURATION_META_REPORT=global-meta-v2.json \
 yarn --silent search:configuration-meta
 ```
 
-`data/global-meta-challenge.json` records the first global challenge. Its strongest response scores `0.55838`, and `data/global-meta-v2.json` records the resulting 39-strategy equilibrium after five response rounds plus a practical-convergence screen. No equipment family cleared the `0.505` confirmation threshold; the strongest residual response scored `0.50103`.
+`data/global-meta-challenge.json` records the first global challenge. Its strongest response scores `0.55838`, and `data/global-meta-v2.json` records the resulting 39-strategy equilibrium after five response rounds plus a practical-convergence screen. A fresh global closure cycle then screened three weapon-pair-diverse leaders from every profile against that final mixture. None cleared the `0.505` confirmation threshold; the strongest screened response scored `0.46860`.
+
+Local configuration closure can change the equilibrium enough to make a previously screened equipment family profitable. `search:global-meta-loop` therefore alternates a complete conditioned equipment screen, diversified global challenge, and local configuration closure until a fresh global challenge admits nothing. Each cycle is checkpointed beneath `GLOBAL_META_LOOP_DIRECTORY`; `GLOBAL_META_LOOP_INITIAL_REPORT` selects the starting meta and `GLOBAL_META_LOOP_REPORT` exports the final catalog together with its global-closure history. A configuration-meta report's `converged` field describes only local closure. The loop's `global_search.globally_closed` field records the stronger stopping condition.
 
 The global region screen defaults to the controlled entry-level kernel. Set `REGION_OPPONENT_CATALOG` and `REGION_OPPONENT_REPORT` to condition it on a current equilibrium instead. The report must contain a `support` array of candidate IDs and weights, and the catalog supplies those builds. `REGION_BASE_CATALOG` preserves the existing strategy archive when exporting the newly conditioned candidates, while `REGION_CANDIDATE_PREFIX` gives each expansion distinct IDs. Repeating this screen after each restricted-game solve makes candidate discovery depend on the emerging meta rather than the reference-build fixtures.
 

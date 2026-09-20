@@ -15,18 +15,32 @@ if (!region_report_path) {
 let output_path = process.env.GLOBAL_CHALLENGE_REPORT;
 let catalog_output_path = process.env.GLOBAL_CHALLENGE_CATALOG;
 let source_report_path = process.env.GLOBAL_CHALLENGE_SOURCE_REPORT;
-let leaders_per_profile = Number(process.env.GLOBAL_CHALLENGE_LEADERS || 1);
+let leaders_per_profile = Number(process.env.GLOBAL_CHALLENGE_LEADERS || 3);
 let batch_size = Number(process.env.GLOBAL_CHALLENGE_BATCH_SIZE || 2);
 let worker_count = Number(process.env.GLOBAL_CHALLENGE_WORKERS || 4);
 let maximum_iterations = Number(process.env.GLOBAL_CHALLENGE_ITERATIONS || 8);
 let tolerance = Number(process.env.GLOBAL_CHALLENGE_TOLERANCE || 1e-3);
+let screening_iterations = Number(process.env.GLOBAL_CHALLENGE_SCREENING_ITERATIONS || 1);
+let screening_promotion_score = Number(
+  process.env.GLOBAL_CHALLENGE_SCREENING_PROMOTION_SCORE || 0.505
+);
+let admission_score = Number(process.env.GLOBAL_CHALLENGE_ADMISSION_SCORE || 0.51);
+if (!Number.isInteger(leaders_per_profile) || leaders_per_profile <= 0 ||
+    !Number.isInteger(screening_iterations) || screening_iterations <= 0 ||
+    screening_promotion_score <= 0.5 || admission_score < screening_promotion_score) {
+  throw new Error('Global challenge search settings are invalid.');
+}
 
 let meta = JSON.parse(fs.readFileSync(meta_path));
 let region_report = JSON.parse(fs.readFileSync(region_report_path));
 let support = meta.final_support || meta.rounds[meta.rounds.length - 1].support;
 let seeds_by_equipment = new Map();
 region_report.profiles.forEach(function(profile) {
-  profile.configured_proxy_screen.leaders.slice(0, leaders_per_profile).forEach(
+  let leaders = src.BuildSearch.selectDiverseEquipmentLeaders(
+    profile.configured_proxy_screen.finalists,
+    leaders_per_profile
+  );
+  leaders.forEach(
     function(leader, index) {
       let signature = src.BuildSearch.equipmentSignature(leader.build.equipment);
       if (!seeds_by_equipment.has(signature)) {
@@ -44,7 +58,7 @@ region_report.profiles.forEach(function(profile) {
 });
 let seeds = Array.from(seeds_by_equipment.values());
 
-let searchSeed = function(seed) {
+let searchSeed = function(seed, iterations) {
   return new Promise(function(resolve, reject) {
     let worker = new worker_threads.Worker(
       path.join(__dirname, 'search-configuration-response-worker.js'),
@@ -55,7 +69,7 @@ let searchSeed = function(seed) {
         options: {
           beamWidth: 4,
           expansionWidth: 1,
-          jointMaxIterations: maximum_iterations,
+          jointMaxIterations: iterations,
           improvementTolerance: tolerance,
           minimumSurvivalProbability: 0.01,
           screeningMinimumSurvivalProbability: 0.1,
@@ -74,20 +88,45 @@ let searchSeed = function(seed) {
   });
 };
 
-let searchSeeds = function(offset, results) {
-  if (offset >= seeds.length) {
+let searchSeeds = function(seeds_to_search, iterations, offset, results) {
+  if (offset >= seeds_to_search.length) {
     return Promise.resolve(results);
   }
-  let batch = seeds.slice(offset, offset + worker_count);
-  return Promise.all(batch.map(searchSeed)).then(function(batch_results) {
-    return searchSeeds(offset + worker_count, results.concat(batch_results));
+  let batch = seeds_to_search.slice(offset, offset + worker_count);
+  return Promise.all(batch.map(function(seed) {
+    return searchSeed(seed, iterations);
+  })).then(function(batch_results) {
+    return searchSeeds(
+      seeds_to_search, iterations, offset + worker_count, results.concat(batch_results)
+    );
   });
 };
 
 let started = Date.now();
 let source_report = source_report_path ? JSON.parse(fs.readFileSync(source_report_path)) : null;
-let results_promise = source_report ? Promise.resolve(source_report.results) : searchSeeds(0, []);
-results_promise.then(function(results) {
+let searches_promise;
+if (source_report) {
+  searches_promise = Promise.resolve({
+    screening: source_report.screening_results || source_report.results,
+    confirmation: source_report.results,
+  });
+} else {
+  searches_promise = searchSeeds(seeds, screening_iterations, 0, []).then(
+    function(screening) {
+      let promoted_ids = new Set(screening.filter(function(result) {
+        return result.responses.some(function(response) {
+          return response.score > screening_promotion_score;
+        });
+      }).map(function(result) { return result.seed.id; }));
+      let promoted = seeds.filter(function(seed) { return promoted_ids.has(seed.id); });
+      return searchSeeds(promoted, maximum_iterations, 0, []).then(function(confirmation) {
+        return { screening: screening, confirmation: confirmation };
+      });
+    }
+  );
+}
+searches_promise.then(function(searches) {
+  let results = searches.confirmation;
   let active_signatures = new Set(Object.keys(meta.catalog).map(function(id) {
     return src.CombatSim.combatSignature(src.Player.generateBuild(meta.catalog[id]));
   }));
@@ -112,7 +151,7 @@ results_promise.then(function(results) {
     return right.score - left.score;
   });
   let profitable = ranked.filter(function(response) {
-    return response.score > 0.5 + tolerance;
+    return response.score > Math.max(0.5 + tolerance, admission_score);
   });
   let profitable_by_equipment = new Map();
   profitable.forEach(function(response) {
@@ -137,6 +176,11 @@ results_promise.then(function(results) {
     support: support,
     seed_count: seeds.length,
     seeds: seeds,
+    screening_iterations: screening_iterations,
+    screening_promotion_score: screening_promotion_score,
+    admission_score: admission_score,
+    screening_results: searches.screening,
+    promoted_seed_count: results.length,
     results: results,
     profitable: profitable,
     admitted: admitted,

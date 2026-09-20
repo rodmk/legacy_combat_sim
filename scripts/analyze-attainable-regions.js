@@ -26,6 +26,9 @@ let second_stage_bucket_size = Number(process.env.SECOND_STAGE_BUCKET_SIZE || 1)
 let opponent_catalog_path = process.env.REGION_OPPONENT_CATALOG ||
   path.join('data', 'kernel-builds.json');
 let opponent_report_path = process.env.REGION_OPPONENT_REPORT;
+let opponent_pruning_tolerance = Number(
+  process.env.REGION_OPPONENT_PRUNING_TOLERANCE || 0.02
+);
 
 let skill_by_type = {
   melee: 'melee_skill',
@@ -57,8 +60,12 @@ let loadOpponentMixture = function() {
   let support;
   if (opponent_report_path) {
     let report = JSON.parse(fs.readFileSync(opponent_report_path));
-    support = report.final_support || report.support ||
+    support = (report.final_equilibrium && report.final_equilibrium.weights) ||
+      report.final_support || report.support ||
       report.rounds[report.rounds.length - 1].support;
+    support = src.MatchupGame.pruneOpponentMixture(
+      support, opponent_pruning_tolerance
+    ).retained;
   } else {
     let ids = Object.keys(catalog).sort();
     support = ids.map(function(id) {
@@ -424,6 +431,7 @@ if (profile_key) {
   });
   console.log(JSON.stringify({
     profile: profile_key,
+    opponent_pruning_tolerance: opponent_report_path ? opponent_pruning_tolerance : 0,
     opponent_mixture: opponent_ids.map(function(id, index) {
       return { candidate: id, weight: weights[index] };
     }),
@@ -543,6 +551,7 @@ if (profile_key) {
       generated_at: new Date().toISOString(),
       opponent_catalog: opponent_catalog_path,
       opponent_report: opponent_report_path || null,
+      opponent_pruning_tolerance: results[0].opponent_pruning_tolerance,
       opponent_mixture: results[0].opponent_mixture,
       profiles: results,
       totals: {
