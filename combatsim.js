@@ -1150,6 +1150,413 @@ BuildSearch.slotVariantFrontier = function(slot, options) {
   };
 };
 
+BuildSearch.itemSourceDescriptor = function(source) {
+  let descriptor = {
+    item: source.item,
+    crystals: source.crystals.slice(),
+  };
+  if (source.mods.length > 0) {
+    descriptor.mods = source.mods.slice();
+  }
+  return descriptor;
+};
+
+BuildSearch.configuredSlotGroups = function(slot, active_weapon_types, options) {
+  let settings = options || {};
+  let catalog = equipmentCatalog[slot];
+  if (!catalog) {
+    throw new Error('Unknown equipment slot: ' + slot + '.');
+  }
+  let item_keys = (settings.itemKeys || Object.keys(catalog)).filter(function(key) {
+    return slot !== 'weapons' || active_weapon_types.includes(catalog[key].type);
+  });
+  let groups_by_signature = new Map();
+  let item_variant_count = 0;
+
+  item_keys.forEach(function(item_key) {
+    let report = BuildSearch.cachedItemVariantReport(item_key, {
+      activeWeaponTypes: active_weapon_types,
+      crystalKeys: settings.crystalKeys,
+      socketCapacity: settings.socketCapacity,
+    });
+    item_variant_count += report.nondominated_groups.length;
+    report.nondominated_groups.forEach(function(group) {
+      let existing = groups_by_signature.get(group.signature);
+      if (!existing) {
+        existing = {
+          signature: group.signature,
+          representative: group.representative,
+          sources: [],
+        };
+        groups_by_signature.set(group.signature, existing);
+      }
+      existing.sources = existing.sources.concat(group.sources);
+    });
+  });
+
+  let unique_groups = Array.from(groups_by_signature.values());
+  let nondominated_groups = this.pruneDominatedItemVariants(
+    unique_groups, active_weapon_types
+  );
+  return {
+    groups: nondominated_groups,
+    counts: {
+      base_items: item_keys.length,
+      item_frontier_variants: item_variant_count,
+      unique_effective: groups_by_signature.size,
+      nondominated: nondominated_groups.length,
+    },
+  };
+};
+
+BuildSearch.partialEquipmentEffect = function(items, active_weapon_types) {
+  let bonuses = Equipment.computeBonuses(items);
+  let stats = [
+    'armor',
+    'dodge',
+    'accuracy',
+    'speed',
+    'def_skill',
+  ].concat(this.activeWeaponSkills(active_weapon_types)).map(function(stat) {
+    return [ stat, idx(bonuses, stat, 0) ];
+  });
+  let weapons = [ bonuses.weapon1, bonuses.weapon2 ].map(function(weapon) {
+    return [
+      idx(weapon, 'type', null),
+      idx(weapon, 'min_damage', 0),
+      idx(weapon, 'max_damage', 0),
+    ];
+  }).filter(function(weapon) { return weapon[0] !== null; }).sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  });
+  return { stats: stats, weapons: weapons };
+};
+
+BuildSearch.partialEquipmentEffectSignature = function(effect) {
+  return JSON.stringify([ effect.stats, effect.weapons ]);
+};
+
+BuildSearch.effectDominates = function(left, right) {
+  if (JSON.stringify(left.weapons.map(function(weapon) { return weapon[0]; })) !==
+      JSON.stringify(right.weapons.map(function(weapon) { return weapon[0]; }))) {
+    return false;
+  }
+  let left_values = left.stats.map(function(stat) { return stat[1]; }).concat(
+    left.weapons.flatMap(function(weapon) { return weapon.slice(1); })
+  );
+  let right_values = right.stats.map(function(stat) { return stat[1]; }).concat(
+    right.weapons.flatMap(function(weapon) { return weapon.slice(1); })
+  );
+  let strictly_better = false;
+  for (let i = 0; i < left_values.length; i++) {
+    if (left_values[i] < right_values[i]) {
+      return false;
+    }
+    strictly_better = strictly_better || left_values[i] > right_values[i];
+  }
+  return strictly_better;
+};
+
+BuildSearch.pruneDominatedEffects = function(groups, options) {
+  let settings = options || {};
+  let maximum_comparisons = settings.maximumComparisons === undefined ?
+    5000000 : settings.maximumComparisons;
+  let buckets = new Map();
+  groups.forEach(function(group) {
+    let key = JSON.stringify(group.effect.weapons);
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+    }
+    buckets.get(key).push(group);
+  });
+  let comparisons = 0;
+  let complete = true;
+  let retained = Array.from(buckets.values()).flatMap(function(bucket) {
+    let frontier = [];
+    for (let group_index = 0; group_index < bucket.length; group_index++) {
+      let group = bucket[group_index];
+      let dominated = false;
+      for (let frontier_index = 0; frontier_index < frontier.length; frontier_index++) {
+        comparisons++;
+        if (comparisons > maximum_comparisons) {
+          complete = false;
+          return frontier.concat(bucket.slice(group_index));
+        }
+        if (BuildSearch.effectDominates(frontier[frontier_index].effect, group.effect)) {
+          dominated = true;
+          break;
+        }
+      }
+      if (dominated) {
+        continue;
+      }
+      let next_frontier = [];
+      for (let existing_index = 0; existing_index < frontier.length; existing_index++) {
+        comparisons++;
+        if (comparisons > maximum_comparisons) {
+          complete = false;
+          return frontier.concat(bucket.slice(group_index));
+        }
+        if (!BuildSearch.effectDominates(group.effect, frontier[existing_index].effect)) {
+          next_frontier.push(frontier[existing_index]);
+        }
+      }
+      frontier = next_frontier;
+      frontier.push(group);
+    }
+    return frontier;
+  });
+  return {
+    groups: retained,
+    comparisons: comparisons,
+    complete: complete,
+  };
+};
+
+BuildSearch.composePairGroups = function(left_groups, right_groups, options) {
+  let settings = options || {};
+  let active_weapon_types = settings.activeWeaponTypes;
+  let pair_kind = settings.kind;
+  let symmetric = settings.symmetric === true;
+  if (!active_weapon_types || !pair_kind) {
+    throw new Error('Pair composition requires active weapon types and a pair kind.');
+  }
+  let groups_by_signature = new Map();
+  let source_pair_count = 0;
+  let start_time = Date.now();
+
+  left_groups.forEach(function(left, left_index) {
+    right_groups.forEach(function(right, right_index) {
+      if (symmetric && right_index < left_index) {
+        return;
+      }
+      let left_source = left.sources[0];
+      let right_source = right.sources[0];
+      let items = [ Item.none, Item.none, Item.none, Item.none, Item.none ];
+      if (pair_kind === 'weapons') {
+        items[1] = left.representative;
+        items[2] = right.representative;
+      } else if (pair_kind === 'miscs') {
+        items[3] = left.representative;
+        items[4] = right.representative;
+      } else {
+        throw new Error('Unknown pair kind: ' + pair_kind + '.');
+      }
+      let effect = BuildSearch.partialEquipmentEffect(items, active_weapon_types);
+      let signature = BuildSearch.partialEquipmentEffectSignature(effect);
+      let source_count = symmetric && left_index === right_index ?
+        (left.sources.length * (left.sources.length + 1)) / 2 :
+        left.sources.length * right.sources.length;
+      source_pair_count += source_count;
+      let existing = groups_by_signature.get(signature);
+      if (!existing) {
+        existing = {
+          signature: signature,
+          effect: effect,
+          source: [
+            BuildSearch.itemSourceDescriptor(left_source),
+            BuildSearch.itemSourceDescriptor(right_source),
+          ],
+          source_count: 0,
+        };
+        groups_by_signature.set(signature, existing);
+      }
+      existing.source_count += source_count;
+    });
+  });
+
+  let groups = Array.from(groups_by_signature.values());
+  let dominance = settings.pruneDominated === false ? {
+    groups: groups,
+    comparisons: 0,
+    complete: false,
+  } : this.pruneDominatedEffects(groups, {
+    maximumComparisons: settings.maximumDominanceComparisons,
+  });
+  let retained_groups = dominance.groups;
+  return {
+    groups: groups,
+    nondominated_groups: retained_groups,
+    counts: {
+      input_left: left_groups.length,
+      input_right: right_groups.length,
+      raw_ordered_pairs: left_groups.length * right_groups.length,
+      canonical_pairs: symmetric ?
+        (left_groups.length * (left_groups.length + 1)) / 2 :
+        left_groups.length * right_groups.length,
+      source_pairs: source_pair_count,
+      unique_effective: groups.length,
+      retained_after_safe_dominance: retained_groups.length,
+      dominance_comparisons: dominance.comparisons,
+      dominance_complete: dominance.complete,
+    },
+    elapsed_ms: Date.now() - start_time,
+  };
+};
+
+BuildSearch.weaponPairReport = function(left_type, right_type, options) {
+  let active_weapon_types = Array.from(new Set([ left_type, right_type ])).sort();
+  let left = this.configuredSlotGroups('weapons', active_weapon_types, Object.assign(
+    {}, options, { itemKeys: Object.keys(equipmentCatalog.weapons).filter(function(key) {
+      return equipmentCatalog.weapons[key].type === left_type;
+    }) }
+  ));
+  let right = left_type === right_type ? left :
+    this.configuredSlotGroups('weapons', active_weapon_types, Object.assign(
+      {}, options, { itemKeys: Object.keys(equipmentCatalog.weapons).filter(function(key) {
+        return equipmentCatalog.weapons[key].type === right_type;
+      }) }
+    ));
+  let report = this.composePairGroups(left.groups, right.groups, {
+    activeWeaponTypes: active_weapon_types,
+    kind: 'weapons',
+    symmetric: left_type === right_type,
+    pruneDominated: !options || options.pruneDominated !== false,
+    maximumDominanceComparisons: options && options.maximumDominanceComparisons,
+  });
+  report.profile = left_type + '+' + right_type;
+  report.active_weapon_types = active_weapon_types;
+  report.inputs = { left: left.counts, right: right.counts };
+  return report;
+};
+
+BuildSearch.miscPairReport = function(active_weapon_types, options) {
+  let variants = this.configuredSlotGroups('miscs', active_weapon_types, options);
+  let report = this.composePairGroups(variants.groups, variants.groups, {
+    activeWeaponTypes: active_weapon_types,
+    kind: 'miscs',
+    symmetric: true,
+    pruneDominated: !options || options.pruneDominated !== false,
+    maximumDominanceComparisons: options && options.maximumDominanceComparisons,
+  });
+  report.active_weapon_types = active_weapon_types.slice();
+  report.inputs = { miscs: variants.counts };
+  return report;
+};
+
+BuildSearch.armorVariantReport = function(active_weapon_types, options) {
+  let variants = this.configuredSlotGroups('armor', active_weapon_types, options);
+  let groups = variants.groups.map(function(group) {
+    let items = [ group.representative, Item.none, Item.none, Item.none, Item.none ];
+    let effect = BuildSearch.partialEquipmentEffect(items, active_weapon_types);
+    return {
+      signature: BuildSearch.partialEquipmentEffectSignature(effect),
+      effect: effect,
+      source: BuildSearch.itemSourceDescriptor(group.sources[0]),
+      source_count: group.sources.length,
+    };
+  });
+  let groups_by_signature = new Map();
+  groups.forEach(function(group) {
+    let existing = groups_by_signature.get(group.signature);
+    if (!existing) {
+      groups_by_signature.set(group.signature, group);
+    } else {
+      existing.source_count += group.source_count;
+    }
+  });
+  let unique_groups = Array.from(groups_by_signature.values());
+  let dominance = options && options.pruneDominated === false ? {
+    groups: unique_groups,
+    comparisons: 0,
+    complete: false,
+  } : this.pruneDominatedEffects(unique_groups, {
+    maximumComparisons: options && options.maximumDominanceComparisons,
+  });
+  let retained_groups = dominance.groups;
+  return {
+    groups: unique_groups,
+    nondominated_groups: retained_groups,
+    counts: {
+      base_items: variants.counts.base_items,
+      item_frontier_variants: variants.counts.item_frontier_variants,
+      unique_effective: unique_groups.length,
+      retained_after_safe_dominance: retained_groups.length,
+      dominance_comparisons: dominance.comparisons,
+      dominance_complete: dominance.complete,
+    },
+  };
+};
+
+BuildSearch.combinePackageEffects = function(weapon_group, misc_group, armor_group) {
+  let totals = new Map();
+  [ weapon_group, misc_group, armor_group ].forEach(function(group) {
+    group.effect.stats.forEach(function(stat) {
+      totals.set(stat[0], (totals.get(stat[0]) || 0) + stat[1]);
+    });
+  });
+  let stats = Array.from(totals.entries()).sort(function(left, right) {
+    return left[0].localeCompare(right[0]);
+  });
+  let effect = {
+    stats: stats,
+    weapons: weapon_group.effect.weapons.map(function(weapon) { return weapon.slice(); }),
+  };
+  return {
+    signature: this.partialEquipmentEffectSignature(effect),
+    effect: effect,
+    source: {
+      armor: armor_group.source,
+      weapon1: weapon_group.source[0],
+      weapon2: weapon_group.source[1],
+      misc1: misc_group.source[0],
+      misc2: misc_group.source[1],
+    },
+  };
+};
+
+BuildSearch.coordinatedWeaponPair = function(left_item, right_item, options) {
+  let active_weapon_types = Array.from(new Set([
+    Item[left_item].type,
+    Item[right_item].type,
+  ])).sort();
+  let variants = this.configuredSlotGroups('weapons', active_weapon_types, options);
+  let findSource = function(item_key) {
+    for (let group of variants.groups) {
+      let source = group.sources.find(function(candidate) {
+        return candidate.item === item_key;
+      });
+      if (source) {
+        return { group: group, source: source };
+      }
+    }
+    return null;
+  };
+  let left = findSource(left_item);
+  let right = findSource(right_item);
+  if (!left || !right) {
+    return null;
+  }
+  let items = [ Item.none, left.group.representative, right.group.representative,
+    Item.none, Item.none ];
+  let effect = this.partialEquipmentEffect(items, active_weapon_types);
+  return {
+    signature: this.partialEquipmentEffectSignature(effect),
+    effect: effect,
+    source: [
+      this.itemSourceDescriptor(left.source),
+      this.itemSourceDescriptor(right.source),
+    ],
+  };
+};
+
+BuildSearch.buildFromPackage = function(name, weapon_group, misc_group, armor_group, stats) {
+  return {
+    name: name,
+    level: 80,
+    reference: false,
+    stats: Object.assign({}, stats),
+    attack_type: 'normal',
+    equipment: {
+      armor: armor_group.source,
+      weapon1: weapon_group.source[0],
+      weapon2: weapon_group.source[1],
+      misc1: misc_group.source[0],
+      misc2: misc_group.source[1],
+    },
+  };
+};
+
 BuildSearch.normalizeEquipment = function(build, options) {
   let settings = options || {};
   let slots = settings.slots || [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
@@ -2898,6 +3305,9 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   exact_result.search_defeat_cache = frontier_result.defeat_cache;
   exact_result.search_matchup_cache = frontier_result.matchup_cache;
   exact_result.minimum_survival_probability = minimum_survival_probability;
+  exact_result.approximate_best_weighted_score = frontier_result.best_weighted.weighted_score;
+  exact_result.approximate_best_weighted_error_bound =
+    frontier_result.best_weighted.weighted_score_error_bound;
   exact_result.exact_finalist_count = finalists.length;
   exact_result.stages = stages;
   exact_result.convergence = convergence;

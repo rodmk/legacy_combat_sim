@@ -72,6 +72,17 @@ yarn search:stats > stat-search.json
 
 Each refinement explores the neighborhoods of the preceding combat and economy frontiers. One-point expansion continues until no unseen frontier neighbors remain, and the final frontier candidates are evaluated exactly.
 
+Search-space census
+===================
+
+Measure canonical weapon pairs, skill-conditioned misc pairs, armor variants, and their symbolic package cross-products without materializing the complete package space:
+
+```sh
+yarn --silent analyze:search-space > search-space-census.json
+```
+
+The report separates raw combinations, combat-equivalent effects, and variants removed by proven componentwise dominance. Dominance scans have an explicit comparison budget and report whether they completed; unexamined variants are retained conservatively. Each weapon profile also compares a fixed stat allocation with coarse conditional stat and attack optimization followed by exact finalist evaluation.
+
 Development
 ===========
 
