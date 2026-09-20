@@ -6,6 +6,7 @@ let build = src.Build.ControlledKernel;
 let opponent = src.Player.generateBuild(build);
 let widths = [ 8 ];
 let tolerances = (process.env.SEARCH_TOLERANCES || '0.001').split(',').map(Number);
+let progressive_combat_fidelity = process.env.PROGRESSIVE_COMBAT_FIDELITY !== 'false';
 
 let results = widths.flatMap(function(width) {
   return tolerances.map(function(tolerance) {
@@ -20,11 +21,13 @@ let results = widths.flatMap(function(width) {
         beamWidth: width,
         improvementTolerance: tolerance,
         minimumSurvivalProbability: 1e-6,
+        progressiveCombatFidelity: progressive_combat_fidelity,
       }
   );
     return {
       beam_width: width,
       improvement_tolerance: tolerance,
+      progressive_combat_fidelity: progressive_combat_fidelity,
       returned_responses: response.beam.length,
       iterations: response.iterations.length,
       converged: response.converged,

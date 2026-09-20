@@ -1562,6 +1562,41 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   test.equal(response.convergence_reason, 'repeated_beam');
   test.ok(response.timings_ms.total >= response.timings_ms.equipment);
 
+  let staged_equipment = MatchupGame.equipmentResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    {
+      beamWidth: 2,
+      screeningBeamWidth: 4,
+      screeningMinimumSurvivalProbability: 0.05,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  let regular_equipment = MatchupGame.equipmentResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    {
+      beamWidth: 2,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.ok(staged_equipment.screening_matchups > 0);
+  test.ok(staged_equipment.validation_matchups > 0);
+  test.equal(
+    staged_equipment.beam[0].best_response.signature,
+    regular_equipment.beam[0].best_response.signature
+  );
+
   let full_fidelity = MatchupGame.jointEquipmentStatResponseBeam(
     build,
     [ opponent ],

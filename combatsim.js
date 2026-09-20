@@ -1853,20 +1853,59 @@ MatchupGame.equipmentResponseBeam = function(
   let beam_width = options.beamWidth || 8;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
+  let screening_survival_probability = options.screeningMinimumSurvivalProbability;
+  let screening_beam_width = options.screeningBeamWidth || beam_width * 2;
   let neighborhood_started = Date.now();
   let neighborhood = BuildSearch.equipmentNeighborhood(build, options);
   let neighborhood_ms = Date.now() - neighborhood_started;
   let approximate_started = Date.now();
   let approximate = this.candidateFrontiers(
     neighborhood.groups, opponents, opponent_ids, {
-      defeatCache: options.defeatCache,
-      matchupCache: options.matchupCache,
-      minimumSurvivalProbability: minimum_survival_probability,
+      defeatCache: screening_survival_probability === undefined ? options.defeatCache :
+        options.screeningDefeatCache,
+      matchupCache: screening_survival_probability === undefined ? options.matchupCache :
+        options.screeningMatchupCache,
+      minimumSurvivalProbability: screening_survival_probability === undefined ?
+        minimum_survival_probability : screening_survival_probability,
       opponentWeights: opponent_weights,
       includeCandidates: true,
       trackFrontiers: false,
     }
   );
+  let screening_matchups = 0;
+  let validation_matchups = approximate.evaluated_matchups;
+  if (screening_survival_probability !== undefined) {
+    screening_matchups = approximate.evaluated_matchups;
+    let screening_concepts = new Map();
+    approximate.candidates.forEach(function(candidate) {
+      candidate.sources.forEach(function(source) {
+        let signature = BuildSearch.equipmentConceptSignature(source.build);
+        let existing = screening_concepts.get(signature);
+        if (!existing || candidate.weighted_score > existing.weighted_score) {
+          screening_concepts.set(signature, candidate);
+        }
+      });
+    });
+    let retained_concepts = new Set(Array.from(screening_concepts.entries()).sort(
+      function(left, right) { return right[1].weighted_score - left[1].weighted_score; }
+    ).slice(0, screening_beam_width).map(function(entry) { return entry[0]; }));
+    let validation_groups = neighborhood.groups.filter(function(group) {
+      return group.sources.some(function(source) {
+        return retained_concepts.has(BuildSearch.equipmentConceptSignature(source.build));
+      });
+    });
+    approximate = this.candidateFrontiers(
+      validation_groups, opponents, opponent_ids, {
+        defeatCache: options.defeatCache,
+        matchupCache: options.matchupCache,
+        minimumSurvivalProbability: minimum_survival_probability,
+        opponentWeights: opponent_weights,
+        includeCandidates: true,
+        trackFrontiers: false,
+      }
+    );
+    validation_matchups = approximate.evaluated_matchups;
+  }
   let approximate_ms = Date.now() - approximate_started;
   let selection_started = Date.now();
   let concepts = new Map();
@@ -1945,7 +1984,9 @@ MatchupGame.equipmentResponseBeam = function(
     selected_concept_count: selected_concepts.length,
     candidate_count: neighborhood.counts.unique_combat_signatures,
     finalist_count: finalists.length,
-    evaluated_matchups: approximate.evaluated_matchups,
+    evaluated_matchups: screening_matchups + validation_matchups,
+    screening_matchups: screening_matchups,
+    validation_matchups: validation_matchups,
     exact_matchups: exact.evaluated_matchups,
     timings_ms: {
       neighborhood: neighborhood_ms,
@@ -2327,8 +2368,11 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
   let improvement_tolerance = options.improvementTolerance === undefined ?
     1e-3 : options.improvementTolerance;
   let progressive_stat_fidelity = options.progressiveStatFidelity !== false;
+  let progressive_combat_fidelity = options.progressiveCombatFidelity !== false;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
+  let screening_survival_probability = options.screeningMinimumSurvivalProbability === undefined ?
+    0.05 : options.screeningMinimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
     beamWidth: beam_width,
     defeatCache: options.defeatCache ||
@@ -2336,6 +2380,12 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+    screeningMinimumSurvivalProbability: progressive_combat_fidelity ?
+      screening_survival_probability : undefined,
+    screeningDefeatCache: options.screeningDefeatCache ||
+      CombatSim.createDefeatRoundCache(screening_survival_probability),
+    screeningMatchupCache: options.screeningMatchupCache ||
+      { values: new Map(), hits: 0, misses: 0 },
   });
   let seeds = [ build ];
   let seen_beams = new Set();
