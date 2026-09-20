@@ -1836,8 +1836,10 @@ exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
   let search = MatchupGame.endogenousEquipmentSearch(kernel, {
     beamWidth: 2,
     batchSize: 2,
-    maxRounds: 2,
-    maxIterations: 1,
+    maxRounds: 3,
+    attackTypes: [ 'normal' ],
+    hpPoints: [ 70 ],
+    pointStrides: [ 11 ],
     slots: [ 'weapon1' ],
     itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
     crystalKeys: [ 'PerfectFire' ],
@@ -1845,11 +1847,17 @@ exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
   });
 
   test.ok(search.converged);
-  test.equal(search.rounds.length, 2);
+  test.equal(search.rounds.length, 3);
   test.equal(search.rounds[0].added.length, 1);
-  test.equal(search.rounds[1].added.length, 0);
+  test.equal(search.rounds[1].added.length, 1);
+  test.equal(search.rounds[2].added.length, 0);
+  test.equal(
+    search.rounds[0].added[0].concept_signature,
+    search.rounds[1].added[0].concept_signature
+  );
+  test.notDeepEqual(search.rounds[0].added[0].build.stats, search.rounds[1].added[0].build.stats);
   test.ok(search.caches.catalog_matchups.hits > 0);
-  test.equal(Object.keys(search.catalog).length, 2);
+  test.equal(Object.keys(search.catalog).length, 3);
   test.done();
 };
 

@@ -2131,30 +2131,23 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let starting_build = options.startBuild || catalog[equilibrium_entries.slice().sort(
     function(left, right) { return right.weight - left.weight; }
   )[0].candidate];
+  let attack_types = options.attackTypes || [ 'normal', 'quick', 'aimed', 'cover' ];
   let search_started = Date.now();
-  let response = this.adaptiveEquipmentResponseBeam(
-    starting_build,
-    opponents,
-    opponent_ids,
-    opponent_weights,
-    options
+  let response = this.jointEquipmentStatResponseBeam(
+    starting_build, opponents, opponent_ids, opponent_weights, attack_types, options
   );
   let search_ms = Date.now() - search_started;
   let archived_signatures = new Set(Object.keys(catalog).map(function(key) {
     return CombatSim.combatSignature(Player.generateBuild(catalog[key]));
   }));
-  let archived_concepts = new Set(Object.keys(catalog).map(function(key) {
-    return BuildSearch.equipmentConceptSignature(catalog[key]);
-  }));
   let profitable = response.beam.filter(function(entry) {
-    return entry.best_response.weighted_score > 0.5 + improvement_tolerance &&
-      !archived_signatures.has(entry.best_response.signature) &&
-      !archived_concepts.has(entry.concept_signature);
+    return entry.weighted_score > 0.5 + improvement_tolerance &&
+      !archived_signatures.has(entry.signature);
   });
   let provisional_catalog = Object.assign({}, catalog);
   profitable.forEach(function(entry, index) {
     provisional_catalog['ProvisionalResponse' + index] = Object.assign(
-      {}, entry.best_response.sources[0].build, { reference: false }
+      {}, entry.build, { reference: false }
     );
   });
   let provisional_analysis = profitable.length > 0 ? this.analyzeBuildCatalog(
@@ -2173,7 +2166,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let expanded_catalog = Object.assign({}, catalog);
   selected.forEach(function(entry, index) {
     let key = 'EndogenousResponse' + (Object.keys(catalog).length + index);
-    let build = Object.assign({}, entry.best_response.sources[0].build, {
+    let build = Object.assign({}, entry.build, {
       name: 'Endogenous Response ' + (Object.keys(catalog).length + index),
       reference: false,
     });
@@ -2191,7 +2184,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
       return {
         id: 'EndogenousResponse' + (Object.keys(catalog).length + index),
         concept_signature: entry.concept_signature,
-        score_against_equilibrium: entry.best_response.weighted_score,
+        score_against_equilibrium: entry.weighted_score,
         build: expanded_catalog['EndogenousResponse' + (Object.keys(catalog).length + index)],
       };
     }),
@@ -2244,6 +2237,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       support_size: support.size,
       equilibrium: expansion.after.inferred_meta,
       response_converged: expansion.response.converged,
+      response_convergence_reason: expansion.response.convergence_reason,
       response_iterations: expansion.response.iterations.length,
       timings_ms: expansion.timings_ms,
     });
