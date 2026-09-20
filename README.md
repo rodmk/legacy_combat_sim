@@ -83,6 +83,14 @@ yarn --silent analyze:search-space > search-space-census.json
 
 The report separates raw combinations, combat-equivalent effects, and variants removed by proven componentwise dominance. Dominance scans have an explicit comparison budget and report whether they completed; unexamined variants are retained conservatively. Each weapon profile also compares a fixed stat allocation with coarse conditional stat and attack optimization followed by exact finalist evaluation.
 
+Treat the five base equipment items and weapon mods as a signature, with crystals, allocated stats, and attack type inside its attainable specialization region:
+
+```sh
+yarn --silent analyze:regions > attainable-regions.json
+```
+
+The report counts the complete equipment-signature space, samples strict region-envelope dominance, and compares a safe opponent-conditioned relaxation with configured crystal and stat specialization. The relaxation combines independently attainable maxima, so its score is an upper bound rather than a legal build. It first scores every signature with a cheap matchup proxy and retains both global leaders and leaders within armor-and-weapon diversity buckets. A second proxy pass evaluates legal directional crystal loadouts jointly with representative stat allocations and attack types, retaining global leaders plus one representative from each weapon-pair family. Promoted signatures are then configured with the more expensive search and compared with control samples; this measures screening yield, not exhaustive recall.
+
 Development
 ===========
 

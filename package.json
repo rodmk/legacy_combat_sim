@@ -6,6 +6,7 @@
     "analyze:seed": "node scripts/analyze-seed-builds.js",
     "analyze:allocations": "node scripts/analyze-stat-allocations.js",
     "analyze:search-space": "node scripts/analyze-search-space.js",
+    "analyze:regions": "node scripts/analyze-attainable-regions.js",
     "search:min-hp": "node scripts/search-minimum-hp.js",
     "search:stats": "node scripts/search-stat-allocations.js",
     "search:equipment": "node scripts/search-equipment-response.js",
