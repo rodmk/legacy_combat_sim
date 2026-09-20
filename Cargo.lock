@@ -162,7 +162,6 @@ dependencies = [
  "approx",
  "clap",
  "rand",
- "rand_chacha",
  "serde",
  "serde_json",
 ]

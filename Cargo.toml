@@ -8,8 +8,7 @@ description = "Combat simulation tools for Legacy"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-rand = "0.8"
-rand_chacha = "0.3"
+rand = { version = "0.8", features = ["small_rng"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

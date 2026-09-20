@@ -25,6 +25,14 @@ loaded by repeating `--catalog path/to/builds.json`. The catalog, player
 materialization, and combat modules are library APIs so later inference-engine
 work can reuse the same rules without going through the CLI.
 
+The [combat model](docs/combat-model.md) records initiative, attack ordering,
+rounding, equipment, attack-mode, and randomness assumptions. Public Rust APIs
+also include generated documentation:
+
+```sh
+cargo doc --open
+```
+
 List all bundled build keys with:
 
 ```sh

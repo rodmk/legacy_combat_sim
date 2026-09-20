@@ -6,10 +6,11 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::model::{
-    AttackType, BuildDefinition, CrystalDefinition, ItemDefinition, ItemSelection, Multipliers,
-    Player, Stats, Weapon, WeaponModDefinition, WeaponType,
+    AttackType, BuildDefinition, CombatRole, CrystalDefinition, ItemDefinition, ItemSelection,
+    Matchup, Multipliers, Player, Stats, Weapon, WeaponModDefinition, WeaponType,
 };
 
+/// Ordered mapping from stable build keys to build definitions.
 pub type BuildCatalog = BTreeMap<String, BuildDefinition>;
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +21,7 @@ struct EquipmentCatalog {
 }
 
 #[derive(Debug)]
+/// Equipment, modifier, and build catalogs used to materialize combatants.
 pub struct Catalogs {
     equipment: EquipmentCatalog,
     crystals: HashMap<String, CrystalDefinition>,
@@ -35,6 +37,7 @@ struct MaterializedItem {
 }
 
 impl Catalogs {
+    /// Loads the equipment data and primary build catalogs bundled with the crate.
     pub fn bundled() -> Result<Self> {
         let equipment = serde_json::from_str(include_str!("../data/equipment.json"))?;
         let crystals = serde_json::from_str(include_str!("../data/crystals.json"))?;
@@ -58,6 +61,9 @@ impl Catalogs {
         Ok(catalogs)
     }
 
+    /// Merges a schema-compatible JSON build catalog from disk.
+    ///
+    /// Returns an error if a key duplicates any previously loaded build.
     pub fn add_build_catalog(&mut self, path: &Path) -> Result<()> {
         let data = fs::read_to_string(path)
             .with_context(|| format!("failed to read build catalog {}", path.display()))?;
@@ -75,16 +81,28 @@ impl Catalogs {
         Ok(())
     }
 
+    /// Looks up a build by its stable catalog key.
     pub fn build(&self, key: &str) -> Result<&BuildDefinition> {
         self.builds
             .get(key)
             .with_context(|| format!("unknown build: {key}"))
     }
 
+    /// Iterates over build keys in stable lexical order.
     pub fn build_keys(&self) -> impl Iterator<Item = &str> {
         self.builds.keys().map(String::as_str)
     }
 
+    /// Iterates over build keys and definitions in stable lexical order.
+    pub fn builds(&self) -> impl Iterator<Item = (&str, &BuildDefinition)> {
+        self.builds.iter().map(|(key, build)| (key.as_str(), build))
+    }
+
+    /// Returns the members of a bundled named enemy set.
+    ///
+    /// Supported names are `shadow-dojo` and `reference`. Shadow Dojo membership
+    /// follows the existing `ShadowDojo` build-key convention; reference membership
+    /// includes builds whose `reference` property is absent or true.
     pub fn enemy_set(&self, name: &str) -> Result<Vec<(&str, &BuildDefinition)>> {
         let prefix = match name {
             "shadow-dojo" => "ShadowDojo",
@@ -106,7 +124,11 @@ impl Catalogs {
             .collect())
     }
 
-    pub fn materialize(&self, build: &BuildDefinition, attacking: bool) -> Result<Player> {
+    /// Validates and converts a build definition into combat-ready statistics.
+    ///
+    /// [`CombatRole::Attacker`] applies the build's selected attack mode.
+    /// [`CombatRole::Defender`] uses normal-mode speed, accuracy, and dodge.
+    pub fn materialize(&self, build: &BuildDefinition, role: CombatRole) -> Result<Player> {
         if build.level != 80 {
             bail!("builds require level 80");
         }
@@ -166,7 +188,7 @@ impl Catalogs {
             stats.add(bonuses);
         }
 
-        if attacking {
+        if role == CombatRole::Attacker {
             apply_attack_type(&mut stats, build.attack_type);
         }
         Ok(Player {
@@ -176,6 +198,18 @@ impl Catalogs {
             stats,
             weapon1: weapon_from_item(&items[1])?,
             weapon2: weapon_from_item(&items[2])?,
+        })
+    }
+
+    /// Materializes both sides of a directional build matchup with the correct roles.
+    pub fn materialize_matchup(
+        &self,
+        attacker: &BuildDefinition,
+        defender: &BuildDefinition,
+    ) -> Result<Matchup> {
+        Ok(Matchup {
+            attacker: self.materialize(attacker, CombatRole::Attacker)?,
+            defender: self.materialize(defender, CombatRole::Defender)?,
         })
     }
 
@@ -309,7 +343,10 @@ mod tests {
     fn materializes_known_build() {
         let catalogs = Catalogs::bundled().unwrap();
         let player = catalogs
-            .materialize(catalogs.build("ShadowDojoDLGunBuild2").unwrap(), true)
+            .materialize(
+                catalogs.build("ShadowDojoDLGunBuild2").unwrap(),
+                CombatRole::Attacker,
+            )
             .unwrap();
         assert_eq!(player.max_hp, 865);
         assert_eq!(player.weapon1.weapon_type, WeaponType::Gun);

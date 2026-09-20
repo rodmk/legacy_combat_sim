@@ -4,8 +4,9 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use legacy_combat_sim::catalog::Catalogs;
 use legacy_combat_sim::combat;
+use legacy_combat_sim::model::CombatRole;
+use rand::rngs::SmallRng;
 use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
 use serde::Serialize;
 
 #[derive(Debug, Parser)]
@@ -97,7 +98,7 @@ fn main() -> Result<()> {
             }
             let catalogs = load_catalogs(&catalogs)?;
             let build_definition = catalogs.build(&build)?;
-            let player = catalogs.materialize(build_definition, true)?;
+            let player = catalogs.materialize(build_definition, CombatRole::Attacker)?;
             let enemies = if !enemy.is_empty() {
                 enemy
                     .iter()
@@ -111,10 +112,10 @@ fn main() -> Result<()> {
             }
 
             let seed = seed.unwrap_or_else(rand::random);
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = SmallRng::seed_from_u64(seed);
             let mut matchups = Vec::with_capacity(enemies.len());
             for (enemy_key, enemy_build) in enemies {
-                let opponent = catalogs.materialize(enemy_build, false)?;
+                let opponent = catalogs.materialize(enemy_build, CombatRole::Defender)?;
                 let result = combat::simulate(&player, &opponent, fights, &mut rng);
                 matchups.push(MatchupReport {
                     enemy: enemy_key.to_owned(),

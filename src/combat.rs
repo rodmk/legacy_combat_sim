@@ -2,8 +2,13 @@ use rand::Rng;
 
 use crate::model::{Player, SimulationResult, Weapon};
 
+/// Number of complete attack-and-counterattack rounds before an unresolved fight draws.
 pub const MAX_COMBAT_ROUNDS: usize = 100;
 
+/// Returns the documented probability that one statistic beats another.
+///
+/// Division remains fractional, matching the PHP formula on which the legacy
+/// implementation is based. Equal values produce a probability of `0.5`.
 pub fn combat_probability(offense: i32, defense: i32) -> f64 {
     let offense = f64::from(offense);
     let defense = f64::from(defense);
@@ -19,12 +24,24 @@ pub fn combat_probability(offense: i32, defense: i32) -> f64 {
     }
 }
 
+/// Applies level-based armor reduction and rounds the result to the nearest integer.
+///
+/// Attacker level is capped at 80 before calculating the modifier.
 pub fn damage_after_armor(attacker_level: u32, defender_armor: i32, base_damage: i32) -> i32 {
     let level_modifier = f64::from(attacker_level.min(80)) * 7.0 / 2.0;
     (f64::from(base_damage) * (level_modifier / (level_modifier + f64::from(defender_armor))))
         .round() as i32
 }
 
+/// Simulates `fights` independent combats and aggregates their outcomes.
+///
+/// The faster player attacks first. A speed tie favors `player1`, preserving the
+/// caller's initiative. Each turn resolves both weapons before checking for defeat;
+/// a defeated opponent does not counterattack. Fights still unresolved after
+/// [`MAX_COMBAT_ROUNDS`] are draws.
+///
+/// The caller owns the random-number generator, allowing reproducible runs and a
+/// deliberate choice of generator without coupling the combat model to one RNG.
 pub fn simulate<R: Rng + ?Sized>(
     player1: &Player,
     player2: &Player,
@@ -32,57 +49,120 @@ pub fn simulate<R: Rng + ?Sized>(
     rng: &mut R,
 ) -> SimulationResult {
     let mut result = SimulationResult::default();
+    let matchup = PreparedMatchup::new(player1, player2);
     for _ in 0..fights {
-        let winner = if player2.stats.speed > player1.stats.speed {
-            fight(player2, player1, rng).map(|winner| if winner == 0 { 1 } else { 0 })
-        } else {
-            fight(player1, player2, rng)
-        };
-        match winner {
-            Some(0) => result.player1_wins += 1,
-            Some(1) => result.player2_wins += 1,
-            None => result.draws += 1,
-            _ => unreachable!(),
+        match matchup.fight(rng) {
+            FightOutcome::Player1Win => result.player1_wins += 1,
+            FightOutcome::Player2Win => result.player2_wins += 1,
+            FightOutcome::Draw => result.draws += 1,
         }
     }
     result
 }
 
-fn fight<R: Rng + ?Sized>(attacker: &Player, defender: &Player, rng: &mut R) -> Option<usize> {
-    let mut attacker_hp = attacker.max_hp;
-    let mut defender_hp = defender.max_hp;
-    for _ in 0..MAX_COMBAT_ROUNDS {
-        defender_hp -= attack(attacker, defender, rng);
-        if defender_hp <= 0 {
-            return Some(0);
-        }
-        attacker_hp -= attack(defender, attacker, rng);
-        if attacker_hp <= 0 {
-            return Some(1);
+#[derive(Clone, Copy)]
+enum FightOutcome {
+    Player1Win,
+    Player2Win,
+    Draw,
+}
+
+struct PreparedMatchup {
+    attacker: PreparedPlayer,
+    defender: PreparedPlayer,
+    attacker_is_player1: bool,
+}
+
+impl PreparedMatchup {
+    fn new(player1: &Player, player2: &Player) -> Self {
+        if player2.stats.speed > player1.stats.speed {
+            Self {
+                attacker: PreparedPlayer::new(player2, player1),
+                defender: PreparedPlayer::new(player1, player2),
+                attacker_is_player1: false,
+            }
+        } else {
+            Self {
+                attacker: PreparedPlayer::new(player1, player2),
+                defender: PreparedPlayer::new(player2, player1),
+                attacker_is_player1: true,
+            }
         }
     }
-    None
+
+    fn fight<R: Rng + ?Sized>(&self, rng: &mut R) -> FightOutcome {
+        let mut attacker_hp = self.attacker.max_hp;
+        let mut defender_hp = self.defender.max_hp;
+        for _ in 0..MAX_COMBAT_ROUNDS {
+            defender_hp -= self.attacker.attack(rng);
+            if defender_hp <= 0 {
+                return if self.attacker_is_player1 {
+                    FightOutcome::Player1Win
+                } else {
+                    FightOutcome::Player2Win
+                };
+            }
+            attacker_hp -= self.defender.attack(rng);
+            if attacker_hp <= 0 {
+                return if self.attacker_is_player1 {
+                    FightOutcome::Player2Win
+                } else {
+                    FightOutcome::Player1Win
+                };
+            }
+        }
+        FightOutcome::Draw
+    }
 }
 
-fn attack<R: Rng + ?Sized>(attacker: &Player, defender: &Player, rng: &mut R) -> i32 {
-    attempt_hit(attacker, defender, &attacker.weapon1, rng)
-        + attempt_hit(attacker, defender, &attacker.weapon2, rng)
+struct PreparedPlayer {
+    max_hp: i32,
+    weapons: [PreparedWeapon; 2],
 }
 
-fn attempt_hit<R: Rng + ?Sized>(
-    attacker: &Player,
-    defender: &Player,
-    weapon: &Weapon,
-    rng: &mut R,
-) -> i32 {
-    if rng.gen::<f64>() < combat_probability(attacker.stats.accuracy, defender.stats.dodge)
-        && rng.gen::<f64>()
-            < combat_probability(attacker.skill_for(weapon), defender.stats.def_skill)
-    {
-        let base_damage = rng.gen_range(weapon.min_damage..=weapon.max_damage);
-        damage_after_armor(attacker.level, defender.stats.armor, base_damage)
-    } else {
-        0
+impl PreparedPlayer {
+    fn new(attacker: &Player, defender: &Player) -> Self {
+        Self {
+            max_hp: attacker.max_hp,
+            weapons: [
+                PreparedWeapon::new(attacker, defender, &attacker.weapon1),
+                PreparedWeapon::new(attacker, defender, &attacker.weapon2),
+            ],
+        }
+    }
+
+    fn attack<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
+        self.weapons[0].attempt_hit(rng) + self.weapons[1].attempt_hit(rng)
+    }
+}
+
+struct PreparedWeapon {
+    accuracy_probability: f64,
+    skill_probability: f64,
+    damage_outcomes: Vec<i32>,
+}
+
+impl PreparedWeapon {
+    fn new(attacker: &Player, defender: &Player, weapon: &Weapon) -> Self {
+        Self {
+            accuracy_probability: combat_probability(attacker.stats.accuracy, defender.stats.dodge),
+            skill_probability: combat_probability(
+                attacker.skill_for(weapon),
+                defender.stats.def_skill,
+            ),
+            damage_outcomes: (weapon.min_damage..=weapon.max_damage)
+                .map(|damage| damage_after_armor(attacker.level, defender.stats.armor, damage))
+                .collect(),
+        }
+    }
+
+    fn attempt_hit<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
+        if rng.gen::<f64>() < self.accuracy_probability && rng.gen::<f64>() < self.skill_probability
+        {
+            self.damage_outcomes[rng.gen_range(0..self.damage_outcomes.len())]
+        } else {
+            0
+        }
     }
 }
 
