@@ -1545,6 +1545,10 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
     response.equipment_response.beam[0].best_response.weighted_score);
   test.equal(response.iterations.length, 2);
   test.equal(response.iterations[1].seed_count, response.beam.length);
+  test.ok(response.iterations[1].stat_search_cache_hits > 0);
+  test.ok(response.iterations.every(function(iteration) {
+    return iteration.equipment_combat_signature_count <= iteration.equipment_concept_count;
+  }));
   test.ok(response.converged);
   test.equal(response.convergence_reason, 'repeated_beam');
   test.ok(response.timings_ms.total >= response.timings_ms.equipment);
@@ -1866,6 +1870,7 @@ exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
   );
   test.notDeepEqual(search.rounds[0].added[0].build.stats, search.rounds[1].added[0].build.stats);
   test.ok(search.caches.catalog_matchups.hits > 0);
+  test.ok(search.caches.stat_searches.hits > 0);
   test.equal(Object.keys(search.catalog).length, 3);
   test.done();
 };

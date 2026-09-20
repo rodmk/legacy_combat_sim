@@ -2216,6 +2216,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
     matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+    statSearchCache: options.statSearchCache || { values: new Map(), hits: 0, misses: 0 },
   });
   delete shared_options.startBuild;
   let current_catalog = Object.assign({}, catalog);
@@ -2240,6 +2241,23 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       response_converged: expansion.response.converged,
       response_convergence_reason: expansion.response.convergence_reason,
       response_iterations: expansion.response.iterations.length,
+      response_passes: expansion.response.iterations.map(function(iteration) {
+        return {
+          iteration: iteration.iteration,
+          seed_count: iteration.seed_count,
+          equipment_candidate_count: iteration.equipment_candidate_count,
+          equipment_finalist_count: iteration.equipment_finalist_count,
+          equipment_concept_count: iteration.equipment_concept_count,
+          equipment_combat_signature_count: iteration.equipment_combat_signature_count,
+          stat_search_requests: iteration.stat_search_requests,
+          stat_search_cache_hits: iteration.stat_search_cache_hits,
+          stat_search_cache_misses: iteration.stat_search_cache_misses,
+          stat_candidate_count: iteration.stat_candidate_count,
+          exact_stat_finalist_count: iteration.exact_stat_finalist_count,
+          improvement: iteration.improvement,
+          timings_ms: iteration.timings_ms,
+        };
+      }),
       timings_ms: expansion.timings_ms,
     });
     current_catalog = expansion.catalog;
@@ -2278,6 +2296,7 @@ MatchupGame.equipmentSearchCacheStats = function(options) {
     catalog_matchups: stats(options.catalogMatchupCache),
     approximate_matchups: stats(options.matchupCache),
     exact_matchups: stats(options.exactMatchupCache),
+    stat_searches: stats(options.statSearchCache),
   };
 };
 
@@ -2299,6 +2318,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+    statSearchCache: options.statSearchCache || { values: new Map(), hits: 0, misses: 0 },
   });
   let seeds = [ build ];
   let seen_beams = new Set();
@@ -2349,14 +2369,24 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
         best_response: candidate,
       });
     });
-    let equipment_beam = Array.from(equipment_by_concept.values()).sort(
+    let ranked_equipment = Array.from(equipment_by_concept.values()).sort(
       function(left, right) {
         return right.best_response.weighted_score - left.best_response.weighted_score;
       }
-    ).slice(0, beam_width);
-    equipment_ms += Date.now() - equipment_started;
+    );
+    let equipment_by_combat = new Map();
+    ranked_equipment.forEach(function(entry) {
+      if (!equipment_by_combat.has(entry.best_response.signature)) {
+        equipment_by_combat.set(entry.best_response.signature, entry);
+      }
+    });
+    let equipment_beam = Array.from(equipment_by_combat.values()).slice(0, beam_width);
+    let iteration_equipment_ms = Date.now() - equipment_started;
+    equipment_ms += iteration_equipment_ms;
     equipment = {
       beam: equipment_beam,
+      concept_count: equipment_by_concept.size,
+      combat_signature_count: equipment_by_combat.size,
       candidate_count: responses.reduce(function(sum, response) {
         return sum + response.candidate_count;
       }, 0),
@@ -2372,17 +2402,39 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     };
 
     let responses_by_signature = new Map();
+    let iteration_stat_started = Date.now();
+    let stat_cache_hits_before = shared_options.statSearchCache.hits;
+    let stat_cache_misses_before = shared_options.statSearchCache.misses;
+    let stat_candidate_count = 0;
+    let exact_stat_finalist_count = 0;
     equipment_beam.forEach(function(entry) {
       let equipment_build = entry.best_response.sources[0].build;
-      let stat_started = Date.now();
-      let stats = MatchupGame.adaptiveStatFrontiers(
-        equipment_build,
-        opponents,
-        opponent_ids,
+      let stat_cache_key = JSON.stringify([
+        CombatSim.combatSignature(Player.generateBuild(equipment_build)),
+        opponents.map(function(opponent) { return CombatSim.combatSignature(opponent); }),
+        opponent_weights,
         attack_types,
-        Object.assign({}, shared_options, { opponentWeights: opponent_weights })
-      );
-      stat_ms += Date.now() - stat_started;
+        options.hpPoints || null,
+        options.pointStrides || [ 11, 5, 2, 1 ],
+        minimum_survival_probability,
+      ]);
+      let stats;
+      if (shared_options.statSearchCache.values.has(stat_cache_key)) {
+        shared_options.statSearchCache.hits++;
+        stats = shared_options.statSearchCache.values.get(stat_cache_key);
+      } else {
+        shared_options.statSearchCache.misses++;
+        stats = MatchupGame.adaptiveStatFrontiers(
+          equipment_build,
+          opponents,
+          opponent_ids,
+          attack_types,
+          Object.assign({}, shared_options, { opponentWeights: opponent_weights })
+        );
+        shared_options.statSearchCache.values.set(stat_cache_key, stats);
+        stat_candidate_count += stats.search_candidate_count;
+        exact_stat_finalist_count += stats.exact_finalist_count;
+      }
       let source = stats.best_weighted.sources[0];
       let response_build = Object.assign({}, equipment_build, {
         stats: source.stats,
@@ -2401,6 +2453,8 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
         responses_by_signature.set(signature, response);
       }
     });
+    let iteration_stat_ms = Date.now() - iteration_stat_started;
+    stat_ms += iteration_stat_ms;
     beam = Array.from(responses_by_signature.values()).sort(function(left, right) {
       return right.weighted_score - left.weighted_score;
     }).slice(0, beam_width);
@@ -2412,6 +2466,20 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       seed_count: seeds.length,
       equipment_candidate_count: equipment.candidate_count,
       equipment_finalist_count: equipment.finalist_count,
+      equipment_concept_count: equipment.concept_count,
+      equipment_combat_signature_count: equipment.combat_signature_count,
+      stat_search_requests: equipment_beam.length,
+      stat_search_cache_hits: shared_options.statSearchCache.hits - stat_cache_hits_before,
+      stat_search_cache_misses: shared_options.statSearchCache.misses - stat_cache_misses_before,
+      stat_candidate_count: stat_candidate_count,
+      exact_stat_finalist_count: exact_stat_finalist_count,
+      improvement: previous_best_score === null ? null :
+        beam[0].weighted_score - previous_best_score,
+      timings_ms: {
+        equipment: iteration_equipment_ms,
+        stats: iteration_stat_ms,
+        total: iteration_equipment_ms + iteration_stat_ms,
+      },
       beam: beam,
     });
     let repeated = seen_beams.has(beam_signature);
