@@ -47,6 +47,8 @@ let results = widths.map(function(width) {
         exact_stat_finalists: iteration.exact_stat_finalist_count,
         improvement: iteration.improvement,
         timings_ms: iteration.timings_ms,
+        equipment_profile_ms: iteration.equipment_profile_ms,
+        stat_profile_ms: iteration.stat_profile_ms,
       };
     }),
   };
