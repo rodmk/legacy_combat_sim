@@ -2216,7 +2216,6 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
     matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
-    statSearchCache: options.statSearchCache || { values: new Map(), hits: 0, misses: 0 },
   });
   delete shared_options.startBuild;
   let current_catalog = Object.assign({}, catalog);
@@ -2250,8 +2249,6 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
           equipment_concept_count: iteration.equipment_concept_count,
           equipment_combat_signature_count: iteration.equipment_combat_signature_count,
           stat_search_requests: iteration.stat_search_requests,
-          stat_search_cache_hits: iteration.stat_search_cache_hits,
-          stat_search_cache_misses: iteration.stat_search_cache_misses,
           stat_candidate_count: iteration.stat_candidate_count,
           exact_stat_finalist_count: iteration.exact_stat_finalist_count,
           improvement: iteration.improvement,
@@ -2296,7 +2293,6 @@ MatchupGame.equipmentSearchCacheStats = function(options) {
     catalog_matchups: stats(options.catalogMatchupCache),
     approximate_matchups: stats(options.matchupCache),
     exact_matchups: stats(options.exactMatchupCache),
-    stat_searches: stats(options.statSearchCache),
   };
 };
 
@@ -2318,7 +2314,6 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
-    statSearchCache: options.statSearchCache || { values: new Map(), hits: 0, misses: 0 },
   });
   let seeds = [ build ];
   let seen_beams = new Set();
@@ -2403,38 +2398,19 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
 
     let responses_by_signature = new Map();
     let iteration_stat_started = Date.now();
-    let stat_cache_hits_before = shared_options.statSearchCache.hits;
-    let stat_cache_misses_before = shared_options.statSearchCache.misses;
     let stat_candidate_count = 0;
     let exact_stat_finalist_count = 0;
     equipment_beam.forEach(function(entry) {
       let equipment_build = entry.best_response.sources[0].build;
-      let stat_cache_key = JSON.stringify([
-        CombatSim.combatSignature(Player.generateBuild(equipment_build)),
-        opponents.map(function(opponent) { return CombatSim.combatSignature(opponent); }),
-        opponent_weights,
+      let stats = MatchupGame.adaptiveStatFrontiers(
+        equipment_build,
+        opponents,
+        opponent_ids,
         attack_types,
-        options.hpPoints || null,
-        options.pointStrides || [ 11, 5, 2, 1 ],
-        minimum_survival_probability,
-      ]);
-      let stats;
-      if (shared_options.statSearchCache.values.has(stat_cache_key)) {
-        shared_options.statSearchCache.hits++;
-        stats = shared_options.statSearchCache.values.get(stat_cache_key);
-      } else {
-        shared_options.statSearchCache.misses++;
-        stats = MatchupGame.adaptiveStatFrontiers(
-          equipment_build,
-          opponents,
-          opponent_ids,
-          attack_types,
-          Object.assign({}, shared_options, { opponentWeights: opponent_weights })
-        );
-        shared_options.statSearchCache.values.set(stat_cache_key, stats);
-        stat_candidate_count += stats.search_candidate_count;
-        exact_stat_finalist_count += stats.exact_finalist_count;
-      }
+        Object.assign({}, shared_options, { opponentWeights: opponent_weights })
+      );
+      stat_candidate_count += stats.search_candidate_count;
+      exact_stat_finalist_count += stats.exact_finalist_count;
       let source = stats.best_weighted.sources[0];
       let response_build = Object.assign({}, equipment_build, {
         stats: source.stats,
@@ -2469,8 +2445,6 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       equipment_concept_count: equipment.concept_count,
       equipment_combat_signature_count: equipment.combat_signature_count,
       stat_search_requests: equipment_beam.length,
-      stat_search_cache_hits: shared_options.statSearchCache.hits - stat_cache_hits_before,
-      stat_search_cache_misses: shared_options.statSearchCache.misses - stat_cache_misses_before,
       stat_candidate_count: stat_candidate_count,
       exact_stat_finalist_count: exact_stat_finalist_count,
       improvement: previous_best_score === null ? null :

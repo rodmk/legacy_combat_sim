@@ -43,8 +43,6 @@ let results = widths.map(function(width) {
         equipment_finalists: iteration.equipment_finalist_count,
         equipment_concepts: iteration.equipment_concept_count,
         equipment_combat_signatures: iteration.equipment_combat_signature_count,
-        stat_cache_hits: iteration.stat_search_cache_hits,
-        stat_cache_misses: iteration.stat_search_cache_misses,
         stat_candidates: iteration.stat_candidate_count,
         exact_stat_finalists: iteration.exact_stat_finalist_count,
         improvement: iteration.improvement,
