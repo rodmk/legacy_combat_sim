@@ -1555,12 +1555,50 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   test.ok(response.iterations.length >= 2);
   test.equal(response.iterations[1].seed_count, response.beam.length);
   test.ok(response.iterations.every(function(iteration) {
+    return iteration.expanded_seed_count <= 2;
+  }));
+  test.ok(response.iterations.every(function(iteration) {
     return iteration.equipment_combat_signature_count <= iteration.equipment_concept_count;
   }));
   test.ok(response.converged);
   test.equal(response.iterations[response.iterations.length - 1].stat_fidelity, 'full');
   test.equal(response.convergence_reason, 'repeated_beam');
   test.ok(response.timings_ms.total >= response.timings_ms.equipment);
+
+  let staged_equipment = MatchupGame.equipmentResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    {
+      beamWidth: 2,
+      screeningBeamWidth: 4,
+      screeningMinimumSurvivalProbability: 0.05,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  let regular_equipment = MatchupGame.equipmentResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    {
+      beamWidth: 2,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.ok(staged_equipment.screening_matchups > 0);
+  test.ok(staged_equipment.validation_matchups > 0);
+  test.equal(
+    staged_equipment.beam[0].best_response.signature,
+    regular_equipment.beam[0].best_response.signature
+  );
 
   let full_fidelity = MatchupGame.jointEquipmentStatResponseBeam(
     build,
@@ -1603,6 +1641,12 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   test.equal(bounded.iterations.length, 1);
   test.equal(bounded.converged, false);
   test.equal(bounded.convergence_reason, 'iteration_limit');
+  test.throws(function() {
+    MatchupGame.jointEquipmentStatResponseBeam(
+      build, [ opponent ], [ 'ControlledKernel' ], [ 1 ], [ 'normal' ],
+      { expansionWidth: -1 }
+    );
+  });
   test.done();
 };
 
@@ -1741,6 +1785,23 @@ exports.testRestrictedMatchupGame = function(test) {
     converged: true,
   });
 
+  test.done();
+};
+
+exports.testOpponentMixturePruning = function(test) {
+  let mixture = MatchupGame.pruneOpponentMixture([
+    { candidate: 'a', weight: 0.0001 },
+    { candidate: 'b', weight: 0.00015 },
+    { candidate: 'c', weight: 0.09975 },
+    { candidate: 'd', weight: 0.9 },
+  ], 0.00025);
+  test.deepEqual(mixture.dropped.map(function(entry) { return entry.candidate; }), [ 'a', 'b' ]);
+  test.equal(mixture.dropped_weight, 0.00025);
+  test.equal(mixture.maximum_score_error, 0.00025);
+  test.ok(Math.abs(mixture.retained.reduce(function(sum, entry) {
+    return sum + entry.weight;
+  }, 0) - 1) <= 1e-12);
+  test.throws(function() { MatchupGame.pruneOpponentMixture([], 0.1); });
   test.done();
 };
 

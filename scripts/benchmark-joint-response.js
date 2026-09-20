@@ -6,6 +6,8 @@ let build = src.Build.ControlledKernel;
 let opponent = src.Player.generateBuild(build);
 let widths = [ 8 ];
 let tolerances = (process.env.SEARCH_TOLERANCES || '0.001').split(',').map(Number);
+let progressive_combat_fidelity = process.env.PROGRESSIVE_COMBAT_FIDELITY !== 'false';
+let expansion_width = Number(process.env.EXPANSION_WIDTH || 2);
 
 let results = widths.flatMap(function(width) {
   return tolerances.map(function(tolerance) {
@@ -18,13 +20,17 @@ let results = widths.flatMap(function(width) {
     [ 'normal', 'quick', 'aimed', 'cover' ],
       {
         beamWidth: width,
+        expansionWidth: expansion_width,
         improvementTolerance: tolerance,
         minimumSurvivalProbability: 1e-6,
+        progressiveCombatFidelity: progressive_combat_fidelity,
       }
   );
     return {
       beam_width: width,
+      expansion_width: expansion_width,
       improvement_tolerance: tolerance,
+      progressive_combat_fidelity: progressive_combat_fidelity,
       returned_responses: response.beam.length,
       iterations: response.iterations.length,
       converged: response.converged,
@@ -45,6 +51,7 @@ let results = widths.flatMap(function(width) {
         return {
           iteration: iteration.iteration,
           stat_fidelity: iteration.stat_fidelity,
+          expanded_seeds: iteration.expanded_seed_count,
           equipment_candidates: iteration.equipment_candidate_count,
           equipment_finalists: iteration.equipment_finalist_count,
           equipment_concepts: iteration.equipment_concept_count,

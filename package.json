@@ -13,6 +13,7 @@
     "search:meta": "node scripts/search-meta.js",
     "export:meta": "node scripts/export-meta-search.js",
     "benchmark:joint-response": "node scripts/benchmark-joint-response.js",
+    "benchmark:equipment-pass": "node scripts/benchmark-equipment-pass.js",
     "verify": "yarn test && yarn validate:data && yarn typecheck",
     "prepare": "husky",
     "test": "yarn test-eslint && yarn test-unittest",
