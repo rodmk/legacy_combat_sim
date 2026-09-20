@@ -1079,6 +1079,22 @@ BuildSearch.itemVariantReport = function(item_key, options) {
   };
 };
 
+BuildSearch.itemVariantReportCache = new Map();
+
+BuildSearch.cachedItemVariantReport = function(item_key, options) {
+  let settings = options || {};
+  let key = JSON.stringify([
+    item_key,
+    settings.activeWeaponTypes || [ 'melee', 'gun', 'projectile' ],
+    settings.crystalKeys || Object.keys(crystalDefinitions),
+    idx(settings, 'socketCapacity', 4),
+  ]);
+  if (!this.itemVariantReportCache.has(key)) {
+    this.itemVariantReportCache.set(key, this.itemVariantReport(item_key, settings));
+  }
+  return this.itemVariantReportCache.get(key);
+};
+
 BuildSearch.slotVariantFrontier = function(slot, options) {
   let settings = options || {};
   let catalog = equipmentCatalog[slot];
@@ -1286,7 +1302,7 @@ BuildSearch.equipmentNeighborhood = function(build, options) {
         } else if (slot === 'weapon2') {
           active_weapon_keys[1] = item_key;
         }
-        let report = BuildSearch.itemVariantReport(item_key, {
+        let report = BuildSearch.cachedItemVariantReport(item_key, {
           activeWeaponTypes: active_weapon_keys.map(function(key) { return Item[key].type; }),
           crystalKeys: settings.crystalKeys,
           socketCapacity: settings.socketCapacity,
@@ -1641,6 +1657,7 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
     throw new Error('Opponent weights must match the opponents and sum to one.');
   }
   let previous_result = options.previousResult;
+  let track_frontiers = options.trackFrontiers !== false;
   let combat_frontier = previous_result ? previous_result.combat_frontier : [];
   let economy_frontier = previous_result ? previous_result.combat_economy_frontier : [];
   let candidate_count = previous_result ? previous_result.candidate_count : 0;
@@ -1681,12 +1698,15 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
   let cheapest_average_winner = previous_result ? previous_result.cheapest_average_winner : null;
   let best_weighted = previous_result ? previous_result.best_weighted : null;
   let candidates = [];
+  let opponent_signatures = opponents.map(function(opponent) {
+    return CombatSim.combatSignature(opponent);
+  });
   groups.forEach(function(group) {
     let group_signature = group.signature || CombatSim.combatSignature(group.representative);
-    let matchups = opponents.map(function(opponent) {
+    let matchups = opponents.map(function(opponent, opponent_index) {
       let matchup_key = JSON.stringify([
         group_signature,
-        CombatSim.combatSignature(opponent),
+        opponent_signatures[opponent_index],
         defeat_cache.minimum_survival_probability,
       ]);
       if (matchup_cache.values.has(matchup_key)) {
@@ -1728,8 +1748,10 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       average_healing_cost: total_healing_cost / matchups.length,
       healing_credits_per_win: total_wins > 0 ? total_healing_cost / total_wins : Infinity,
     };
-    combat_frontier = addToFrontier(combat_frontier, candidate, false);
-    economy_frontier = addToFrontier(economy_frontier, candidate, true);
+    if (track_frontiers) {
+      combat_frontier = addToFrontier(combat_frontier, candidate, false);
+      economy_frontier = addToFrontier(economy_frontier, candidate, true);
+    }
     if (!best_worst_case || candidate.worst_score > best_worst_case.worst_score) {
       best_worst_case = candidate;
     }
@@ -1792,6 +1814,7 @@ MatchupGame.equipmentBestResponse = function(
       minimumSurvivalProbability: minimum_survival_probability,
       opponentWeights: opponent_weights,
       includeCandidates: true,
+      trackFrontiers: false,
     }
   );
   let incumbent_lower_bound = Math.max.apply(null, approximate.candidates.map(function(candidate) {
@@ -1810,6 +1833,7 @@ MatchupGame.equipmentBestResponse = function(
     defeatCache: options.exactDefeatCache,
     matchupCache: options.exactMatchupCache,
     opponentWeights: opponent_weights,
+    trackFrontiers: false,
   });
 
   return {
@@ -1837,6 +1861,7 @@ MatchupGame.equipmentResponseBeam = function(
       minimumSurvivalProbability: minimum_survival_probability,
       opponentWeights: opponent_weights,
       includeCandidates: true,
+      trackFrontiers: false,
     }
   );
   let concepts = new Map();
@@ -1879,6 +1904,7 @@ MatchupGame.equipmentResponseBeam = function(
     matchupCache: options.exactMatchupCache,
     opponentWeights: opponent_weights,
     includeCandidates: true,
+    trackFrontiers: false,
   });
   let exact_by_signature = new Map(exact.candidates.map(function(candidate) {
     return [ candidate.signature, candidate ];

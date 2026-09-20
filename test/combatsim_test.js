@@ -1164,6 +1164,17 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
     nondominated: 2,
   });
   test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
+  let cached_options = {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectFire' ],
+    socketCapacity: 1,
+  };
+  let cached_report = BuildSearch.cachedItemVariantReport('RiftGun', cached_options);
+  test.strictEqual(
+    BuildSearch.cachedItemVariantReport('RiftGun', cached_options),
+    cached_report
+  );
+  test.deepEqual(cached_report, BuildSearch.itemVariantReport('RiftGun', cached_options));
 
   let mod_combinations = BuildSearch.modCombinations(Item.BioGunMk4);
   test.equal(mod_combinations.length, 4);
