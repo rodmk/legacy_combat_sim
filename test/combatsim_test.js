@@ -1225,6 +1225,73 @@ exports.testSlotVariantFrontier = function(test) {
   test.done();
 };
 
+exports.testCanonicalEquipmentPackageComposition = function(test) {
+  let options = {
+    crystalKeys: [ 'PerfectGreen', 'PerfectFire' ],
+    socketCapacity: 1,
+    maximumDominanceComparisons: 100000,
+  };
+  let weapons = BuildSearch.weaponPairReport('gun', 'gun', options);
+  let miscs = BuildSearch.miscPairReport([ 'gun' ], options);
+  let armor = BuildSearch.armorVariantReport([ 'gun' ], options);
+
+  test.equal(weapons.profile, 'gun+gun');
+  test.ok(weapons.counts.canonical_pairs < weapons.counts.raw_ordered_pairs);
+  test.ok(weapons.counts.unique_effective <= weapons.counts.canonical_pairs);
+  test.ok(weapons.counts.retained_after_safe_dominance <=
+    weapons.counts.unique_effective);
+  test.ok(miscs.counts.unique_effective <= miscs.counts.canonical_pairs);
+  test.ok(armor.counts.retained_after_safe_dominance <= armor.counts.unique_effective);
+
+  let package_group = BuildSearch.combinePackageEffects(
+    weapons.nondominated_groups[0],
+    miscs.nondominated_groups[0],
+    armor.nondominated_groups[0]
+  );
+  let build = BuildSearch.buildFromPackage(
+    'Package',
+    weapons.nondominated_groups[0],
+    miscs.nondominated_groups[0],
+    armor.nondominated_groups[0],
+    Build.ControlledKernel.stats
+  );
+  test.ok(package_group.signature);
+  test.equal(build.equipment.weapon1.item, weapons.nondominated_groups[0].source[0].item);
+  test.doesNotThrow(function() { Player.generateBuild(build); });
+
+  [
+    [ 'ReaperAxe', 'CrystalMaul' ],
+    [ 'AlienRifle', 'DoubleBarrelSniperRifle' ],
+    [ 'AlienStaff', 'VoidBow' ],
+    [ 'ReaperAxe', 'AlienRifle' ],
+  ].forEach(function(items) {
+    let coordinated = BuildSearch.coordinatedWeaponPair(items[0], items[1], options);
+    test.ok(coordinated);
+    test.deepEqual(
+      coordinated.source.map(function(source) { return source.item; }), items
+    );
+  });
+  test.ok(miscs.nondominated_groups.some(function(group) {
+    return group.effect.stats.some(function(stat) {
+      return (stat[0] === 'dodge' || stat[0] === 'def_skill') && stat[1] > 0;
+    });
+  }));
+  test.ok(armor.nondominated_groups.some(function(group) {
+    return group.effect.stats.some(function(stat) {
+      return stat[0] === 'armor' && stat[1] > 0;
+    });
+  }));
+
+  let bounded = BuildSearch.pruneDominatedEffects([
+    { effect: { stats: [ [ 'armor', 2 ] ], weapons: [] } },
+    { effect: { stats: [ [ 'armor', 1 ] ], weapons: [] } },
+  ], { maximumComparisons: 0 });
+  test.equal(bounded.complete, false);
+  test.equal(bounded.groups.length, 2);
+
+  test.done();
+};
+
 exports.testEquipmentNeighborhood = function(test) {
   let build = Build.ShadowDojoDLGunBuild3;
   let normalized = BuildSearch.normalizeEquipment(build);
@@ -1474,6 +1541,9 @@ exports.testStatAllocationGeneration = function(test) {
   test.ok(adaptive.search_candidate_count < groups.length);
   test.equal(adaptive.exact_finalist_count, 2);
   test.equal(adaptive.converged, true);
+  test.ok(Math.abs(
+    adaptive.best_weighted.weighted_score - adaptive.approximate_best_weighted_score
+  ) <= adaptive.approximate_best_weighted_error_bound + 1e-12);
   test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
   let weighted_only = MatchupGame.adaptiveStatFrontiers(
     build,
