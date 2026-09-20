@@ -39,6 +39,7 @@ let results = widths.map(function(width) {
     passes: response.iterations.map(function(iteration) {
       return {
         iteration: iteration.iteration,
+        stat_fidelity: iteration.stat_fidelity,
         equipment_candidates: iteration.equipment_candidate_count,
         equipment_finalists: iteration.equipment_finalist_count,
         equipment_concepts: iteration.equipment_concept_count,

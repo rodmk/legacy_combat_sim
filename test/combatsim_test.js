@@ -1552,14 +1552,36 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   }));
   test.ok(response.beam[0].weighted_score >=
     response.equipment_response.beam[0].best_response.weighted_score);
-  test.equal(response.iterations.length, 2);
+  test.ok(response.iterations.length >= 2);
   test.equal(response.iterations[1].seed_count, response.beam.length);
   test.ok(response.iterations.every(function(iteration) {
     return iteration.equipment_combat_signature_count <= iteration.equipment_concept_count;
   }));
   test.ok(response.converged);
+  test.equal(response.iterations[response.iterations.length - 1].stat_fidelity, 'full');
   test.equal(response.convergence_reason, 'repeated_beam');
   test.ok(response.timings_ms.total >= response.timings_ms.equipment);
+
+  let full_fidelity = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      progressiveStatFidelity: false,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.ok(Math.abs(
+    response.beam[0].weighted_score - full_fidelity.beam[0].weighted_score
+  ) <= 1e-6);
 
   let bounded = MatchupGame.jointEquipmentStatResponseBeam(
     build,

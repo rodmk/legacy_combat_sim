@@ -2261,6 +2261,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       response_passes: expansion.response.iterations.map(function(iteration) {
         return {
           iteration: iteration.iteration,
+          stat_fidelity: iteration.stat_fidelity,
           seed_count: iteration.seed_count,
           equipment_candidate_count: iteration.equipment_candidate_count,
           equipment_finalist_count: iteration.equipment_finalist_count,
@@ -2325,6 +2326,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     Infinity : options.jointMaxIterations;
   let improvement_tolerance = options.improvementTolerance === undefined ?
     1e-6 : options.improvementTolerance;
+  let progressive_stat_fidelity = options.progressiveStatFidelity !== false;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
@@ -2343,10 +2345,12 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
   let beam = [];
   let equipment;
   let previous_best_score = null;
+  let full_stat_fidelity = !progressive_stat_fidelity;
+  let skip_equipment_expansion = false;
 
   for (let iteration = 1; iteration <= maximum_iterations; iteration++) {
     let equipment_started = Date.now();
-    let responses = seeds.map(function(seed) {
+    let responses = skip_equipment_expansion ? [] : seeds.map(function(seed) {
       return MatchupGame.equipmentResponseBeam(
         seed, opponents, opponent_ids, opponent_weights, shared_options
       );
@@ -2437,6 +2441,9 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
         Object.assign({}, shared_options, {
           opponentWeights: opponent_weights,
           weightedBestOnly: true,
+          pointStrides: full_stat_fidelity ? options.pointStrides :
+            (options.coarsePointStrides || [ 11 ]),
+          convergeStats: full_stat_fidelity,
         })
       );
       stat_candidate_count += stats.search_candidate_count;
@@ -2472,6 +2479,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     }).sort());
     iterations.push({
       iteration: iteration,
+      stat_fidelity: full_stat_fidelity ? 'full' : 'coarse',
       seed_count: seeds.length,
       equipment_candidate_count: equipment.candidate_count,
       equipment_finalist_count: equipment.finalist_count,
@@ -2499,7 +2507,8 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     let repeated = seen_beams.has(beam_signature);
     let improvement = previous_best_score === null ? null :
       beam[0].weighted_score - previous_best_score;
-    if (repeated || (improvement !== null && improvement <= improvement_tolerance)) {
+    let stable = repeated || (improvement !== null && improvement <= improvement_tolerance);
+    if (stable && full_stat_fidelity) {
       return {
         beam: beam,
         equipment_response: equipment,
@@ -2516,6 +2525,8 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
     seen_beams.add(beam_signature);
     previous_best_score = beam[0].weighted_score;
     seeds = beam.map(function(entry) { return entry.build; });
+    skip_equipment_expansion = stable && !full_stat_fidelity;
+    full_stat_fidelity = !progressive_stat_fidelity || stable;
   }
 
   return {
@@ -2667,7 +2678,7 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
 
   let convergence = [];
   let convergence_iteration = 0;
-  let converged = false;
+  let converged = options.convergeStats === false;
   while (!converged) {
     convergence_iteration++;
     let expansion_started = Date.now();
