@@ -1779,6 +1779,23 @@ exports.testRestrictedMatchupGame = function(test) {
   test.done();
 };
 
+exports.testOpponentMixturePruning = function(test) {
+  let mixture = MatchupGame.pruneOpponentMixture([
+    { candidate: 'a', weight: 0.0001 },
+    { candidate: 'b', weight: 0.00015 },
+    { candidate: 'c', weight: 0.09975 },
+    { candidate: 'd', weight: 0.9 },
+  ], 0.00025);
+  test.deepEqual(mixture.dropped.map(function(entry) { return entry.candidate; }), [ 'a', 'b' ]);
+  test.equal(mixture.dropped_weight, 0.00025);
+  test.equal(mixture.maximum_score_error, 0.00025);
+  test.ok(Math.abs(mixture.retained.reduce(function(sum, entry) {
+    return sum + entry.weight;
+  }, 0) - 1) <= 1e-12);
+  test.throws(function() { MatchupGame.pruneOpponentMixture([], 0.1); });
+  test.done();
+};
+
 exports.testMatchupDominanceFrontier = function(test) {
   let matrix = [
     [ 0.5, 0.5, 0.8 ],

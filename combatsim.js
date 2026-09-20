@@ -2181,7 +2181,12 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     matchupCache: catalog_matchup_cache,
   });
   let analysis_ms = Date.now() - analysis_started;
-  let equilibrium_entries = before.inferred_meta.weights;
+  let opponent_pruning_tolerance = options.opponentPruningTolerance === undefined ?
+    improvement_tolerance / 4 : options.opponentPruningTolerance;
+  let opponent_mixture = this.pruneOpponentMixture(
+    before.inferred_meta.weights, opponent_pruning_tolerance
+  );
+  let equilibrium_entries = opponent_mixture.retained;
   let opponents = equilibrium_entries.map(function(entry) {
     return Player.generateBuild(catalog[entry.candidate]);
   });
@@ -2251,12 +2256,45 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     after: after,
     response: response,
     screened_response_count: profitable.length,
+    opponent_mixture: opponent_mixture,
     timings_ms: {
       initial_analysis: analysis_ms,
       response_search: search_ms,
       expanded_analysis: solve_ms,
       total: analysis_ms + search_ms + solve_ms,
     },
+  };
+};
+
+MatchupGame.pruneOpponentMixture = function(entries, maximum_dropped_weight) {
+  if (!Number.isFinite(maximum_dropped_weight) || maximum_dropped_weight < 0 ||
+      maximum_dropped_weight >= 1) {
+    throw new Error('Opponent pruning tolerance must be at least zero and less than one.');
+  }
+  if (entries.length === 0 || Math.abs(entries.reduce(function(sum, entry) {
+    return sum + entry.weight;
+  }, 0) - 1) > 1e-12) {
+    throw new Error('Opponent mixture weights must be nonempty and sum to one.');
+  }
+  let dropped_weight = 0;
+  let dropped = [];
+  let retained = entries.slice().sort(function(left, right) {
+    return left.weight - right.weight;
+  });
+  while (retained.length > 1 &&
+      dropped_weight + retained[0].weight <= maximum_dropped_weight + 1e-12) {
+    let entry = retained.shift();
+    dropped.push(entry);
+    dropped_weight += entry.weight;
+  }
+  let retained_weight = 1 - dropped_weight;
+  return {
+    retained: retained.map(function(entry) {
+      return Object.assign({}, entry, { weight: entry.weight / retained_weight });
+    }),
+    dropped: dropped,
+    dropped_weight: dropped_weight,
+    maximum_score_error: dropped_weight,
   };
 };
 
@@ -2299,6 +2337,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       response_converged: expansion.response.converged,
       response_convergence_reason: expansion.response.convergence_reason,
       response_iterations: expansion.response.iterations.length,
+      opponent_mixture: expansion.opponent_mixture,
       response_passes: expansion.response.iterations.map(function(iteration) {
         return {
           iteration: iteration.iteration,
