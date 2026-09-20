@@ -1555,6 +1555,9 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   test.ok(response.iterations.length >= 2);
   test.equal(response.iterations[1].seed_count, response.beam.length);
   test.ok(response.iterations.every(function(iteration) {
+    return iteration.expanded_seed_count <= 2;
+  }));
+  test.ok(response.iterations.every(function(iteration) {
     return iteration.equipment_combat_signature_count <= iteration.equipment_concept_count;
   }));
   test.ok(response.converged);
@@ -1638,6 +1641,12 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   test.equal(bounded.iterations.length, 1);
   test.equal(bounded.converged, false);
   test.equal(bounded.convergence_reason, 'iteration_limit');
+  test.throws(function() {
+    MatchupGame.jointEquipmentStatResponseBeam(
+      build, [ opponent ], [ 'ControlledKernel' ], [ 1 ], [ 'normal' ],
+      { expansionWidth: -1 }
+    );
+  });
   test.done();
 };
 

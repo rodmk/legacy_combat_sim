@@ -2343,6 +2343,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
           iteration: iteration.iteration,
           stat_fidelity: iteration.stat_fidelity,
           seed_count: iteration.seed_count,
+          expanded_seed_count: iteration.expanded_seed_count,
           equipment_candidate_count: iteration.equipment_candidate_count,
           equipment_finalist_count: iteration.equipment_finalist_count,
           equipment_concept_count: iteration.equipment_concept_count,
@@ -2402,6 +2403,12 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
 ) {
   options = options || {};
   let beam_width = options.beamWidth || 8;
+  let expansion_width = options.expansionWidth || 2;
+  let full_stat_width = options.fullStatWidth || 4;
+  if (!Number.isInteger(expansion_width) || expansion_width <= 0 ||
+      !Number.isInteger(full_stat_width) || full_stat_width <= 0) {
+    throw new Error('Joint response widths must be positive integers.');
+  }
   let maximum_iterations = options.jointMaxIterations === undefined ?
     Infinity : options.jointMaxIterations;
   let improvement_tolerance = options.improvementTolerance === undefined ?
@@ -2439,7 +2446,8 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
 
   for (let iteration = 1; iteration <= maximum_iterations; iteration++) {
     let equipment_started = Date.now();
-    let responses = skip_equipment_expansion ? [] : seeds.map(function(seed) {
+    let expansion_seeds = skip_equipment_expansion ? [] : seeds.slice(0, expansion_width);
+    let responses = expansion_seeds.map(function(seed) {
       return MatchupGame.equipmentResponseBeam(
         seed, opponents, opponent_ids, opponent_weights, shared_options
       );
@@ -2489,6 +2497,9 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       }
     });
     let equipment_beam = Array.from(equipment_by_combat.values()).slice(0, beam_width);
+    if (full_stat_fidelity) {
+      equipment_beam = equipment_beam.slice(0, full_stat_width);
+    }
     let iteration_equipment_ms = Date.now() - equipment_started;
     equipment_ms += iteration_equipment_ms;
     equipment = {
@@ -2570,6 +2581,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       iteration: iteration,
       stat_fidelity: full_stat_fidelity ? 'full' : 'coarse',
       seed_count: seeds.length,
+      expanded_seed_count: expansion_seeds.length,
       equipment_candidate_count: equipment.candidate_count,
       equipment_finalist_count: equipment.finalist_count,
       equipment_concept_count: equipment.concept_count,
