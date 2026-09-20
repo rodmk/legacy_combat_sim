@@ -1161,6 +1161,294 @@ BuildSearch.itemSourceDescriptor = function(source) {
   return descriptor;
 };
 
+BuildSearch.equipmentSignature = function(equipment) {
+  let descriptor = function(slot) {
+    return [ slot.item, (slot.mods || []).slice().sort() ];
+  };
+  let weapons = [ descriptor(equipment.weapon1), descriptor(equipment.weapon2) ].sort(
+    function(left, right) { return JSON.stringify(left).localeCompare(JSON.stringify(right)); }
+  );
+  let miscs = [ descriptor(equipment.misc1), descriptor(equipment.misc2) ].sort(
+    function(left, right) { return JSON.stringify(left).localeCompare(JSON.stringify(right)); }
+  );
+  return JSON.stringify([ descriptor(equipment.armor), weapons, miscs ]);
+};
+
+BuildSearch.weaponDescriptors = function(weapon_type) {
+  return Object.keys(equipmentCatalog.weapons).filter(function(key) {
+    return equipmentCatalog.weapons[key].type === weapon_type;
+  }).flatMap(function(key) {
+    return BuildSearch.modCombinations(Item[key]).map(function(mods) {
+      let descriptor = { item: key };
+      if (mods.length > 0) {
+        descriptor.mods = mods.slice();
+      }
+      return descriptor;
+    });
+  });
+};
+
+BuildSearch.equipmentSignatureSpace = function(left_type, right_type) {
+  let left_weapons = this.weaponDescriptors(left_type);
+  let right_weapons = left_type === right_type ? left_weapons :
+    this.weaponDescriptors(right_type);
+  let weapon_pair_count = left_type === right_type ?
+    (left_weapons.length * (left_weapons.length + 1)) / 2 :
+    left_weapons.length * right_weapons.length;
+  let misc_count = Object.keys(equipmentCatalog.miscs).length;
+  let misc_pair_count = (misc_count * (misc_count + 1)) / 2;
+  let armor_count = Object.keys(equipmentCatalog.armor).length;
+  return {
+    profile: left_type + '+' + right_type,
+    active_weapon_types: Array.from(new Set([ left_type, right_type ])).sort(),
+    left_weapons: left_weapons,
+    right_weapons: right_weapons,
+    weapon_pair_count: weapon_pair_count,
+    misc_pair_count: misc_pair_count,
+    armor_count: armor_count,
+    signature_count: weapon_pair_count * misc_pair_count * armor_count,
+  };
+};
+
+BuildSearch.forEachEquipmentSignature = function(left_type, right_type, visit) {
+  let space = this.equipmentSignatureSpace(left_type, right_type);
+  let armor_keys = Object.keys(equipmentCatalog.armor);
+  let misc_keys = Object.keys(equipmentCatalog.miscs);
+  let index = 0;
+  space.left_weapons.forEach(function(left, left_index) {
+    space.right_weapons.forEach(function(right, right_index) {
+      if (left_type === right_type && right_index < left_index) {
+        return;
+      }
+      misc_keys.forEach(function(left_misc, left_misc_index) {
+        misc_keys.slice(left_misc_index).forEach(function(right_misc) {
+          armor_keys.forEach(function(armor) {
+            visit({
+              index: index,
+              signature: BuildSearch.equipmentSignature({
+                armor: { item: armor },
+                weapon1: left,
+                weapon2: right,
+                misc1: { item: left_misc },
+                misc2: { item: right_misc },
+              }),
+              equipment: {
+                armor: { item: armor },
+                weapon1: left,
+                weapon2: right,
+                misc1: { item: left_misc },
+                misc2: { item: right_misc },
+              },
+            });
+            index++;
+          });
+        });
+      });
+    });
+  });
+  return index;
+};
+
+BuildSearch.sampleEquipmentSignatures = function(left_type, right_type, sample_count) {
+  let space = this.equipmentSignatureSpace(left_type, right_type);
+  let selected_indexes = new Set();
+  for (let sample = 0; sample < sample_count; sample++) {
+    selected_indexes.add(Math.floor((sample + 0.5) * space.signature_count / sample_count));
+  }
+  let selected = [];
+  this.forEachEquipmentSignature(left_type, right_type, function(entry) {
+    if (selected_indexes.has(entry.index)) {
+      selected.push(entry);
+    }
+  });
+  return selected;
+};
+
+BuildSearch.descriptorVariantGroupCache = new Map();
+
+BuildSearch.descriptorVariantGroups = function(descriptor, active_weapon_types, options) {
+  let settings = options || {};
+  let expected_mods = (descriptor.mods || []).slice().sort();
+  let cache_key = JSON.stringify([
+    descriptor.item,
+    expected_mods,
+    active_weapon_types.slice().sort(),
+    settings.crystalKeys || Object.keys(crystalDefinitions),
+    idx(settings, 'socketCapacity', 4),
+  ]);
+  if (this.descriptorVariantGroupCache.has(cache_key)) {
+    return this.descriptorVariantGroupCache.get(cache_key);
+  }
+  let groups = this.generateItemVariants(descriptor.item, {
+    activeWeaponTypes: active_weapon_types,
+    crystalKeys: settings.crystalKeys,
+    socketCapacity: settings.socketCapacity,
+  }).map(function(group) {
+    let sources = group.sources.filter(function(source) {
+      return JSON.stringify(source.mods.slice().sort()) === JSON.stringify(expected_mods);
+    });
+    return sources.length === 0 ? null : {
+      signature: group.signature,
+      representative: group.representative,
+      sources: sources,
+    };
+  }).filter(function(group) { return group !== null; });
+  let frontier = this.pruneDominatedItemVariants(groups, active_weapon_types);
+  this.descriptorVariantGroupCache.set(cache_key, frontier);
+  return frontier;
+};
+
+BuildSearch.signatureSpecializations = function(entry, options) {
+  let settings = options || {};
+  let active_weapon_types = [
+    Item[entry.equipment.weapon1.item].type,
+    Item[entry.equipment.weapon2.item].type,
+  ];
+  let slots = [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
+  let groups_by_slot = {};
+  slots.forEach(function(slot) {
+    groups_by_slot[slot] = BuildSearch.descriptorVariantGroups(
+      entry.equipment[slot], active_weapon_types, settings
+    );
+  });
+  let objectives = [
+    'armor', 'dodge', 'accuracy', 'speed', 'def_skill', 'min_damage', 'max_damage',
+  ].concat(this.activeWeaponSkills(active_weapon_types));
+  let builds_by_signature = new Map();
+  objectives.forEach(function(objective) {
+    let equipment = {};
+    slots.forEach(function(slot) {
+      let selected = groups_by_slot[slot].slice().sort(function(left, right) {
+        return idx(right.representative, objective, 0) -
+          idx(left.representative, objective, 0);
+      })[0];
+      equipment[slot] = BuildSearch.itemSourceDescriptor(selected.sources[0]);
+    });
+    let build = {
+      name: 'Signature specialization',
+      level: 80,
+      reference: false,
+      stats: { hp: 70, speed: 37, accuracy: 38, dodge: 38 },
+      attack_type: 'normal',
+      equipment: equipment,
+    };
+    let signature = CombatSim.combatSignature(Player.generateBuild(build));
+    if (!builds_by_signature.has(signature)) {
+      builds_by_signature.set(signature, build);
+    }
+  });
+  return Array.from(builds_by_signature.values());
+};
+
+BuildSearch.signatureEffectEnvelope = function(entry, options) {
+  let active_weapon_types = [
+    Item[entry.equipment.weapon1.item].type,
+    Item[entry.equipment.weapon2.item].type,
+  ];
+  let slots = [ 'armor', 'weapon1', 'weapon2', 'misc1', 'misc2' ];
+  let stat_keys = [
+    'armor', 'dodge', 'accuracy', 'speed', 'def_skill',
+  ].concat(this.activeWeaponSkills(active_weapon_types));
+  let minimum = Object.fromEntries(stat_keys.map(function(stat) { return [ stat, 0 ]; }));
+  let maximum = Object.fromEntries(stat_keys.map(function(stat) { return [ stat, 0 ]; }));
+  let weapon_envelopes = [];
+  slots.forEach(function(slot) {
+    let descriptor_envelope = BuildSearch.descriptorEffectEnvelope(
+      entry.equipment[slot], active_weapon_types, options
+    );
+    stat_keys.forEach(function(stat) {
+      let multiplier = (slot === 'weapon1' || slot === 'weapon2') &&
+        active_weapon_types[0] !== active_weapon_types[1] &&
+        WEAPON_TYPE_TO_SKILL[Item[entry.equipment[slot].item].type] === stat ? 2 : 1;
+      minimum[stat] += descriptor_envelope.minimum[stat] * multiplier;
+      maximum[stat] += descriptor_envelope.maximum[stat] * multiplier;
+    });
+    if (slot === 'weapon1' || slot === 'weapon2') {
+      weapon_envelopes.push(descriptor_envelope.weapon);
+    }
+  });
+  return {
+    signature: entry.signature,
+    minimum: minimum,
+    maximum: maximum,
+    weapons: weapon_envelopes,
+  };
+};
+
+BuildSearch.descriptorEffectEnvelopeCache = new Map();
+
+BuildSearch.descriptorEffectEnvelope = function(descriptor, active_weapon_types, options) {
+  let settings = options || {};
+  let cache_key = JSON.stringify([
+    descriptor.item,
+    (descriptor.mods || []).slice().sort(),
+    active_weapon_types.slice().sort(),
+    settings.crystalKeys || Object.keys(crystalDefinitions),
+    idx(settings, 'socketCapacity', 4),
+  ]);
+  if (this.descriptorEffectEnvelopeCache.has(cache_key)) {
+    return this.descriptorEffectEnvelopeCache.get(cache_key);
+  }
+  let groups = this.descriptorVariantGroups(descriptor, active_weapon_types, settings);
+  let stat_keys = [
+    'armor', 'dodge', 'accuracy', 'speed', 'def_skill',
+  ].concat(this.activeWeaponSkills(active_weapon_types));
+  let envelope = {
+    minimum: {},
+    maximum: {},
+    weapon: null,
+  };
+  stat_keys.forEach(function(stat) {
+    let values = groups.map(function(group) {
+      return idx(group.representative, stat, 0);
+    });
+    envelope.minimum[stat] = Math.min.apply(null, values);
+    envelope.maximum[stat] = Math.max.apply(null, values);
+  });
+  if (Item[descriptor.item].type) {
+    envelope.weapon = {
+      type: Item[descriptor.item].type,
+      minimum_damage: Math.min.apply(null, groups.map(function(group) {
+        return group.representative.min_damage;
+      })),
+      maximum_min_damage: Math.max.apply(null, groups.map(function(group) {
+        return group.representative.min_damage;
+      })),
+      minimum_max_damage: Math.min.apply(null, groups.map(function(group) {
+        return group.representative.max_damage;
+      })),
+      maximum_damage: Math.max.apply(null, groups.map(function(group) {
+        return group.representative.max_damage;
+      })),
+    };
+  }
+  this.descriptorEffectEnvelopeCache.set(cache_key, envelope);
+  return envelope;
+};
+
+BuildSearch.envelopeDominates = function(left, right) {
+  let strictly_better = false;
+  if (left.weapons.length !== right.weapons.length || left.weapons.some(function(weapon, index) {
+    let other = right.weapons[index];
+    if (weapon.minimum_damage > other.maximum_min_damage ||
+        weapon.minimum_max_damage > other.maximum_damage) {
+      strictly_better = true;
+    }
+    return weapon.type !== other.type ||
+      weapon.minimum_damage < other.maximum_min_damage ||
+      weapon.minimum_max_damage < other.maximum_damage;
+  })) {
+    return false;
+  }
+  let stats_dominate = Object.keys(right.maximum).every(function(stat) {
+    if (left.minimum[stat] > right.maximum[stat]) {
+      strictly_better = true;
+    }
+    return left.minimum[stat] >= right.maximum[stat];
+  });
+  return stats_dominate && strictly_better;
+};
+
 BuildSearch.configuredSlotGroups = function(slot, active_weapon_types, options) {
   let settings = options || {};
   let catalog = equipmentCatalog[slot];

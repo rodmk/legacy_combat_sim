@@ -1292,6 +1292,79 @@ exports.testCanonicalEquipmentPackageComposition = function(test) {
   test.done();
 };
 
+exports.testAttainableEquipmentSignatureRegions = function(test) {
+  let left = {
+    armor: { item: 'TitanGuard', crystals: [ 'PerfectVoid' ] },
+    weapon1: { item: 'AlienRifle', crystals: [ 'PerfectGreen' ] },
+    weapon2: { item: 'DoubleBarrelSniperRifle', crystals: [ 'PerfectGreen' ] },
+    misc1: { item: 'DroidDrone', crystals: [ 'PerfectOrange' ] },
+    misc2: { item: 'ScoutDrones', crystals: [ 'PerfectOrange' ] },
+  };
+  let right = {
+    armor: left.armor,
+    weapon1: Object.assign({}, left.weapon2, { crystals: [ 'GreenInferno' ] }),
+    weapon2: Object.assign({}, left.weapon1, { crystals: [ 'GreenInferno' ] }),
+    misc1: left.misc2,
+    misc2: left.misc1,
+  };
+  test.equal(
+    BuildSearch.equipmentSignature(left),
+    BuildSearch.equipmentSignature(right)
+  );
+
+  let expected_counts = {
+    'melee+melee': 47736,
+    'gun+gun': 32760,
+    'projectile+projectile': 20592,
+    'melee+gun': 74256,
+    'melee+projectile': 58344,
+    'gun+projectile': 48048,
+  };
+  Object.keys(expected_counts).forEach(function(profile) {
+    let types = profile.split('+');
+    let space = BuildSearch.equipmentSignatureSpace(types[0], types[1]);
+    test.equal(space.signature_count, expected_counts[profile]);
+    test.equal(BuildSearch.sampleEquipmentSignatures(types[0], types[1], 3).length, 3);
+  });
+
+  let entry = BuildSearch.sampleEquipmentSignatures('gun', 'gun', 1)[0];
+  let options = {
+    crystalKeys: [ 'PerfectGreen', 'PerfectOrange' ],
+    socketCapacity: 1,
+  };
+  let specializations = BuildSearch.signatureSpecializations(entry, options);
+  let envelope = BuildSearch.signatureEffectEnvelope(entry, options);
+  let descriptor_envelope = BuildSearch.descriptorEffectEnvelope(
+    entry.equipment.weapon1, [ 'gun', 'gun' ], options
+  );
+  test.strictEqual(descriptor_envelope, BuildSearch.descriptorEffectEnvelope(
+    entry.equipment.weapon1, [ 'gun', 'gun' ], options
+  ));
+  test.ok(specializations.length > 0);
+  specializations.forEach(function(build) {
+    test.equal(BuildSearch.equipmentSignature(build.equipment), entry.signature);
+    test.doesNotThrow(function() { Player.generateBuild(build); });
+  });
+  test.equal(BuildSearch.envelopeDominates(envelope, envelope), false);
+  test.equal(BuildSearch.envelopeDominates({
+    minimum: { armor: 10 },
+    maximum: { armor: 10 },
+    weapons: [ {
+      type: 'gun', minimum_damage: 10, maximum_min_damage: 10,
+      minimum_max_damage: 20, maximum_damage: 20,
+    } ],
+  }, {
+    minimum: { armor: 9 },
+    maximum: { armor: 9 },
+    weapons: [ {
+      type: 'gun', minimum_damage: 9, maximum_min_damage: 9,
+      minimum_max_damage: 19, maximum_damage: 19,
+    } ],
+  }), true);
+
+  test.done();
+};
+
 exports.testEquipmentNeighborhood = function(test) {
   let build = Build.ShadowDojoDLGunBuild3;
   let normalized = BuildSearch.normalizeEquipment(build);
