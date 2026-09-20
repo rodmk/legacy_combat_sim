@@ -2201,6 +2201,42 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     starting_build, opponents, opponent_ids, opponent_weights, attack_types, options
   );
   let search_ms = Date.now() - search_started;
+  let response_validation_started = Date.now();
+  if (opponent_mixture.dropped.length > 0) {
+    let full_entries = before.inferred_meta.weights;
+    let full_opponents = full_entries.map(function(entry) {
+      return Player.generateBuild(catalog[entry.candidate]);
+    });
+    let full_ids = full_entries.map(function(entry) { return entry.candidate; });
+    let full_weights = full_entries.map(function(entry) { return entry.weight; });
+    let response_groups = response.beam.map(function(entry) {
+      return {
+        signature: entry.signature,
+        representative: Player.generateBuild(entry.build),
+        sources: [ entry ],
+      };
+    });
+    let validation = this.candidateFrontiers(response_groups, full_opponents, full_ids, {
+      matchupCache: catalog_matchup_cache,
+      opponentWeights: full_weights,
+      includeCandidates: true,
+      trackFrontiers: false,
+    });
+    let validated_by_signature = new Map(validation.candidates.map(function(candidate) {
+      return [ candidate.signature, candidate ];
+    }));
+    response.beam = response.beam.map(function(entry) {
+      let validated = validated_by_signature.get(entry.signature);
+      return Object.assign({}, entry, {
+        search_weighted_score: entry.weighted_score,
+        weighted_score: validated.weighted_score,
+      });
+    }).sort(function(left, right) {
+      return right.weighted_score - left.weighted_score;
+    });
+    response.full_equilibrium_matchups = validation.evaluated_matchups;
+  }
+  let response_validation_ms = Date.now() - response_validation_started;
   let archived_signatures = new Set(Object.keys(catalog).map(function(key) {
     return CombatSim.combatSignature(Player.generateBuild(catalog[key]));
   }));
@@ -2260,8 +2296,9 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
     timings_ms: {
       initial_analysis: analysis_ms,
       response_search: search_ms,
+      response_validation: response_validation_ms,
       expanded_analysis: solve_ms,
-      total: analysis_ms + search_ms + solve_ms,
+      total: analysis_ms + search_ms + response_validation_ms + solve_ms,
     },
   };
 };
@@ -2337,6 +2374,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       response_converged: expansion.response.converged,
       response_convergence_reason: expansion.response.convergence_reason,
       response_iterations: expansion.response.iterations.length,
+      response_validation_matchups: expansion.response.full_equilibrium_matchups || 0,
       opponent_mixture: expansion.opponent_mixture,
       response_passes: expansion.response.iterations.map(function(iteration) {
         return {
@@ -2404,10 +2442,8 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
   options = options || {};
   let beam_width = options.beamWidth || 8;
   let expansion_width = options.expansionWidth || 2;
-  let full_stat_width = options.fullStatWidth || 4;
-  if (!Number.isInteger(expansion_width) || expansion_width <= 0 ||
-      !Number.isInteger(full_stat_width) || full_stat_width <= 0) {
-    throw new Error('Joint response widths must be positive integers.');
+  if (!Number.isInteger(expansion_width) || expansion_width <= 0) {
+    throw new Error('Joint response expansion width must be a positive integer.');
   }
   let maximum_iterations = options.jointMaxIterations === undefined ?
     Infinity : options.jointMaxIterations;
@@ -2497,9 +2533,6 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       }
     });
     let equipment_beam = Array.from(equipment_by_combat.values()).slice(0, beam_width);
-    if (full_stat_fidelity) {
-      equipment_beam = equipment_beam.slice(0, full_stat_width);
-    }
     let iteration_equipment_ms = Date.now() - equipment_started;
     equipment_ms += iteration_equipment_ms;
     equipment = {

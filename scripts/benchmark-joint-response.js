@@ -8,7 +8,6 @@ let widths = [ 8 ];
 let tolerances = (process.env.SEARCH_TOLERANCES || '0.001').split(',').map(Number);
 let progressive_combat_fidelity = process.env.PROGRESSIVE_COMBAT_FIDELITY !== 'false';
 let expansion_width = Number(process.env.EXPANSION_WIDTH || 2);
-let full_stat_width = Number(process.env.FULL_STAT_WIDTH || 4);
 
 let results = widths.flatMap(function(width) {
   return tolerances.map(function(tolerance) {
@@ -22,7 +21,6 @@ let results = widths.flatMap(function(width) {
       {
         beamWidth: width,
         expansionWidth: expansion_width,
-        fullStatWidth: full_stat_width,
         improvementTolerance: tolerance,
         minimumSurvivalProbability: 1e-6,
         progressiveCombatFidelity: progressive_combat_fidelity,
@@ -31,7 +29,6 @@ let results = widths.flatMap(function(width) {
     return {
       beam_width: width,
       expansion_width: expansion_width,
-      full_stat_width: full_stat_width,
       improvement_tolerance: tolerance,
       progressive_combat_fidelity: progressive_combat_fidelity,
       returned_responses: response.beam.length,
