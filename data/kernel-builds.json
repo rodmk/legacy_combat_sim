@@ -1,0 +1,30 @@
+{
+  "ControlledKernel": {
+    "name": "Controlled Entry-Level Kernel",
+    "level": 80,
+    "reference": false,
+    "stats": { "hp": 70, "speed": 37, "accuracy": 38, "dodge": 38 },
+    "equipment": {
+      "armor": {
+        "item": "TitanGuard",
+        "crystals": ["PerfectVoid", "PerfectVoid", "PerfectVoid", "PerfectVoid"]
+      },
+      "weapon1": {
+        "item": "CrystalSword",
+        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
+      },
+      "weapon2": {
+        "item": "CrystalSword",
+        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
+      },
+      "misc1": {
+        "item": "DroidDrone",
+        "crystals": ["PerfectOrange", "PerfectOrange", "PerfectOrange", "PerfectOrange"]
+      },
+      "misc2": {
+        "item": "DroidDrone",
+        "crystals": ["PerfectOrange", "PerfectOrange", "PerfectOrange", "PerfectOrange"]
+      }
+    }
+  }
+}

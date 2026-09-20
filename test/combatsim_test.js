@@ -1105,10 +1105,13 @@ exports.testEquivalentBuildGrouping = function(test) {
 };
 
 exports.testMultipleBuildCatalogs = function(test) {
-  test.equal(BuildCatalogs.length, 2);
+  test.equal(BuildCatalogs.length, 3);
   test.equal(Object.keys(BuildCatalogs[1]).length, 15);
-  test.equal(Object.keys(Build).length, 20);
+  test.equal(Object.keys(BuildCatalogs[2]).length, 1);
+  test.equal(Object.keys(Build).length, 21);
   test.equal(Player.generateReferencePlayers(BuildCatalogs).length, 19);
+  test.equal(Build.ControlledKernel.equipment.weapon1.item, 'CrystalSword');
+  test.equal(Build.ControlledKernel.equipment.weapon2.item, 'CrystalSword');
 
   let q15_player = Player.generateBuild(Build.ShadowDojoDLGunBuild2);
   test.deepEqual(q15_player.weapon2, {
@@ -1161,6 +1164,17 @@ exports.testCanonicalEquipmentVariantGeneration = function(test) {
     nondominated: 2,
   });
   test.deepEqual(report.useful_crystals, [ 'PerfectGreen', 'PerfectFire' ]);
+  let cached_options = {
+    activeWeaponTypes: [ 'gun', 'projectile' ],
+    crystalKeys: [ 'PerfectGreen', 'PerfectFire' ],
+    socketCapacity: 1,
+  };
+  let cached_report = BuildSearch.cachedItemVariantReport('RiftGun', cached_options);
+  test.strictEqual(
+    BuildSearch.cachedItemVariantReport('RiftGun', cached_options),
+    cached_report
+  );
+  test.deepEqual(cached_report, BuildSearch.itemVariantReport('RiftGun', cached_options));
 
   let mod_combinations = BuildSearch.modCombinations(Item.BioGunMk4);
   test.equal(mod_combinations.length, 4);
@@ -1207,6 +1221,178 @@ exports.testSlotVariantFrontier = function(test) {
   test.throws(function() {
     BuildSearch.slotVariantFrontier('unknown', {});
   }, /Unknown equipment slot/);
+
+  test.done();
+};
+
+exports.testEquipmentNeighborhood = function(test) {
+  let build = Build.ShadowDojoDLGunBuild3;
+  let normalized = BuildSearch.normalizeEquipment(build);
+  test.equal(normalized.length, 1);
+  normalized.forEach(function(entry) {
+    test.equal(entry.replacements.length, 3);
+    test.deepEqual(entry.build.equipment.weapon2.crystals, [
+      'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+    ]);
+    test.deepEqual(entry.build.equipment.misc1.crystals, [
+      'GreenInferno', 'GreenInferno', 'GreenInferno', 'GreenInferno',
+    ]);
+    test.deepEqual(entry.build.equipment.misc2.crystals, [
+      'GreenInferno', 'GreenInferno', 'GreenInferno', 'GreenInferno',
+    ]);
+  });
+  let branching_build = Object.assign({}, build, {
+    equipment: Object.assign({}, build.equipment, {
+      misc1: {
+        item: 'BioSpinalEnhancer',
+        crystals: [ 'PerfectWater', 'PerfectWater', 'PerfectWater', 'PerfectWater' ],
+      },
+    }),
+  });
+  let branching_normalized = BuildSearch.normalizeEquipment(
+    branching_build, { slots: [ 'misc1' ] }
+  );
+  test.equal(branching_normalized.length, 5);
+  branching_normalized.forEach(function(entry) {
+    test.ok(!entry.build.equipment.misc1.crystals.includes('PerfectWater'));
+  });
+  let concept_left = Object.assign({}, normalized[0].build, {
+    equipment: Object.assign({}, normalized[0].build.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'AmuletCrystal', 'AmuletCrystal', 'AmuletCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  let concept_right = Object.assign({}, concept_left, {
+    equipment: Object.assign({}, concept_left.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'AmuletCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  test.equal(
+    BuildSearch.equipmentConceptSignature(concept_left),
+    BuildSearch.equipmentConceptSignature(concept_right)
+  );
+  let distinct_concept = Object.assign({}, concept_right, {
+    equipment: Object.assign({}, concept_right.equipment, {
+      weapon1: {
+        item: 'AlienRifle',
+        crystals: [
+          'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal', 'BerserkerCrystal',
+        ],
+      },
+    }),
+  });
+  test.notEqual(
+    BuildSearch.equipmentConceptSignature(concept_left),
+    BuildSearch.equipmentConceptSignature(distinct_concept)
+  );
+  let neighborhood = BuildSearch.equipmentNeighborhood(build, {
+    slots: [ 'weapon1', 'misc1' ],
+    itemKeysBySlot: {
+      weapon1: [ 'RiftGun', 'AlienRifle' ],
+      misc1: [ 'ScoutDrones' ],
+    },
+    crystalKeys: [ 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+
+  test.ok(neighborhood.counts.slot_variants >= neighborhood.groups.length);
+  test.ok(neighborhood.groups.length > 0);
+  neighborhood.groups.forEach(function(group) {
+    test.ok(group.sources.length > 0);
+    group.sources.forEach(function(source) {
+      test.ok(source.slot === 'weapon1' || source.slot === 'misc1');
+      test.ok(source.equipment.crystals.length <= 1);
+    });
+  });
+  test.throws(function() {
+    BuildSearch.equipmentNeighborhood(build, { slots: [ 'unknown' ] });
+  }, /Unknown equipment slot/);
+
+  let opponent = Player.generateBuild(build);
+  let response = MatchupGame.equipmentBestResponse(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      socketCapacity: 1,
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.equal(response.candidate_count, response.evaluated_matchups);
+  test.ok(response.finalist_count <= response.candidate_count);
+  test.equal(response.exact_matchups, response.finalist_count);
+  test.ok(response.best_response.weighted_score >= 0 &&
+    response.best_response.weighted_score <= 1);
+  test.equal(response.best_response.sources[0].slot, 'weapon1');
+  let exact_neighborhood = BuildSearch.equipmentNeighborhood(build, {
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    socketCapacity: 1,
+  });
+  let exhaustive_response = MatchupGame.candidateFrontiers(
+    exact_neighborhood.groups, [ opponent ], [ 'opponent' ], { opponentWeights: [ 1 ] }
+  );
+  test.equal(response.best_response.signature, exhaustive_response.best_weighted.signature);
+
+  let other_opponent = Player.generateBuild(Build.ShadowDojoHFCoreVoid);
+  let approximate_matchup = MatchupGame.candidateMatchup(
+    opponent,
+    other_opponent,
+    CombatSim.createDefeatRoundCache(0.1)
+  );
+  let exact_matchup = MatchupGame.candidateMatchup(opponent, other_opponent);
+  test.ok(approximate_matchup.score_error_bound > 0);
+  test.ok(Math.abs(approximate_matchup.score - exact_matchup.score) <=
+    approximate_matchup.score_error_bound);
+  let adaptive_response = MatchupGame.adaptiveEquipmentBestResponse(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      socketCapacity: 1,
+      minimumSurvivalProbability: 1e-6,
+      maxIterations: 3,
+    }
+  );
+  test.ok(adaptive_response.converged);
+  test.ok(adaptive_response.iterations.length <= 3);
+  let response_beam = MatchupGame.equipmentResponseBeam(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire', 'AmuletCrystal', 'BerserkerCrystal' ],
+      socketCapacity: 2,
+      minimumSurvivalProbability: 1e-6,
+      beamWidth: 2,
+    }
+  );
+  test.equal(response_beam.beam.length, 2);
+  test.equal(new Set(response_beam.beam.map(function(entry) {
+    return entry.concept_signature;
+  })).size, 2);
+  test.ok(response_beam.finalist_count >= response_beam.beam.length);
+  let adaptive_beam = MatchupGame.adaptiveEquipmentResponseBeam(
+    build, [ opponent ], [ 'opponent' ], [ 1 ], {
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'RiftGun', 'AlienRifle' ] },
+      crystalKeys: [ 'PerfectFire', 'AmuletCrystal', 'BerserkerCrystal' ],
+      socketCapacity: 2,
+      minimumSurvivalProbability: 1e-6,
+      beamWidth: 2,
+    }
+  );
+  test.ok(adaptive_beam.converged);
+  test.ok(adaptive_beam.beam.length <= 2);
 
   test.done();
 };
@@ -1352,6 +1538,7 @@ exports.testRestrictedMatchupGame = function(test) {
   test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
   test.deepEqual(MatchupGame.candidateMatchup(player1, player2), {
     score: 0.5,
+    score_error_bound: 0,
     win_probability: 0.5,
     expected_healing_cost: 3.5,
   });
@@ -1432,6 +1619,37 @@ exports.testRestrictedMatchupGame = function(test) {
     score: 0,
     players: [ 0, 1, 2 ],
   });
+  test.deepEqual(MatchupGame.mixedEquilibrium(cyclic_matrix), {
+    strategy: [ 1 / 3, 1 / 3, 1 / 3 ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 1,
+    converged: true,
+  });
+
+  let weighted_cyclic_matrix = [
+    [ 0.5, 0.4, 0.8 ],
+    [ 0.6, 0.5, 0.3 ],
+    [ 0.2, 0.7, 0.5 ],
+  ];
+  let weighted_equilibrium = MatchupGame.mixedEquilibrium(weighted_cyclic_matrix);
+  test.ok(weighted_equilibrium.converged);
+  test.ok(weighted_equilibrium.exploitability <= 0.001);
+  [ 2 / 6, 3 / 6, 1 / 6 ].forEach(function(expected, player) {
+    test.ok(Math.abs(weighted_equilibrium.strategy[player] - expected) <= 0.01);
+  });
+
+  let pure_matrix = [
+    [ 0.5, 0.7 ],
+    [ 0.3, 0.5 ],
+  ];
+  test.deepEqual(MatchupGame.mixedEquilibrium(pure_matrix), {
+    strategy: [ 1, 0 ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 0,
+    converged: true,
+  });
 
   test.done();
 };
@@ -1487,6 +1705,13 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
   test.deepEqual(analysis.strategic_kernel, [
     'ShadowDojoDLGunBuild3',
   ]);
+  test.deepEqual(analysis.inferred_meta, {
+    weights: [ { candidate: 'ShadowDojoDLGunBuild3', weight: 1 } ],
+    exploitability: 0,
+    tolerance: 0.001,
+    iterations: 0,
+    converged: true,
+  });
   test.equal(analysis.elimination_rounds.length, 3);
   test.equal(analysis.score_matrix.length, analysis.candidate_count);
   test.deepEqual(
@@ -1524,6 +1749,51 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
     ) < 1e-12);
   });
 
+  test.done();
+};
+
+exports.testBatchedEquipmentArchiveExpansion = function(test) {
+  let kernel = BuildCatalogs[2];
+  let expansion = MatchupGame.expandEquipmentArchive(kernel, {
+    startBuild: kernel.ControlledKernel,
+    beamWidth: 2,
+    batchSize: 2,
+    maxIterations: 1,
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    minimumSurvivalProbability: 0.01,
+  });
+
+  test.equal(expansion.added.length, 1);
+  test.equal(expansion.added[0].build.equipment.weapon1.item, 'CrystalSwordT2');
+  test.ok(expansion.added[0].score_against_equilibrium > 0.5);
+  test.equal(Object.keys(expansion.catalog).length, 2);
+  test.deepEqual(expansion.after.inferred_meta.weights, [
+    { candidate: 'EndogenousResponse1', weight: 1 },
+  ]);
+  test.done();
+};
+
+exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
+  let kernel = BuildCatalogs[2];
+  let search = MatchupGame.endogenousEquipmentSearch(kernel, {
+    beamWidth: 2,
+    batchSize: 2,
+    maxRounds: 2,
+    maxIterations: 1,
+    slots: [ 'weapon1' ],
+    itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+    crystalKeys: [ 'PerfectFire' ],
+    minimumSurvivalProbability: 0.01,
+  });
+
+  test.ok(search.converged);
+  test.equal(search.rounds.length, 2);
+  test.equal(search.rounds[0].added.length, 1);
+  test.equal(search.rounds[1].added.length, 0);
+  test.ok(search.caches.catalog_matchups.hits > 0);
+  test.equal(Object.keys(search.catalog).length, 2);
   test.done();
 };
 

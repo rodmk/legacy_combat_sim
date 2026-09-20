@@ -20,6 +20,13 @@
       "dodge": 75,
       "speed": 65,
       "def_skill": 90
+    },
+    "TitanGuard": {
+      "name": "Titan Guard",
+      "armor": 40,
+      "dodge": 68,
+      "speed": 55,
+      "def_skill": 40
     }
   },
   "weapons": {
@@ -108,6 +115,16 @@
       "min_damage": 95,
       "max_damage": 105,
       "accuracy": 95
+    },
+    "CrystalSword": {
+      "name": "Crystal Sword",
+      "type": "melee",
+      "min_damage": 68,
+      "max_damage": 84,
+      "accuracy": 34,
+      "speed": 70,
+      "def_skill": 14,
+      "melee_skill": 26
     },
     "CrystalSwordT2": {
       "name": "Crystal Sword T2",
