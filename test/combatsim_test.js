@@ -1543,7 +1543,32 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
   }));
   test.ok(response.beam[0].weighted_score >=
     response.equipment_response.beam[0].best_response.weighted_score);
+  test.equal(response.iterations.length, 2);
+  test.equal(response.iterations[1].seed_count, response.beam.length);
+  test.ok(response.converged);
+  test.equal(response.convergence_reason, 'repeated_beam');
   test.ok(response.timings_ms.total >= response.timings_ms.equipment);
+
+  let bounded = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      jointMaxIterations: 1,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.equal(bounded.iterations.length, 1);
+  test.equal(bounded.converged, false);
+  test.equal(bounded.convergence_reason, 'iteration_limit');
   test.done();
 };
 

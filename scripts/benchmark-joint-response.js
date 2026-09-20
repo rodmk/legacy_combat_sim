@@ -4,7 +4,7 @@
 let src = require('../combatsim');
 let build = src.Build.ControlledKernel;
 let opponent = src.Player.generateBuild(build);
-let widths = [ 1, 2, 4, 8 ];
+let widths = [ 8 ];
 
 let results = widths.map(function(width) {
   src.BuildSearch.itemVariantReportCache.clear();
@@ -16,13 +16,15 @@ let results = widths.map(function(width) {
     [ 'normal', 'quick', 'aimed', 'cover' ],
     {
       beamWidth: width,
-      maxIterations: 1,
       minimumSurvivalProbability: 1e-6,
     }
   );
   return {
     beam_width: width,
     returned_responses: response.beam.length,
+    iterations: response.iterations.length,
+    converged: response.converged,
+    convergence_reason: response.convergence_reason,
     timings_ms: response.timings_ms,
     equipment_best_score: response.equipment_response.beam[0].best_response.weighted_score,
     joint_best_score: response.beam[0].weighted_score,
