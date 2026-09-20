@@ -108,9 +108,34 @@ The independent validation search starts from equilibrium builds but may move ou
 
 `search:equipment-configurations` holds each seed's five items and weapon mods fixed while jointly optimizing crystals, stats, and attack mode against the current role-averaged equilibrium. Supply a seed catalog with `CONFIGURATION_SEED_CATALOG`, optionally restrict it with `CONFIGURATION_SEED_IDS`, or use a validation result as the seed with `CONFIGURATION_VALIDATION_REPORT`.
 
-`search:configuration-meta` closes that oracle over the restricted meta. It checkpoints the strategy catalog and each completed round in SQLite, solves the current equilibrium, searches every equipment signature carrying retained equilibrium weight, admits up to two novel profitable configurations, and repeats until a full confirmation pass finds none above the configured tolerance. Independent equipment signatures run in a bounded worker pool; set `CONFIGURATION_META_WORKERS` to tune its size. Set `CONFIGURATION_META_DB` to resume a run and `CONFIGURATION_META_REPORT` to export its catalog and round history.
+`search:configuration-meta` closes that oracle over the restricted meta. It checkpoints the strategy catalog and each completed round in SQLite, solves the current equilibrium, and screens every equipment signature carrying retained equilibrium weight with one coarse joint-search iteration. Signatures scoring above `0.505` receive full confirmation, and up to two novel configurations confirmed above `0.51` are admitted. A round with no confirmed admission is practical convergence; its strongest rejected response is retained as residual exploitability. Independent equipment signatures run in a bounded worker pool; set `CONFIGURATION_META_WORKERS` to tune its size. Set `CONFIGURATION_META_DB` to resume a run and `CONFIGURATION_META_REPORT` to export its catalog and round history.
 
 The archived configuration-meta run converged after 16 rounds with 27 strategies; its final confirmation covered three supported equipment signatures and admitted no novel response above `0.501`. The report is stored in `data/configuration-meta.json`. On the benchmark machine, parallel signature search reduced that final confirmation round from 242.3 seconds to 129.7 seconds.
+
+Challenge a configuration meta with unconstrained equipment discovery, then fully configure the strongest differentiated package from each weapon profile:
+
+```sh
+REGION_OPPONENT_CATALOG=data/configuration-meta.json \
+REGION_OPPONENT_REPORT=data/configuration-meta.json \
+yarn --silent analyze:regions > global-regions.json
+
+GLOBAL_CHALLENGE_REGIONS=global-regions.json \
+GLOBAL_CHALLENGE_REPORT=global-challenge.json \
+GLOBAL_CHALLENGE_CATALOG=global-challengers.json \
+yarn --silent search:global-meta-challenge
+```
+
+The global challenge admits at most two profitable responses with distinct five-item equipment signatures. Continue the equilibrium from the preceding artifact by passing its challenger catalog to the configuration-meta search:
+
+```sh
+CONFIGURATION_META_INITIAL_REPORT=data/configuration-meta.json \
+CONFIGURATION_META_EXTRA_CATALOG=global-challengers.json \
+CONFIGURATION_META_DB=.local/global-meta-v2.sqlite \
+CONFIGURATION_META_REPORT=global-meta-v2.json \
+yarn --silent search:configuration-meta
+```
+
+`data/global-meta-challenge.json` records the first global challenge. Its strongest response scores `0.55838`, and `data/global-meta-v2.json` records the resulting 39-strategy equilibrium after five response rounds plus a practical-convergence screen. No equipment family cleared the `0.505` confirmation threshold; the strongest residual response scored `0.50103`.
 
 The global region screen defaults to the controlled entry-level kernel. Set `REGION_OPPONENT_CATALOG` and `REGION_OPPONENT_REPORT` to condition it on a current equilibrium instead. The report must contain a `support` array of candidate IDs and weights, and the catalog supplies those builds. `REGION_BASE_CATALOG` preserves the existing strategy archive when exporting the newly conditioned candidates, while `REGION_CANDIDATE_PREFIX` gives each expansion distinct IDs. Repeating this screen after each restricted-game solve makes candidate discovery depend on the emerging meta rather than the reference-build fixtures.
 

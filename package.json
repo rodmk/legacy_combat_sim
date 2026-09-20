@@ -17,6 +17,7 @@
     "search:candidate-meta": "node scripts/search-candidate-meta.js",
     "search:equipment-configurations": "node scripts/search-equipment-configurations.js",
     "search:configuration-meta": "node scripts/search-configuration-meta.js",
+    "search:global-meta-challenge": "node scripts/search-global-meta-challenge.js",
     "export:candidate-meta": "node scripts/export-candidate-meta.js",
     "validate:candidate-meta": "node scripts/validate-meta-equilibrium.js",
     "screen:conditioned-regions": "node scripts/analyze-attainable-regions.js",

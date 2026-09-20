@@ -9,16 +9,22 @@ let src = require('../combatsim');
 
 let equilibrium_builds_path = process.env.CONFIGURATION_META_INITIAL_BUILDS ||
   path.join('data', 'meta-equilibrium-builds.json');
+let initial_report_path = process.env.CONFIGURATION_META_INITIAL_REPORT;
+let extra_catalog_path = process.env.CONFIGURATION_META_EXTRA_CATALOG;
 let seed_report_path = process.env.CONFIGURATION_META_SEED_REPORT ||
-  path.join('data', 'equipment-configuration-validation.json');
+  (initial_report_path ? null : path.join('data', 'equipment-configuration-validation.json'));
 let database_path = process.env.CONFIGURATION_META_DB ||
   path.join('.local', 'configuration-meta-search.sqlite');
 let output_path = process.env.CONFIGURATION_META_REPORT;
 let max_rounds = Number(process.env.CONFIGURATION_META_ROUNDS || 10);
 let batch_size = Number(process.env.CONFIGURATION_META_BATCH_SIZE || 2);
 let response_tolerance = Number(process.env.CONFIGURATION_META_TOLERANCE || 1e-3);
+let screening_promotion_score = Number(
+  process.env.CONFIGURATION_META_SCREENING_PROMOTION_SCORE || 0.505
+);
+let admission_score = Number(process.env.CONFIGURATION_META_ADMISSION_SCORE || 0.51);
 let screening_iterations = Number(
-  process.env.CONFIGURATION_META_SCREENING_ITERATIONS || 2
+  process.env.CONFIGURATION_META_SCREENING_ITERATIONS || 1
 );
 let confirmation_iterations = Number(
   process.env.CONFIGURATION_META_CONFIRMATION_ITERATIONS || 8
@@ -29,17 +35,26 @@ let worker_count = Number(process.env.CONFIGURATION_META_WORKERS || 4);
 if (!Number.isInteger(worker_count) || worker_count <= 0) {
   throw new Error('Configuration meta worker count must be a positive integer.');
 }
+if (screening_promotion_score <= 0.5 || admission_score < screening_promotion_score) {
+  throw new Error('Configuration meta response thresholds are invalid.');
+}
 
-let initial_builds = JSON.parse(fs.readFileSync(equilibrium_builds_path));
-let seed_report = JSON.parse(fs.readFileSync(seed_report_path));
-let seed_build = Object.assign({}, seed_report.best.build, {
-  name: 'ConfigurationSeed001',
-  reference: false,
-});
-let initial_catalog = Object.assign({}, initial_builds, {
-  ConfigurationSeed001: seed_build,
-});
-let config = JSON.stringify({
+let initial_report = initial_report_path ? JSON.parse(fs.readFileSync(initial_report_path)) :
+  null;
+let initial_builds = initial_report ? initial_report.catalog :
+  JSON.parse(fs.readFileSync(equilibrium_builds_path));
+let initial_catalog = Object.assign({}, initial_builds);
+if (seed_report_path) {
+  let seed_report = JSON.parse(fs.readFileSync(seed_report_path));
+  initial_catalog.ConfigurationSeed001 = Object.assign({}, seed_report.best.build, {
+    name: 'ConfigurationSeed001',
+    reference: false,
+  });
+}
+if (extra_catalog_path) {
+  Object.assign(initial_catalog, JSON.parse(fs.readFileSync(extra_catalog_path)));
+}
+let config_values = {
   equilibrium_builds_path: equilibrium_builds_path,
   seed_report_path: seed_report_path,
   batch_size: batch_size,
@@ -48,7 +63,14 @@ let config = JSON.stringify({
   confirmation_iterations: confirmation_iterations,
   beam_width: beam_width,
   expansion_width: expansion_width,
-});
+  screening_promotion_score: screening_promotion_score,
+  admission_score: admission_score,
+};
+if (initial_report_path) {
+  config_values.initial_report_path = initial_report_path;
+  config_values.extra_catalog_path = extra_catalog_path || null;
+}
+let config = JSON.stringify(config_values);
 
 fs.mkdirSync(path.dirname(database_path), { recursive: true });
 let database = new sqlite.DatabaseSync(database_path);
@@ -68,7 +90,24 @@ database.exec(
 );
 let search = database.prepare('SELECT * FROM search WHERE id = 1').get();
 if (search && search.config_json !== config) {
-  throw new Error('Configuration meta settings do not match the checkpoint database.');
+  let stored_config = JSON.parse(search.config_json);
+  let migratable_thresholds =
+    (stored_config.screening_promotion_score === undefined ||
+      stored_config.screening_promotion_score === screening_promotion_score) &&
+    (stored_config.admission_score === undefined ||
+      stored_config.admission_score === admission_score);
+  let migrated_config = Object.assign({}, stored_config, {
+    screening_iterations: screening_iterations,
+    screening_promotion_score: screening_promotion_score,
+    admission_score: admission_score,
+  });
+  if (stored_config.screening_iterations === 2 && migratable_thresholds &&
+      JSON.stringify(migrated_config) === config) {
+    database.prepare('UPDATE search SET config_json = ? WHERE id = 1').run(config);
+    search.config_json = config;
+  } else {
+    throw new Error('Configuration meta settings do not match the checkpoint database.');
+  }
 }
 if (!search) {
   database.prepare(
@@ -146,7 +185,7 @@ let novelProfitableResponses = function(responses, active_signatures) {
   let by_signature = new Map();
   responses.forEach(function(response) {
     let signature = src.CombatSim.combatSignature(src.Player.generateBuild(response.build));
-    if (response.score <= 0.5 + response_tolerance || active_signatures.has(signature)) {
+    if (response.score <= admission_score || active_signatures.has(signature)) {
       return;
     }
     let existing = by_signature.get(signature);
@@ -163,10 +202,18 @@ let finish = function() {
   let rounds = database.prepare('SELECT report_json FROM round ORDER BY number').all().map(
     function(row) { return JSON.parse(row.report_json); }
   );
+  let final_analysis = src.MatchupGame.analyzeBuildCatalog(catalog, {
+    matchupCache: analysis_cache,
+  });
+  let final_support = src.MatchupGame.pruneOpponentMixture(
+    final_analysis.inferred_meta.weights, 5e-3
+  ).retained;
   let output = {
     settings: JSON.parse(config),
     catalog: catalog,
     rounds: rounds,
+    final_equilibrium: final_analysis.inferred_meta,
+    final_support: final_support,
     converged: Boolean(search.converged),
   };
   if (output_path) {
@@ -200,14 +247,17 @@ let runRound = function(offset) {
       let active_signatures = new Set(Object.keys(catalog).map(function(id) {
         return src.CombatSim.combatSignature(src.Player.generateBuild(catalog[id]));
       }));
-      let profitable = novelProfitableResponses(responses, active_signatures);
-      let confirmation_promise = profitable.length === 0 ?
-        searchResponses(seeds, catalog, retained, confirmation_iterations) :
+      let promoted_seed_ids = new Set(responses.filter(function(response) {
+        return response.score > screening_promotion_score;
+      }).map(function(response) { return response.seed; }));
+      let promoted_seeds = seeds.filter(function(seed) {
+        return promoted_seed_ids.has(seed.id);
+      });
+      let confirmation_promise = promoted_seeds.length > 0 ?
+        searchResponses(promoted_seeds, catalog, retained, confirmation_iterations) :
         Promise.resolve([]);
       return confirmation_promise.then(function(confirmation) {
-        if (confirmation.length > 0) {
-          profitable = novelProfitableResponses(confirmation, active_signatures);
-        }
+        let profitable = novelProfitableResponses(confirmation, active_signatures);
         let response_index = Object.keys(catalog).reduce(function(maximum, id) {
           let match = /^ConfigurationResponse(\d+)$/.exec(id);
           return match ? Math.max(maximum, Number(match[1])) : maximum;
@@ -225,11 +275,30 @@ let runRound = function(offset) {
           equilibrium: analysis.inferred_meta,
           support: retained,
           equipment_signatures: seeds.length,
+          promoted_equipment_signatures: promoted_seeds.length,
+          screening_promotion_score: screening_promotion_score,
+          admission_score: admission_score,
           screening_responses: responses,
           confirmation_responses: confirmation,
+          best_screening_score: responses.length === 0 ? null :
+            responses.reduce(function(best, response) {
+              return Math.max(best, response.score);
+            }, -Infinity),
+          best_confirmation_score: confirmation.length === 0 ? null :
+            confirmation.reduce(function(best, response) {
+              return Math.max(best, response.score);
+            }, -Infinity),
+          residual_response: confirmation.length > 0 ?
+            confirmation.slice().sort(function(left, right) {
+              return right.score - left.score;
+            })[0] : responses.slice().sort(function(left, right) {
+              return right.score - left.score;
+            })[0] || null,
           additions: additions,
           elapsed_ms: Date.now() - started,
           converged: converged,
+          convergence_reason: converged ?
+            'no_confirmed_response_above_admission_score' : null,
         };
         let now = new Date().toISOString();
         database.exec('BEGIN');
