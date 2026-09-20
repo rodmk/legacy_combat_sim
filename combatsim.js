@@ -1853,7 +1853,10 @@ MatchupGame.equipmentResponseBeam = function(
   let beam_width = options.beamWidth || 8;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
+  let neighborhood_started = Date.now();
   let neighborhood = BuildSearch.equipmentNeighborhood(build, options);
+  let neighborhood_ms = Date.now() - neighborhood_started;
+  let approximate_started = Date.now();
   let approximate = this.candidateFrontiers(
     neighborhood.groups, opponents, opponent_ids, {
       defeatCache: options.defeatCache,
@@ -1864,6 +1867,8 @@ MatchupGame.equipmentResponseBeam = function(
       trackFrontiers: false,
     }
   );
+  let approximate_ms = Date.now() - approximate_started;
+  let selection_started = Date.now();
   let concepts = new Map();
   approximate.candidates.forEach(function(candidate) {
     candidate.sources.forEach(function(source) {
@@ -1899,6 +1904,8 @@ MatchupGame.equipmentResponseBeam = function(
   let finalists = neighborhood.groups.filter(function(group) {
     return finalist_signatures.has(group.signature);
   });
+  let selection_ms = Date.now() - selection_started;
+  let exact_started = Date.now();
   let exact = this.candidateFrontiers(finalists, opponents, opponent_ids, {
     defeatCache: options.exactDefeatCache,
     matchupCache: options.exactMatchupCache,
@@ -1906,6 +1913,8 @@ MatchupGame.equipmentResponseBeam = function(
     includeCandidates: true,
     trackFrontiers: false,
   });
+  let exact_ms = Date.now() - exact_started;
+  let assembly_started = Date.now();
   let exact_by_signature = new Map(exact.candidates.map(function(candidate) {
     return [ candidate.signature, candidate ];
   }));
@@ -1928,6 +1937,7 @@ MatchupGame.equipmentResponseBeam = function(
   }).sort(function(left, right) {
     return right.best_response.weighted_score - left.best_response.weighted_score;
   });
+  let assembly_ms = Date.now() - assembly_started;
 
   return {
     beam: beam,
@@ -1937,6 +1947,14 @@ MatchupGame.equipmentResponseBeam = function(
     finalist_count: finalists.length,
     evaluated_matchups: approximate.evaluated_matchups,
     exact_matchups: exact.evaluated_matchups,
+    timings_ms: {
+      neighborhood: neighborhood_ms,
+      approximate: approximate_ms,
+      selection: selection_ms,
+      exact: exact_ms,
+      assembly: assembly_ms,
+      total: neighborhood_ms + approximate_ms + selection_ms + exact_ms + assembly_ms,
+    },
   };
 };
 
@@ -2131,30 +2149,23 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let starting_build = options.startBuild || catalog[equilibrium_entries.slice().sort(
     function(left, right) { return right.weight - left.weight; }
   )[0].candidate];
+  let attack_types = options.attackTypes || [ 'normal', 'quick', 'aimed', 'cover' ];
   let search_started = Date.now();
-  let response = this.adaptiveEquipmentResponseBeam(
-    starting_build,
-    opponents,
-    opponent_ids,
-    opponent_weights,
-    options
+  let response = this.jointEquipmentStatResponseBeam(
+    starting_build, opponents, opponent_ids, opponent_weights, attack_types, options
   );
   let search_ms = Date.now() - search_started;
   let archived_signatures = new Set(Object.keys(catalog).map(function(key) {
     return CombatSim.combatSignature(Player.generateBuild(catalog[key]));
   }));
-  let archived_concepts = new Set(Object.keys(catalog).map(function(key) {
-    return BuildSearch.equipmentConceptSignature(catalog[key]);
-  }));
   let profitable = response.beam.filter(function(entry) {
-    return entry.best_response.weighted_score > 0.5 + improvement_tolerance &&
-      !archived_signatures.has(entry.best_response.signature) &&
-      !archived_concepts.has(entry.concept_signature);
+    return entry.weighted_score > 0.5 + improvement_tolerance &&
+      !archived_signatures.has(entry.signature);
   });
   let provisional_catalog = Object.assign({}, catalog);
   profitable.forEach(function(entry, index) {
     provisional_catalog['ProvisionalResponse' + index] = Object.assign(
-      {}, entry.best_response.sources[0].build, { reference: false }
+      {}, entry.build, { reference: false }
     );
   });
   let provisional_analysis = profitable.length > 0 ? this.analyzeBuildCatalog(
@@ -2173,7 +2184,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
   let expanded_catalog = Object.assign({}, catalog);
   selected.forEach(function(entry, index) {
     let key = 'EndogenousResponse' + (Object.keys(catalog).length + index);
-    let build = Object.assign({}, entry.best_response.sources[0].build, {
+    let build = Object.assign({}, entry.build, {
       name: 'Endogenous Response ' + (Object.keys(catalog).length + index),
       reference: false,
     });
@@ -2191,7 +2202,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
       return {
         id: 'EndogenousResponse' + (Object.keys(catalog).length + index),
         concept_signature: entry.concept_signature,
-        score_against_equilibrium: entry.best_response.weighted_score,
+        score_against_equilibrium: entry.weighted_score,
         build: expanded_catalog['EndogenousResponse' + (Object.keys(catalog).length + index)],
       };
     }),
@@ -2211,6 +2222,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
 MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
   options = options || {};
   let maximum_rounds = options.maxRounds === undefined ? Infinity : options.maxRounds;
+  let round_offset = options.roundOffset || 0;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
@@ -2234,7 +2246,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       return entry.candidate;
     }));
     rounds.push({
-      round: round,
+      round: round_offset + round,
       archive_size_before: Object.keys(current_catalog).length,
       archive_size_after: Object.keys(expansion.catalog).length,
       added: expansion.added,
@@ -2244,10 +2256,36 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       support_size: support.size,
       equilibrium: expansion.after.inferred_meta,
       response_converged: expansion.response.converged,
+      response_convergence_reason: expansion.response.convergence_reason,
       response_iterations: expansion.response.iterations.length,
+      response_passes: expansion.response.iterations.map(function(iteration) {
+        return {
+          iteration: iteration.iteration,
+          stat_fidelity: iteration.stat_fidelity,
+          seed_count: iteration.seed_count,
+          equipment_candidate_count: iteration.equipment_candidate_count,
+          equipment_finalist_count: iteration.equipment_finalist_count,
+          equipment_concept_count: iteration.equipment_concept_count,
+          equipment_combat_signature_count: iteration.equipment_combat_signature_count,
+          stat_search_requests: iteration.stat_search_requests,
+          stat_candidate_count: iteration.stat_candidate_count,
+          exact_stat_finalist_count: iteration.exact_stat_finalist_count,
+          improvement: iteration.improvement,
+          timings_ms: iteration.timings_ms,
+          equipment_profile_ms: iteration.equipment_profile_ms,
+          stat_profile_ms: iteration.stat_profile_ms,
+        };
+      }),
       timings_ms: expansion.timings_ms,
     });
     current_catalog = expansion.catalog;
+    if (options.onRound) {
+      options.onRound({
+        catalog: current_catalog,
+        round: rounds[rounds.length - 1],
+        converged: expansion.added.length === 0,
+      });
+    }
     if (expansion.added.length === 0) {
       return {
         catalog: current_catalog,
@@ -2279,7 +2317,234 @@ MatchupGame.equipmentSearchCacheStats = function(options) {
   };
 };
 
+MatchupGame.jointEquipmentStatResponseBeam = function(
+  build, opponents, opponent_ids, opponent_weights, attack_types, options
+) {
+  options = options || {};
+  let beam_width = options.beamWidth || 8;
+  let maximum_iterations = options.jointMaxIterations === undefined ?
+    Infinity : options.jointMaxIterations;
+  let improvement_tolerance = options.improvementTolerance === undefined ?
+    1e-3 : options.improvementTolerance;
+  let progressive_stat_fidelity = options.progressiveStatFidelity !== false;
+  let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
+    0.01 : options.minimumSurvivalProbability;
+  let shared_options = Object.assign({}, options, {
+    beamWidth: beam_width,
+    defeatCache: options.defeatCache ||
+      CombatSim.createDefeatRoundCache(minimum_survival_probability),
+    matchupCache: options.matchupCache || { values: new Map(), hits: 0, misses: 0 },
+    exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
+    exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
+  });
+  let seeds = [ build ];
+  let seen_beams = new Set();
+  let iterations = [];
+  let equipment_ms = 0;
+  let stat_ms = 0;
+  let beam = [];
+  let equipment;
+  let previous_best_score = null;
+  let full_stat_fidelity = !progressive_stat_fidelity;
+  let skip_equipment_expansion = false;
+
+  for (let iteration = 1; iteration <= maximum_iterations; iteration++) {
+    let equipment_started = Date.now();
+    let responses = skip_equipment_expansion ? [] : seeds.map(function(seed) {
+      return MatchupGame.equipmentResponseBeam(
+        seed, opponents, opponent_ids, opponent_weights, shared_options
+      );
+    });
+    let incumbent_groups = seeds.map(function(seed) {
+      return {
+        signature: CombatSim.combatSignature(Player.generateBuild(seed)),
+        representative: Player.generateBuild(seed),
+        sources: [ { build: seed } ],
+      };
+    });
+    let incumbents = MatchupGame.candidateFrontiers(
+      incumbent_groups, opponents, opponent_ids, {
+        defeatCache: shared_options.exactDefeatCache,
+        matchupCache: shared_options.exactMatchupCache,
+        opponentWeights: opponent_weights,
+        includeCandidates: true,
+        trackFrontiers: false,
+      }
+    );
+    let equipment_by_concept = new Map();
+    let add_equipment_entry = function(entry) {
+      let existing = equipment_by_concept.get(entry.concept_signature);
+      if (!existing || entry.best_response.weighted_score >
+          existing.best_response.weighted_score) {
+        equipment_by_concept.set(entry.concept_signature, entry);
+      }
+    };
+    responses.forEach(function(response) {
+      response.beam.forEach(add_equipment_entry);
+    });
+    incumbents.candidates.forEach(function(candidate) {
+      add_equipment_entry({
+        concept_signature: BuildSearch.equipmentConceptSignature(candidate.sources[0].build),
+        best_response: candidate,
+      });
+    });
+    let ranked_equipment = Array.from(equipment_by_concept.values()).sort(
+      function(left, right) {
+        return right.best_response.weighted_score - left.best_response.weighted_score;
+      }
+    );
+    let equipment_by_combat = new Map();
+    ranked_equipment.forEach(function(entry) {
+      if (!equipment_by_combat.has(entry.best_response.signature)) {
+        equipment_by_combat.set(entry.best_response.signature, entry);
+      }
+    });
+    let equipment_beam = Array.from(equipment_by_combat.values()).slice(0, beam_width);
+    let iteration_equipment_ms = Date.now() - equipment_started;
+    equipment_ms += iteration_equipment_ms;
+    equipment = {
+      beam: equipment_beam,
+      concept_count: equipment_by_concept.size,
+      combat_signature_count: equipment_by_combat.size,
+      candidate_count: responses.reduce(function(sum, response) {
+        return sum + response.candidate_count;
+      }, 0),
+      finalist_count: responses.reduce(function(sum, response) {
+        return sum + response.finalist_count;
+      }, 0) + incumbents.candidate_count,
+      evaluated_matchups: responses.reduce(function(sum, response) {
+        return sum + response.evaluated_matchups;
+      }, 0),
+      exact_matchups: responses.reduce(function(sum, response) {
+        return sum + response.exact_matchups;
+      }, 0) + incumbents.evaluated_matchups,
+    };
+
+    let responses_by_signature = new Map();
+    let iteration_stat_started = Date.now();
+    let stat_candidate_count = 0;
+    let exact_stat_finalist_count = 0;
+    let stat_profile = {
+      candidate_generation: 0,
+      approximate_evaluation: 0,
+      frontier_expansion: 0,
+      finalist_selection: 0,
+      exact_evaluation: 0,
+    };
+    equipment_beam.forEach(function(entry) {
+      let equipment_build = entry.best_response.sources[0].build;
+      let stats = MatchupGame.adaptiveStatFrontiers(
+        equipment_build,
+        opponents,
+        opponent_ids,
+        attack_types,
+        Object.assign({}, shared_options, {
+          opponentWeights: opponent_weights,
+          weightedBestOnly: true,
+          pointStrides: full_stat_fidelity ? options.pointStrides :
+            (options.coarsePointStrides || [ 11 ]),
+          convergeStats: full_stat_fidelity,
+        })
+      );
+      stat_candidate_count += stats.search_candidate_count;
+      exact_stat_finalist_count += stats.exact_finalist_count;
+      Object.keys(stat_profile).forEach(function(key) {
+        stat_profile[key] += stats.timings_ms[key];
+      });
+      let source = stats.best_weighted.sources[0];
+      let response_build = Object.assign({}, equipment_build, {
+        stats: source.stats,
+        attack_type: source.attack_type,
+      });
+      let signature = CombatSim.combatSignature(Player.generateBuild(response_build));
+      let response = {
+        signature: signature,
+        concept_signature: BuildSearch.equipmentConceptSignature(response_build),
+        weighted_score: stats.best_weighted.weighted_score,
+        build: response_build,
+        stat_search: stats,
+      };
+      let existing = responses_by_signature.get(signature);
+      if (!existing || response.weighted_score > existing.weighted_score) {
+        responses_by_signature.set(signature, response);
+      }
+    });
+    let iteration_stat_ms = Date.now() - iteration_stat_started;
+    stat_ms += iteration_stat_ms;
+    beam = Array.from(responses_by_signature.values()).sort(function(left, right) {
+      return right.weighted_score - left.weighted_score;
+    }).slice(0, beam_width);
+    let beam_signature = JSON.stringify(beam.map(function(entry) {
+      return entry.signature;
+    }).sort());
+    iterations.push({
+      iteration: iteration,
+      stat_fidelity: full_stat_fidelity ? 'full' : 'coarse',
+      seed_count: seeds.length,
+      equipment_candidate_count: equipment.candidate_count,
+      equipment_finalist_count: equipment.finalist_count,
+      equipment_concept_count: equipment.concept_count,
+      equipment_combat_signature_count: equipment.combat_signature_count,
+      stat_search_requests: equipment_beam.length,
+      stat_candidate_count: stat_candidate_count,
+      exact_stat_finalist_count: exact_stat_finalist_count,
+      improvement: previous_best_score === null ? null :
+        beam[0].weighted_score - previous_best_score,
+      timings_ms: {
+        equipment: iteration_equipment_ms,
+        stats: iteration_stat_ms,
+        total: iteration_equipment_ms + iteration_stat_ms,
+      },
+      equipment_profile_ms: responses.reduce(function(profile, response) {
+        Object.keys(profile).forEach(function(key) {
+          profile[key] += response.timings_ms[key];
+        });
+        return profile;
+      }, { neighborhood: 0, approximate: 0, selection: 0, exact: 0, assembly: 0 }),
+      stat_profile_ms: stat_profile,
+      beam: beam,
+    });
+    let repeated = seen_beams.has(beam_signature);
+    let improvement = previous_best_score === null ? null :
+      beam[0].weighted_score - previous_best_score;
+    let stable = repeated || (improvement !== null && improvement <= improvement_tolerance);
+    if (stable && full_stat_fidelity) {
+      return {
+        beam: beam,
+        equipment_response: equipment,
+        iterations: iterations,
+        converged: true,
+        convergence_reason: repeated ? 'repeated_beam' : 'score_tolerance',
+        timings_ms: {
+          equipment: equipment_ms,
+          stats: stat_ms,
+          total: equipment_ms + stat_ms,
+        },
+      };
+    }
+    seen_beams.add(beam_signature);
+    previous_best_score = beam[0].weighted_score;
+    seeds = beam.map(function(entry) { return entry.build; });
+    skip_equipment_expansion = stable && !full_stat_fidelity;
+    full_stat_fidelity = !progressive_stat_fidelity || stable;
+  }
+
+  return {
+    beam: beam,
+    equipment_response: equipment,
+    iterations: iterations,
+    converged: false,
+    convergence_reason: 'iteration_limit',
+    timings_ms: {
+      equipment: equipment_ms,
+      stats: stat_ms,
+      total: equipment_ms + stat_ms,
+    },
+  };
+};
+
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
+  let search_started = Date.now();
   options = options || {};
   let point_strides = options.pointStrides || [ 11, 5, 2, 1 ];
   if (point_strides.length === 0 || point_strides.some(function(point_stride) {
@@ -2294,6 +2559,9 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   let search_cache = CombatSim.createDefeatRoundCache(minimum_survival_probability);
   let matchup_cache = { values: new Map(), hits: 0, misses: 0 };
   let pending_groups = [];
+  let candidate_generation_ms = 0;
+  let approximate_evaluation_ms = 0;
+  let frontier_expansion_ms = 0;
   let addSource = function(source) {
     if (source.stats.hp < 2 || source.stats.speed < 2 ||
         source.stats.accuracy < 4 || source.stats.dodge < 4 ||
@@ -2350,6 +2618,15 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
     return added;
   };
 
+  let incumbent_source_key = null;
+  let generation_started = Date.now();
+  let current_attack_type = build.attack_type || 'normal';
+  if (attack_types.includes(current_attack_type)) {
+    let incumbent_source = { attack_type: current_attack_type, stats: build.stats };
+    if (addSource(incumbent_source)) {
+      incumbent_source_key = JSON.stringify([ current_attack_type, build.stats ]);
+    }
+  }
   attack_types.forEach(function(attack_type) {
     let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
     BuildSearch.forEachStatAllocation(speed_points, {
@@ -2359,10 +2636,12 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       addSource({ attack_type: attack_type, stats: stats });
     });
   });
+  candidate_generation_ms += Date.now() - generation_started;
 
   let stages = [];
   let frontier_result;
   point_strides.forEach(function(point_stride, stage) {
+    let evaluation_started = Date.now();
     frontier_result = MatchupGame.candidateFrontiers(
       pending_groups,
       opponents,
@@ -2371,8 +2650,11 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         defeatCache: search_cache,
         matchupCache: matchup_cache,
         previousResult: frontier_result,
+        opponentWeights: options.opponentWeights,
       }
     );
+    let evaluation_ms = Date.now() - evaluation_started;
+    approximate_evaluation_ms += evaluation_ms;
     pending_groups = [];
     stages.push({
       point_stride: point_stride,
@@ -2380,21 +2662,29 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       evaluated_matchups: frontier_result.evaluated_matchups,
       combat_frontier_count: frontier_result.combat_frontier.length,
       combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+      evaluation_ms: evaluation_ms,
     });
 
     if (stage === point_strides.length - 1) {
       return;
     }
     let next_stride = point_strides[stage + 1];
+    let expansion_started = Date.now();
     expandFrontier(frontier_result, point_stride, next_stride);
+    let expansion_ms = Date.now() - expansion_started;
+    frontier_expansion_ms += expansion_ms;
+    stages[stages.length - 1].expansion_ms = expansion_ms;
   });
 
   let convergence = [];
   let convergence_iteration = 0;
-  let converged = false;
+  let converged = options.convergeStats === false;
   while (!converged) {
     convergence_iteration++;
+    let expansion_started = Date.now();
     let added = expandFrontier(frontier_result, 1, 1);
+    let expansion_ms = Date.now() - expansion_started;
+    frontier_expansion_ms += expansion_ms;
     if (added === 0) {
       convergence.push({
         iteration: convergence_iteration,
@@ -2402,10 +2692,13 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         candidate_count: frontier_result.candidate_count,
         combat_frontier_count: frontier_result.combat_frontier.length,
         combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+        expansion_ms: expansion_ms,
+        evaluation_ms: 0,
       });
       converged = true;
       continue;
     }
+    let evaluation_started = Date.now();
     frontier_result = MatchupGame.candidateFrontiers(
       pending_groups,
       opponents,
@@ -2414,8 +2707,11 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         defeatCache: search_cache,
         matchupCache: matchup_cache,
         previousResult: frontier_result,
+        opponentWeights: options.opponentWeights,
       }
     );
+    let evaluation_ms = Date.now() - evaluation_started;
+    approximate_evaluation_ms += evaluation_ms;
     pending_groups = [];
     convergence.push({
       iteration: convergence_iteration,
@@ -2423,22 +2719,46 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       candidate_count: frontier_result.candidate_count,
       combat_frontier_count: frontier_result.combat_frontier.length,
       combat_economy_frontier_count: frontier_result.combat_economy_frontier.length,
+      expansion_ms: expansion_ms,
+      evaluation_ms: evaluation_ms,
     });
   }
 
+  let finalist_selection_started = Date.now();
   let finalist_source_keys = new Set();
-  frontier_result.combat_frontier.concat(frontier_result.combat_economy_frontier)
-    .forEach(function(candidate) {
-      candidate.sources.forEach(function(source) {
-        finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
-      });
+  let frontier_candidates = frontier_result.combat_frontier.concat(
+    frontier_result.combat_economy_frontier
+  );
+  if (options.weightedBestOnly) {
+    let weighted_lower_bound = Math.max.apply(null, frontier_candidates.map(
+      function(candidate) {
+        return candidate.weighted_score - candidate.weighted_score_error_bound;
+      }
+    ));
+    frontier_candidates = frontier_candidates.filter(function(candidate) {
+      return candidate.weighted_score + candidate.weighted_score_error_bound >=
+        weighted_lower_bound - 1e-12;
     });
+  }
+  frontier_candidates.forEach(function(candidate) {
+    candidate.sources.forEach(function(source) {
+      finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
+    });
+  });
+  if (incumbent_source_key !== null) {
+    finalist_source_keys.add(incumbent_source_key);
+  }
   let finalists = Array.from(groups_by_signature.values()).filter(function(group) {
     return group.sources.some(function(source) {
       return finalist_source_keys.has(JSON.stringify([ source.attack_type, source.stats ]));
     });
   });
-  let exact_result = MatchupGame.candidateFrontiers(finalists, opponents, opponent_ids);
+  let finalist_selection_ms = Date.now() - finalist_selection_started;
+  let exact_started = Date.now();
+  let exact_result = MatchupGame.candidateFrontiers(finalists, opponents, opponent_ids, {
+    opponentWeights: options.opponentWeights,
+  });
+  let exact_evaluation_ms = Date.now() - exact_started;
   exact_result.search_candidate_count = frontier_result.candidate_count;
   exact_result.search_evaluated_matchups = frontier_result.evaluated_matchups;
   exact_result.search_defeat_cache = frontier_result.defeat_cache;
@@ -2448,6 +2768,14 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   exact_result.stages = stages;
   exact_result.convergence = convergence;
   exact_result.converged = converged;
+  exact_result.timings_ms = {
+    candidate_generation: candidate_generation_ms,
+    approximate_evaluation: approximate_evaluation_ms,
+    frontier_expansion: frontier_expansion_ms,
+    finalist_selection: finalist_selection_ms,
+    exact_evaluation: exact_evaluation_ms,
+    total: Date.now() - search_started,
+  };
   return exact_result;
 };
 

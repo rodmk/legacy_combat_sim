@@ -1475,6 +1475,15 @@ exports.testStatAllocationGeneration = function(test) {
   test.equal(adaptive.exact_finalist_count, 2);
   test.equal(adaptive.converged, true);
   test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
+  let weighted_only = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], minimumSurvivalProbability: 1e-6, weightedBestOnly: true }
+  );
+  test.equal(weighted_only.best_weighted.signature, adaptive.best_weighted.signature);
+  test.ok(weighted_only.exact_finalist_count <= adaptive.exact_finalist_count);
   test.throws(function() {
     MatchupGame.adaptiveStatFrontiers(
       build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [] }
@@ -1513,6 +1522,87 @@ exports.testStatAllocationGeneration = function(test) {
         return sum + iteration.added_allocations;
       }, 0)
   );
+  test.done();
+};
+
+exports.testJointEquipmentStatResponseBeam = function(test) {
+  let build = Build.ControlledKernel;
+  let opponent = Player.generateBuild(build);
+  let response = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      maxIterations: 1,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+
+  test.ok(response.beam.length > 0);
+  test.ok(response.beam.every(function(entry) {
+    return entry.build.stats.hp === 70 && entry.build.attack_type === 'normal';
+  }));
+  test.ok(response.beam[0].weighted_score >=
+    response.equipment_response.beam[0].best_response.weighted_score);
+  test.ok(response.iterations.length >= 2);
+  test.equal(response.iterations[1].seed_count, response.beam.length);
+  test.ok(response.iterations.every(function(iteration) {
+    return iteration.equipment_combat_signature_count <= iteration.equipment_concept_count;
+  }));
+  test.ok(response.converged);
+  test.equal(response.iterations[response.iterations.length - 1].stat_fidelity, 'full');
+  test.equal(response.convergence_reason, 'repeated_beam');
+  test.ok(response.timings_ms.total >= response.timings_ms.equipment);
+
+  let full_fidelity = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      progressiveStatFidelity: false,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.ok(Math.abs(
+    response.beam[0].weighted_score - full_fidelity.beam[0].weighted_score
+  ) <= 1e-6);
+
+  let bounded = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      jointMaxIterations: 1,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.equal(bounded.iterations.length, 1);
+  test.equal(bounded.converged, false);
+  test.equal(bounded.convergence_reason, 'iteration_limit');
   test.done();
 };
 
@@ -1777,23 +1867,40 @@ exports.testBatchedEquipmentArchiveExpansion = function(test) {
 
 exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
   let kernel = BuildCatalogs[2];
+  let checkpoints = [];
   let search = MatchupGame.endogenousEquipmentSearch(kernel, {
     beamWidth: 2,
     batchSize: 2,
-    maxRounds: 2,
-    maxIterations: 1,
+    maxRounds: 3,
+    attackTypes: [ 'normal' ],
+    hpPoints: [ 70 ],
+    pointStrides: [ 11 ],
     slots: [ 'weapon1' ],
     itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
     crystalKeys: [ 'PerfectFire' ],
     minimumSurvivalProbability: 0.01,
+    roundOffset: 4,
+    onRound: function(checkpoint) { checkpoints.push(checkpoint); },
   });
 
   test.ok(search.converged);
-  test.equal(search.rounds.length, 2);
+  test.equal(search.rounds.length, 3);
+  test.deepEqual(search.rounds.map(function(round) { return round.round; }), [ 5, 6, 7 ]);
+  test.deepEqual(checkpoints.map(function(checkpoint) {
+    return checkpoint.round.round;
+  }), [ 5, 6, 7 ]);
+  test.equal(checkpoints[0].converged, false);
+  test.equal(checkpoints[2].converged, true);
   test.equal(search.rounds[0].added.length, 1);
-  test.equal(search.rounds[1].added.length, 0);
+  test.equal(search.rounds[1].added.length, 1);
+  test.equal(search.rounds[2].added.length, 0);
+  test.equal(
+    search.rounds[0].added[0].concept_signature,
+    search.rounds[1].added[0].concept_signature
+  );
+  test.notDeepEqual(search.rounds[0].added[0].build.stats, search.rounds[1].added[0].build.stats);
   test.ok(search.caches.catalog_matchups.hits > 0);
-  test.equal(Object.keys(search.catalog).length, 2);
+  test.equal(Object.keys(search.catalog).length, 3);
   test.done();
 };
 
