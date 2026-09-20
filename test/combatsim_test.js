@@ -1810,6 +1810,31 @@ exports.testJointEquipmentStatResponseBeam = function(test) {
     response.beam[0].weighted_score - full_fidelity.beam[0].weighted_score
   ) <= 1e-6);
 
+  let fixed_equipment = MatchupGame.fixedEquipmentConfigurationResponse(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      jointMaxIterations: 1,
+      slots: [ 'weapon1' ],
+      crystalKeys: [ 'PerfectFire', 'AmuletCrystal' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+  test.ok(fixed_equipment.beam.length > 0);
+  test.equal(
+    fixed_equipment.equipment_signature,
+    BuildSearch.equipmentSignature(build.equipment)
+  );
+  test.ok(fixed_equipment.beam.every(function(entry) {
+    return entry.build.equipment.weapon1.item === build.equipment.weapon1.item;
+  }));
+
   let bounded = MatchupGame.jointEquipmentStatResponseBeam(
     build,
     [ opponent ],

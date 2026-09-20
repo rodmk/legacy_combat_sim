@@ -1,0 +1,166 @@
+{
+  "equilibrium": [
+    {
+      "candidate": "RegionGunGun0011",
+      "weight": 0.14228975997237092
+    },
+    {
+      "candidate": "RegionGunGun0575",
+      "weight": 0.21896045587981353
+    },
+    {
+      "candidate": "RegionMeleeMelee0647",
+      "weight": 0.21896045587981353
+    },
+    {
+      "candidate": "RegionGunGun0552",
+      "weight": 0.4197893282680021
+    }
+  ],
+  "results": [
+    {
+      "seed": "RegionGunGun0552",
+      "score": 0.736621805122287,
+      "build": {
+        "name": "RegionGunGun0552",
+        "level": 80,
+        "reference": false,
+        "stats": {
+          "hp": 126,
+          "speed": 2,
+          "accuracy": 4,
+          "dodge": 51
+        },
+        "attack_type": "cover",
+        "equipment": {
+          "armor": {
+            "item": "DarkLegionArmor",
+            "crystals": [
+              "CorruptedWater",
+              "CorruptedWater",
+              "CorruptedWater",
+              "CorruptedWater"
+            ]
+          },
+          "weapon1": {
+            "item": "DoubleBarrelSniperRifle",
+            "crystals": [
+              "AmuletCrystal",
+              "AmuletCrystal",
+              "AmuletCrystal",
+              "AmuletCrystal"
+            ]
+          },
+          "weapon2": {
+            "item": "AlienRifle",
+            "crystals": [
+              "AmuletCrystal",
+              "AmuletCrystal",
+              "AmuletCrystal",
+              "AmuletCrystal"
+            ]
+          },
+          "misc1": {
+            "item": "ArchaticRing",
+            "crystals": [
+              "CorruptedPink",
+              "CorruptedPink",
+              "CorruptedPink",
+              "CorruptedPink"
+            ]
+          },
+          "misc2": {
+            "item": "BioSpinalEnhancer",
+            "crystals": [
+              "CorruptedPink",
+              "CorruptedPink",
+              "GreenInferno",
+              "GreenInferno"
+            ]
+          }
+        }
+      },
+      "converged": true,
+      "convergence_reason": "repeated_beam",
+      "iterations": 6,
+      "timings_ms": {
+        "equipment": 3843,
+        "stats": 94060,
+        "total": 97903
+      },
+      "elapsed_ms": 97905
+    }
+  ],
+  "best": {
+    "seed": "RegionGunGun0552",
+    "score": 0.736621805122287,
+    "build": {
+      "name": "RegionGunGun0552",
+      "level": 80,
+      "reference": false,
+      "stats": {
+        "hp": 126,
+        "speed": 2,
+        "accuracy": 4,
+        "dodge": 51
+      },
+      "attack_type": "cover",
+      "equipment": {
+        "armor": {
+          "item": "DarkLegionArmor",
+          "crystals": [
+            "CorruptedWater",
+            "CorruptedWater",
+            "CorruptedWater",
+            "CorruptedWater"
+          ]
+        },
+        "weapon1": {
+          "item": "DoubleBarrelSniperRifle",
+          "crystals": [
+            "AmuletCrystal",
+            "AmuletCrystal",
+            "AmuletCrystal",
+            "AmuletCrystal"
+          ]
+        },
+        "weapon2": {
+          "item": "AlienRifle",
+          "crystals": [
+            "AmuletCrystal",
+            "AmuletCrystal",
+            "AmuletCrystal",
+            "AmuletCrystal"
+          ]
+        },
+        "misc1": {
+          "item": "ArchaticRing",
+          "crystals": [
+            "CorruptedPink",
+            "CorruptedPink",
+            "CorruptedPink",
+            "CorruptedPink"
+          ]
+        },
+        "misc2": {
+          "item": "BioSpinalEnhancer",
+          "crystals": [
+            "CorruptedPink",
+            "CorruptedPink",
+            "GreenInferno",
+            "GreenInferno"
+          ]
+        }
+      }
+    },
+    "converged": true,
+    "convergence_reason": "repeated_beam",
+    "iterations": 6,
+    "timings_ms": {
+      "equipment": 3843,
+      "stats": 94060,
+      "total": 97903
+    },
+    "elapsed_ms": 97905
+  }
+}
