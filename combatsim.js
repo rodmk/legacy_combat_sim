@@ -2411,7 +2411,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
   let screening_survival_probability = options.screeningMinimumSurvivalProbability === undefined ?
-    0.05 : options.screeningMinimumSurvivalProbability;
+    0.1 : options.screeningMinimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
     beamWidth: beam_width,
     defeatCache: options.defeatCache ||

@@ -7,6 +7,10 @@ let src = require('../combatsim');
 
 let database_path = process.env.SEARCH_DB || path.join('.local', 'meta-search.sqlite');
 let progressive = process.env.PROGRESSIVE_COMBAT_FIDELITY !== 'false';
+let screening_survival_probability = Number(
+  process.env.SCREENING_MINIMUM_SURVIVAL_PROBABILITY || 0.1
+);
+let screening_beam_width = Number(process.env.SCREENING_BEAM_WIDTH || 16);
 let database = new sqlite.DatabaseSync(database_path, { readOnly: true });
 let latest = database.prepare(
   'SELECT catalog_json FROM round ORDER BY number DESC LIMIT 1'
@@ -37,7 +41,8 @@ let options = {
   minimumSurvivalProbability: 0.01,
 };
 if (progressive) {
-  options.screeningMinimumSurvivalProbability = 0.05;
+  options.screeningMinimumSurvivalProbability = screening_survival_probability;
+  options.screeningBeamWidth = screening_beam_width;
 }
 
 let started = Date.now();
@@ -52,6 +57,8 @@ let elapsed_ms = Date.now() - started;
 
 console.log(JSON.stringify({
   progressive_combat_fidelity: progressive,
+  screening_minimum_survival_probability: screening_survival_probability,
+  screening_beam_width: screening_beam_width,
   starting_build: starting_entry.candidate,
   opponent_count: opponents.length,
   dropped_opponents: opponent_mixture.dropped,
