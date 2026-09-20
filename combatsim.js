@@ -2407,7 +2407,10 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
         opponents,
         opponent_ids,
         attack_types,
-        Object.assign({}, shared_options, { opponentWeights: opponent_weights })
+        Object.assign({}, shared_options, {
+          opponentWeights: opponent_weights,
+          weightedBestOnly: true,
+        })
       );
       stat_candidate_count += stats.search_candidate_count;
       exact_stat_finalist_count += stats.exact_finalist_count;
@@ -2650,12 +2653,25 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
   }
 
   let finalist_source_keys = new Set();
-  frontier_result.combat_frontier.concat(frontier_result.combat_economy_frontier)
-    .forEach(function(candidate) {
-      candidate.sources.forEach(function(source) {
-        finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
-      });
+  let frontier_candidates = frontier_result.combat_frontier.concat(
+    frontier_result.combat_economy_frontier
+  );
+  if (options.weightedBestOnly) {
+    let weighted_lower_bound = Math.max.apply(null, frontier_candidates.map(
+      function(candidate) {
+        return candidate.weighted_score - candidate.weighted_score_error_bound;
+      }
+    ));
+    frontier_candidates = frontier_candidates.filter(function(candidate) {
+      return candidate.weighted_score + candidate.weighted_score_error_bound >=
+        weighted_lower_bound - 1e-12;
     });
+  }
+  frontier_candidates.forEach(function(candidate) {
+    candidate.sources.forEach(function(source) {
+      finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
+    });
+  });
   if (incumbent_source_key !== null) {
     finalist_source_keys.add(incumbent_source_key);
   }

@@ -1475,6 +1475,15 @@ exports.testStatAllocationGeneration = function(test) {
   test.equal(adaptive.exact_finalist_count, 2);
   test.equal(adaptive.converged, true);
   test.equal(adaptive.convergence[adaptive.convergence.length - 1].added_allocations, 0);
+  let weighted_only = MatchupGame.adaptiveStatFrontiers(
+    build,
+    opponents,
+    opponent_keys,
+    [ 'normal', 'quick', 'aimed', 'cover' ],
+    { hpPoints: [ 2 ], minimumSurvivalProbability: 1e-6, weightedBestOnly: true }
+  );
+  test.equal(weighted_only.best_weighted.signature, adaptive.best_weighted.signature);
+  test.ok(weighted_only.exact_finalist_count <= adaptive.exact_finalist_count);
   test.throws(function() {
     MatchupGame.adaptiveStatFrontiers(
       build, opponents, opponent_keys, [ 'normal' ], { pointStrides: [] }
