@@ -15,6 +15,8 @@
     "search:expand-equipment": "node scripts/expand-equipment-archive.js",
     "search:meta": "node scripts/search-meta.js",
     "search:candidate-meta": "node scripts/search-candidate-meta.js",
+    "search:equipment-configurations": "node scripts/search-equipment-configurations.js",
+    "search:configuration-meta": "node scripts/search-configuration-meta.js",
     "export:candidate-meta": "node scripts/export-candidate-meta.js",
     "validate:candidate-meta": "node scripts/validate-meta-equilibrium.js",
     "screen:conditioned-regions": "node scripts/analyze-attainable-regions.js",

@@ -2045,27 +2045,34 @@ BuildSearch.equipmentNeighborhood = function(build, options) {
         throw new Error('Unknown equipment slot: ' + slot + '.');
       }
       let catalog = equipmentCatalog[catalog_name];
-      let item_keys = settings.itemKeysBySlot && settings.itemKeysBySlot[slot] ||
-      Object.keys(catalog);
       let slot_groups = [];
-
-      item_keys.forEach(function(item_key) {
-        if (!catalog[item_key]) {
-          throw new Error('Unknown ' + catalog_name + ' item: ' + item_key + '.');
-        }
-        let active_weapon_keys = weapon_keys.slice();
-        if (slot === 'weapon1') {
-          active_weapon_keys[0] = item_key;
-        } else if (slot === 'weapon2') {
-          active_weapon_keys[1] = item_key;
-        }
-        let report = BuildSearch.cachedItemVariantReport(item_key, {
-          activeWeaponTypes: active_weapon_keys.map(function(key) { return Item[key].type; }),
-          crystalKeys: settings.crystalKeys,
-          socketCapacity: settings.socketCapacity,
+      if (settings.fixedEquipment) {
+        slot_groups = BuildSearch.descriptorVariantGroups(
+          base_build.equipment[slot],
+          weapon_keys.map(function(key) { return Item[key].type; }),
+          settings
+        );
+      } else {
+        let item_keys = settings.itemKeysBySlot && settings.itemKeysBySlot[slot] ||
+          Object.keys(catalog);
+        item_keys.forEach(function(item_key) {
+          if (!catalog[item_key]) {
+            throw new Error('Unknown ' + catalog_name + ' item: ' + item_key + '.');
+          }
+          let active_weapon_keys = weapon_keys.slice();
+          if (slot === 'weapon1') {
+            active_weapon_keys[0] = item_key;
+          } else if (slot === 'weapon2') {
+            active_weapon_keys[1] = item_key;
+          }
+          let report = BuildSearch.cachedItemVariantReport(item_key, {
+            activeWeaponTypes: active_weapon_keys.map(function(key) { return Item[key].type; }),
+            crystalKeys: settings.crystalKeys,
+            socketCapacity: settings.socketCapacity,
+          });
+          slot_groups = slot_groups.concat(report.nondominated_groups);
         });
-        slot_groups = slot_groups.concat(report.nondominated_groups);
-      });
+      }
 
       variant_count += slot_groups.length;
       slot_groups.forEach(function(group) {
@@ -3506,6 +3513,27 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
       total: equipment_ms + stat_ms,
     },
   };
+};
+
+MatchupGame.fixedEquipmentConfigurationResponse = function(
+  build, opponents, opponent_ids, opponent_weights, attack_types, options
+) {
+  let equipment_signature = BuildSearch.equipmentSignature(build.equipment);
+  let response = this.jointEquipmentStatResponseBeam(
+    build,
+    opponents,
+    opponent_ids,
+    opponent_weights,
+    attack_types,
+    Object.assign({}, options, { fixedEquipment: true })
+  );
+  if (response.beam.some(function(entry) {
+    return BuildSearch.equipmentSignature(entry.build.equipment) !== equipment_signature;
+  })) {
+    throw new Error('Fixed-equipment configuration search changed equipment.');
+  }
+  response.equipment_signature = equipment_signature;
+  return response;
 };
 
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
