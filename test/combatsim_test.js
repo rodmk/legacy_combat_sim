@@ -1392,6 +1392,31 @@ exports.testAttainableEquipmentSignatureRegions = function(test) {
     test.doesNotThrow(function() { Player.generateBuild(build); });
   });
   test.equal(BuildSearch.envelopeDominates(envelope, envelope), false);
+
+  let leader = function(score, weapon1, weapon2, armor) {
+    return {
+      score: score,
+      build: {
+        equipment: {
+          armor: { item: armor },
+          weapon1: { item: weapon1 },
+          weapon2: { item: weapon2 },
+          misc1: { item: 'DroidDrone' },
+          misc2: { item: 'ScoutDrones' },
+        },
+      },
+    };
+  };
+  let diverse = BuildSearch.selectDiverseEquipmentLeaders([
+    leader(0.9, 'AlienRifle', 'AlienRifle', 'TitanGuard'),
+    leader(0.8, 'AlienRifle', 'AlienRifle', 'DarkLegionArmor'),
+    leader(0.7, 'DoubleBarrelSniperRifle', 'GunBladeMk4', 'TitanGuard'),
+    leader(0.6, 'RiftGun', 'RiftGun', 'TitanGuard'),
+  ], 3);
+  test.deepEqual(diverse.map(function(entry) { return entry.score; }), [ 0.9, 0.7, 0.6 ]);
+  test.throws(function() {
+    BuildSearch.selectDiverseEquipmentLeaders([], -1);
+  }, /leader count/);
   test.equal(BuildSearch.envelopeDominates({
     minimum: { armor: 10 },
     maximum: { armor: 10 },

@@ -26,6 +26,9 @@ let second_stage_bucket_size = Number(process.env.SECOND_STAGE_BUCKET_SIZE || 1)
 let opponent_catalog_path = process.env.REGION_OPPONENT_CATALOG ||
   path.join('data', 'kernel-builds.json');
 let opponent_report_path = process.env.REGION_OPPONENT_REPORT;
+let opponent_pruning_tolerance = Number(
+  process.env.REGION_OPPONENT_PRUNING_TOLERANCE || 0.02
+);
 
 let skill_by_type = {
   melee: 'melee_skill',
@@ -52,11 +55,17 @@ let screen_stat_templates = [
 ];
 
 let loadOpponentMixture = function() {
-  let catalog = JSON.parse(fs.readFileSync(opponent_catalog_path));
+  let catalog_document = JSON.parse(fs.readFileSync(opponent_catalog_path));
+  let catalog = catalog_document.catalog || catalog_document;
   let support;
   if (opponent_report_path) {
     let report = JSON.parse(fs.readFileSync(opponent_report_path));
-    support = report.support;
+    support = (report.final_equilibrium && report.final_equilibrium.weights) ||
+      report.final_support || report.support ||
+      report.rounds[report.rounds.length - 1].support;
+    support = src.MatchupGame.pruneOpponentMixture(
+      support, opponent_pruning_tolerance
+    ).retained;
   } else {
     let ids = Object.keys(catalog).sort();
     support = ids.map(function(id) {
@@ -422,6 +431,7 @@ if (profile_key) {
   });
   console.log(JSON.stringify({
     profile: profile_key,
+    opponent_pruning_tolerance: opponent_report_path ? opponent_pruning_tolerance : 0,
     opponent_mixture: opponent_ids.map(function(id, index) {
       return { candidate: id, weight: weights[index] };
     }),
@@ -501,69 +511,98 @@ if (profile_key) {
   }));
 } else {
   let started = Date.now();
-  let results = profiles.map(function(profile) {
-    let result = childProcess.spawnSync(process.execPath, [ __filename ], {
-      cwd: process.cwd(),
-      env: Object.assign({}, process.env, { REGION_PROFILE: profile.join('+') }),
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
+  let worker_count = Number(process.env.REGION_WORKERS || 4);
+  if (!Number.isInteger(worker_count) || worker_count <= 0) {
+    throw new Error('Region worker count must be a positive integer.');
+  }
+  let runProfile = function(profile) {
+    return new Promise(function(resolve, reject) {
+      let child = childProcess.spawn(process.execPath, [ __filename ], {
+        cwd: process.cwd(),
+        env: Object.assign({}, process.env, { REGION_PROFILE: profile.join('+') }),
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', function(chunk) { stdout += chunk; });
+      child.stderr.on('data', function(chunk) { stderr += chunk; });
+      child.on('error', reject);
+      child.on('close', function(code) {
+        if (code !== 0) {
+          reject(new Error(stderr || 'Region worker failed for ' + profile.join('+')));
+          return;
+        }
+        resolve(JSON.parse(stdout));
+      });
     });
-    if (result.status !== 0) {
-      throw new Error(result.stderr || 'Region worker failed for ' + profile.join('+'));
+  };
+  let runProfiles = function(offset, results) {
+    if (offset >= profiles.length) {
+      return Promise.resolve(results);
     }
-    return JSON.parse(result.stdout);
-  });
-  console.log(JSON.stringify({
-    generated_at: new Date().toISOString(),
-    opponent_catalog: opponent_catalog_path,
-    opponent_report: opponent_report_path || null,
-    opponent_mixture: results[0].opponent_mixture,
-    profiles: results,
-    totals: {
-      signatures: results.reduce(function(sum, result) {
-        return sum + result.signature_space.signatures;
-      }, 0),
-      strict_sampled_dominated: results.reduce(function(sum, result) {
-        return sum + result.strict_region_dominance.dominated_count;
-      }, 0),
-      relaxed_sampled_prunable: results.reduce(function(sum, result) {
-        return sum + result.opponent_conditioned_relaxation.prunable_count;
-      }, 0),
-      bound_violations: results.reduce(function(sum, result) {
-        return sum + result.opponent_conditioned_relaxation.bound_violations;
-      }, 0),
-      shortlisted_signatures: results.reduce(function(sum, result) {
-        return sum + result.global_screen.shortlist_count;
-      }, 0),
-      screening_elapsed_ms: results.reduce(function(sum, result) {
-        return sum + result.global_screen.elapsed_ms;
-      }, 0),
-      shortlist_fraction: results.reduce(function(sum, result) {
-        return sum + result.global_screen.shortlist_count;
-      }, 0) / results.reduce(function(sum, result) {
-        return sum + result.signature_space.signatures;
-      }, 0),
-      configured_proxy_shortlisted_signatures: results.reduce(function(sum, result) {
-        return sum + result.configured_proxy_screen.shortlist_count;
-      }, 0),
-      configured_proxy_elapsed_ms: results.reduce(function(sum, result) {
-        return sum + result.configured_proxy_screen.elapsed_ms;
-      }, 0),
-      profiles_where_configured_proxy_beat_envelope_proxy: results.filter(
+    let batch = profiles.slice(offset, offset + worker_count);
+    return Promise.all(batch.map(runProfile)).then(function(batch_results) {
+      return runProfiles(offset + worker_count, results.concat(batch_results));
+    });
+  };
+  runProfiles(0, []).then(function(results) {
+    console.log(JSON.stringify({
+      generated_at: new Date().toISOString(),
+      opponent_catalog: opponent_catalog_path,
+      opponent_report: opponent_report_path || null,
+      opponent_pruning_tolerance: results[0].opponent_pruning_tolerance,
+      opponent_mixture: results[0].opponent_mixture,
+      profiles: results,
+      totals: {
+        signatures: results.reduce(function(sum, result) {
+          return sum + result.signature_space.signatures;
+        }, 0),
+        strict_sampled_dominated: results.reduce(function(sum, result) {
+          return sum + result.strict_region_dominance.dominated_count;
+        }, 0),
+        relaxed_sampled_prunable: results.reduce(function(sum, result) {
+          return sum + result.opponent_conditioned_relaxation.prunable_count;
+        }, 0),
+        bound_violations: results.reduce(function(sum, result) {
+          return sum + result.opponent_conditioned_relaxation.bound_violations;
+        }, 0),
+        shortlisted_signatures: results.reduce(function(sum, result) {
+          return sum + result.global_screen.shortlist_count;
+        }, 0),
+        screening_elapsed_ms: results.reduce(function(sum, result) {
+          return sum + result.global_screen.elapsed_ms;
+        }, 0),
+        shortlist_fraction: results.reduce(function(sum, result) {
+          return sum + result.global_screen.shortlist_count;
+        }, 0) / results.reduce(function(sum, result) {
+          return sum + result.signature_space.signatures;
+        }, 0),
+        configured_proxy_shortlisted_signatures: results.reduce(function(sum, result) {
+          return sum + result.configured_proxy_screen.shortlist_count;
+        }, 0),
+        configured_proxy_elapsed_ms: results.reduce(function(sum, result) {
+          return sum + result.configured_proxy_screen.elapsed_ms;
+        }, 0),
+        profiles_where_configured_proxy_beat_envelope_proxy: results.filter(
         function(result) {
           return result.configured_proxy_screen.promoted_beat_envelope_promoted;
         }
       ).length,
-      validation_winners_retained: results.filter(function(result) {
-        return result.global_screen.validation_winner_retained;
-      }).length,
-      profiles_where_promoted_beat_validation: results.filter(function(result) {
-        return result.global_screen.promoted_beat_validation;
-      }).length,
-      mean_validation_shortlist_recall: results.reduce(function(sum, result) {
-        return sum + result.global_screen.validation_shortlist_recall;
-      }, 0) / results.length,
-    },
-    elapsed_ms: Date.now() - started,
-  }, null, 2));
+        validation_winners_retained: results.filter(function(result) {
+          return result.global_screen.validation_winner_retained;
+        }).length,
+        profiles_where_promoted_beat_validation: results.filter(function(result) {
+          return result.global_screen.promoted_beat_validation;
+        }).length,
+        mean_validation_shortlist_recall: results.reduce(function(sum, result) {
+          return sum + result.global_screen.validation_shortlist_recall;
+        }, 0) / results.length,
+      },
+      elapsed_ms: Date.now() - started,
+    }, null, 2));
+  }).catch(function(error) {
+    console.error(error.stack || error);
+    process.exitCode = 1;
+  });
 }

@@ -1236,6 +1236,56 @@ BuildSearch.equipmentSignature = function(equipment) {
   return JSON.stringify([ descriptor(equipment.armor), weapons, miscs ]);
 };
 
+BuildSearch.weaponPairSignature = function(equipment) {
+  let descriptor = function(slot) {
+    return [ slot.item, (slot.mods || []).slice().sort() ];
+  };
+  return JSON.stringify([
+    descriptor(equipment.weapon1),
+    descriptor(equipment.weapon2),
+  ].sort(function(left, right) {
+    return JSON.stringify(left).localeCompare(JSON.stringify(right));
+  }));
+};
+
+BuildSearch.selectDiverseEquipmentLeaders = function(entries, count) {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error('Equipment leader count must be a non-negative integer.');
+  }
+  let selected = [];
+  let selected_equipment = new Set();
+  let selected_weapons = new Set();
+  let remaining = entries.slice().sort(function(left, right) {
+    return right.score - left.score;
+  });
+  let admit = function(entry) {
+    let equipment_signature = BuildSearch.equipmentSignature(entry.build.equipment);
+    if (selected_equipment.has(equipment_signature)) {
+      return false;
+    }
+    selected.push(entry);
+    selected_equipment.add(equipment_signature);
+    selected_weapons.add(BuildSearch.weaponPairSignature(entry.build.equipment));
+    return true;
+  };
+
+  remaining.forEach(function(entry) {
+    if (selected.length >= count) {
+      return;
+    }
+    let weapon_signature = BuildSearch.weaponPairSignature(entry.build.equipment);
+    if (!selected_weapons.has(weapon_signature)) {
+      admit(entry);
+    }
+  });
+  remaining.forEach(function(entry) {
+    if (selected.length < count) {
+      admit(entry);
+    }
+  });
+  return selected;
+};
+
 BuildSearch.weaponDescriptors = function(weapon_type) {
   return Object.keys(equipmentCatalog.weapons).filter(function(key) {
     return equipmentCatalog.weapons[key].type === weapon_type;
