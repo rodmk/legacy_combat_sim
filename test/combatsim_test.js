@@ -1378,11 +1378,10 @@ exports.testEquipmentNeighborhood = function(test) {
       socketCapacity: 2,
       minimumSurvivalProbability: 1e-6,
       beamWidth: 2,
-      maxIterations: 2,
     }
   );
+  test.ok(adaptive_beam.converged);
   test.ok(adaptive_beam.beam.length <= 2);
-  test.ok(adaptive_beam.iterations.length <= 2);
 
   test.done();
 };

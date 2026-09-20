@@ -1927,13 +1927,15 @@ MatchupGame.adaptiveEquipmentBestResponse = function(
     exactDefeatCache: options.exactDefeatCache || CombatSim.createDefeatRoundCache(),
     exactMatchupCache: options.exactMatchupCache || { values: new Map(), hits: 0, misses: 0 },
   });
-  let maximum_iterations = options.maxIterations || 10;
-  let improvement_tolerance = options.improvementTolerance || 1e-6;
+  let maximum_iterations = options.maxIterations === undefined ? Infinity : options.maxIterations;
+  let improvement_tolerance = options.improvementTolerance === undefined ?
+    1e-6 : options.improvementTolerance;
   let current_build = build;
   let current_signature = CombatSim.combatSignature(Player.generateBuild(current_build));
   let seen = new Set([ current_signature ]);
   let iterations = [];
   let best;
+  let accepted_best;
 
   for (let iteration = 1; iteration <= maximum_iterations; iteration++) {
     let result = this.equipmentBestResponse(
@@ -1950,11 +1952,13 @@ MatchupGame.adaptiveEquipmentBestResponse = function(
       candidate_count: result.candidate_count,
       evaluated_matchups: result.evaluated_matchups,
     });
-    if (best.signature === current_signature ||
-        (improvement !== null && improvement <= improvement_tolerance) ||
-        seen.has(best.signature)) {
-      return { best_response: best, iterations: iterations, converged: true };
+    if (best.signature === current_signature || seen.has(best.signature)) {
+      return { best_response: accepted_best || best, iterations: iterations, converged: true };
     }
+    if (improvement !== null && improvement <= improvement_tolerance) {
+      return { best_response: accepted_best, iterations: iterations, converged: true };
+    }
+    accepted_best = best;
     current_build = best.sources[0].build;
     current_signature = best.signature;
     seen.add(current_signature);
@@ -1970,7 +1974,9 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
   let beam_width = options.beamWidth || 8;
-  let maximum_iterations = options.maxIterations || 5;
+  let maximum_iterations = options.maxIterations === undefined ? Infinity : options.maxIterations;
+  let improvement_tolerance = options.improvementTolerance === undefined ?
+    1e-6 : options.improvementTolerance;
   let shared_options = Object.assign({}, options, {
     beamWidth: beam_width,
     defeatCache: options.defeatCache ||
@@ -1983,7 +1989,10 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
     build, opponents, opponent_ids, opponent_weights, shared_options
   );
   let beam = initial.beam.map(function(entry) {
-    return Object.assign({ stable: false }, entry);
+    return Object.assign({
+      stable: false,
+      seen_signatures: new Set([ entry.best_response.signature ]),
+    }, entry);
   });
   let iterations = [ {
     iteration: 1,
@@ -2005,13 +2014,26 @@ MatchupGame.adaptiveEquipmentResponseBeam = function(
         opponent_weights,
         shared_options
       );
+      let candidate = response.best_response;
+      let improved = candidate.weighted_score >
+        entry.best_response.weighted_score + improvement_tolerance;
+      let repeated = entry.seen_signatures.has(candidate.signature);
+      if (!improved || repeated) {
+        return {
+          entry: Object.assign({}, entry, { stable: true }),
+          response: response,
+        };
+      }
+      let seen_signatures = new Set(entry.seen_signatures);
+      seen_signatures.add(candidate.signature);
       return {
         entry: {
           concept_signature: BuildSearch.equipmentConceptSignature(
-            response.best_response.sources[0].build
+            candidate.sources[0].build
           ),
-          best_response: response.best_response,
-          stable: response.best_response.signature === entry.best_response.signature,
+          best_response: candidate,
+          stable: false,
+          seen_signatures: seen_signatures,
         },
         response: response,
       };
