@@ -91,6 +91,23 @@ yarn --silent analyze:regions > attainable-regions.json
 
 The report counts the complete equipment-signature space, samples strict region-envelope dominance, and compares a safe opponent-conditioned relaxation with configured crystal and stat specialization. The relaxation combines independently attainable maxima, so its score is an upper bound rather than a legal build. It first scores every signature with a cheap matchup proxy and retains both global leaders and leaders within armor-and-weapon diversity buckets. A second proxy pass evaluates legal directional crystal loadouts jointly with representative stat allocations and attack types, retaining global leaders plus one representative from each weapon-pair family. Promoted signatures are then configured with the more expensive search and compared with control samples; this measures screening yield, not exhaustive recall.
 
+Export the second-stage finalists and solve their restricted game with a checkpointed best-response search:
+
+```sh
+REGION_REPORT=attainable-regions.json yarn --silent export:region-candidates > data/meta-candidate-builds.json
+yarn --silent search:candidate-meta
+yarn --silent export:candidate-meta
+META_VALIDATION_MAX_ITERATIONS=2 yarn --silent validate:candidate-meta
+```
+
+The candidate search starts with one leader from each weapon profile, solves the exact game over the active archive, and evaluates the remaining pool against the inferred opponent mixture. Approximate combat bounds select a small set of exact finalists each round. Build matchups average both roles: a build attacks with its selected mode and defends with normal-mode speed, accuracy, and dodge. `Player.generateBuildMatchup` materializes the directional roles for stat-based callers, and `CombatSim.simulateBuildCombat` supplies the same role-aware materialization to Monte Carlo simulation while `CombatSim.simulateCombat` remains a low-level stat interface.
+
+When a conditioned global screen expands the catalog, `CANDIDATE_META_INITIAL_REPORT` starts the next restricted solve from the preceding equilibrium support. Zero-weight archive members remain in the candidate pool and can re-enter if the new mixture makes them a best response.
+
+The independent validation search starts from equilibrium builds but may move outside the fixed candidate archive. A high validation score means the restricted equilibrium is not a credible global meta, even if its archived best-response loop converged.
+
+The global region screen defaults to the controlled entry-level kernel. Set `REGION_OPPONENT_CATALOG` and `REGION_OPPONENT_REPORT` to condition it on a current equilibrium instead. The report must contain a `support` array of candidate IDs and weights, and the catalog supplies those builds. `REGION_BASE_CATALOG` preserves the existing strategy archive when exporting the newly conditioned candidates, while `REGION_CANDIDATE_PREFIX` gives each expansion distinct IDs. Repeating this screen after each restricted-game solve makes candidate discovery depend on the emerging meta rather than the reference-build fixtures.
+
 Development
 ===========
 
