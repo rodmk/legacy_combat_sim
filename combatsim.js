@@ -2405,9 +2405,13 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
     return added;
   };
 
+  let incumbent_source_key = null;
   let current_attack_type = build.attack_type || 'normal';
   if (attack_types.includes(current_attack_type)) {
-    addSource({ attack_type: current_attack_type, stats: build.stats });
+    let incumbent_source = { attack_type: current_attack_type, stats: build.stats };
+    if (addSource(incumbent_source)) {
+      incumbent_source_key = JSON.stringify([ current_attack_type, build.stats ]);
+    }
   }
   attack_types.forEach(function(attack_type) {
     let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
@@ -2494,6 +2498,9 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         finalist_source_keys.add(JSON.stringify([ source.attack_type, source.stats ]));
       });
     });
+  if (incumbent_source_key !== null) {
+    finalist_source_keys.add(incumbent_source_key);
+  }
   let finalists = Array.from(groups_by_signature.values()).filter(function(group) {
     return group.sources.some(function(source) {
       return finalist_source_keys.has(JSON.stringify([ source.attack_type, source.stats ]));
