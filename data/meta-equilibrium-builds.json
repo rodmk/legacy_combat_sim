@@ -1,0 +1,242 @@
+{
+  "RegionGunGun0011": {
+    "name": "RegionGunGun0011",
+    "level": 80,
+    "reference": false,
+    "stats": {
+      "hp": 173,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 4
+    },
+    "attack_type": "aimed",
+    "equipment": {
+      "armor": {
+        "item": "SG1Armor",
+        "crystals": [
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull"
+        ]
+      },
+      "weapon1": {
+        "item": "AlienRifle",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "weapon2": {
+        "item": "AlienRifle",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno"
+        ]
+      },
+      "misc2": {
+        "item": "ScoutDrones",
+        "crystals": [
+          "PerfectAir",
+          "PerfectAir",
+          "PerfectAir",
+          "PerfectAir"
+        ]
+      }
+    }
+  },
+  "RegionGunGun0575": {
+    "name": "RegionGunGun0575",
+    "level": 80,
+    "reference": false,
+    "stats": {
+      "hp": 173,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 4
+    },
+    "attack_type": "aimed",
+    "equipment": {
+      "armor": {
+        "item": "HellforgedArmor",
+        "crystals": [
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull"
+        ]
+      },
+      "weapon1": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "weapon2": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno"
+        ]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno"
+        ]
+      }
+    }
+  },
+  "RegionMeleeMelee0647": {
+    "name": "RegionMeleeMelee0647",
+    "level": 80,
+    "reference": false,
+    "stats": {
+      "hp": 173,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 4
+    },
+    "attack_type": "aimed",
+    "equipment": {
+      "armor": {
+        "item": "HellforgedArmor",
+        "crystals": [
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull",
+          "PerfectNull"
+        ]
+      },
+      "weapon1": {
+        "item": "CrystalMaul",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "weapon2": {
+        "item": "CrystalMaul",
+        "crystals": [
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal",
+          "BerserkerCrystal"
+        ]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "OrangeInferno",
+          "OrangeInferno",
+          "OrangeInferno",
+          "OrangeInferno"
+        ]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "OrangeInferno",
+          "OrangeInferno",
+          "OrangeInferno",
+          "OrangeInferno"
+        ]
+      }
+    }
+  },
+  "RegionGunGun0552": {
+    "name": "RegionGunGun0552",
+    "level": 80,
+    "reference": false,
+    "stats": {
+      "hp": 123,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 54
+    },
+    "attack_type": "cover",
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": [
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater"
+        ]
+      },
+      "weapon1": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": [
+          "PerfectAir",
+          "PerfectAir",
+          "PerfectAir",
+          "PerfectAir"
+        ]
+      },
+      "weapon2": {
+        "item": "GunBladeMk4",
+        "crystals": [
+          "PerfectNull",
+          "PerfectAir",
+          "PerfectAir",
+          "AmuletCrystal"
+        ],
+        "mods": [
+          "FasterReload1",
+          "FasterAmmo1"
+        ]
+      },
+      "misc1": {
+        "item": "ArchaticRing",
+        "crystals": [
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater"
+        ]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": [
+          "GreenInferno",
+          "GreenInferno",
+          "GreenInferno",
+          "AbyssCrystal"
+        ]
+      }
+    }
+  }
+}

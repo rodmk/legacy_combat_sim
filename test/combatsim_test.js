@@ -879,6 +879,52 @@ exports.testAttackTypes = function(test) {
   test.equal(cover.speed, 91);
   test.equal(cover.accuracy, 91);
   test.equal(cover.dodge, 122);
+  let defending_cover = Player.asDefender(cover);
+  test.equal(defending_cover.speed, 101);
+  test.equal(defending_cover.accuracy, 101);
+  test.equal(defending_cover.dodge, 101);
+
+  let original_result = CombatSim.combatResultDistribution;
+  let observed_defender;
+  CombatSim.combatResultDistribution = function(attacker, defender) {
+    observed_defender = defender;
+    return { outcome: {} };
+  };
+  try {
+    MatchupGame.directionalCombatResult(quick, cover);
+    test.strictEqual(observed_defender.dodge, 101);
+  } finally {
+    CombatSim.combatResultDistribution = original_result;
+  }
+
+  let cover_build = Object.assign({}, Build.DualVoidBowsWithScouts, {
+    attack_type: 'cover',
+  });
+  let materialized = Player.generateBuildMatchup(cover_build, cover_build);
+  test.ok(materialized.attacker.dodge > materialized.defender.dodge);
+  test.ok(materialized.attacker.speed < materialized.defender.speed);
+  test.ok(materialized.attacker.accuracy < materialized.defender.accuracy);
+  let mixture = Player.generateBuildMixture(
+    { cover: cover_build }, [ { candidate: 'cover', weight: 2 } ]
+  );
+  test.deepEqual(mixture.ids, [ 'cover' ]);
+  test.deepEqual(mixture.weights, [ 1 ]);
+  test.equal(mixture.players[0].speed, materialized.attacker.speed);
+  test.ok(mixture.players[0].speed < Player.asDefender(mixture.players[0]).speed);
+  let original_simulate = CombatSim.simulateCombat;
+  CombatSim.simulateCombat = function(attacker, defender, fights) {
+    test.equal(fights, 7);
+    test.ok(attacker.dodge > defender.dodge);
+    return { player1_wins: fights, player2_wins: 0, draws: 0 };
+  };
+  try {
+    test.equal(CombatSim.simulateBuildCombat(cover_build, cover_build, 7).player1_wins, 7);
+  } finally {
+    CombatSim.simulateCombat = original_simulate;
+  }
+  test.throws(function() {
+    Player.generateBuild(cover_build, 'unknown');
+  }, /Build role/);
 
   test.throws(function() {
     Player.generatePlayer('Unknown', raw_stats, items, 'unknown');
@@ -1583,7 +1629,7 @@ exports.testStatAllocationGeneration = function(test) {
   let groups = BuildSearch.statAllocationGroups(
     build, opponents, [ 'normal', 'quick', 'aimed', 'cover' ], { hpPoints: [ 2 ] }
   );
-  test.equal(groups.length, 3310);
+  test.equal(groups.length, 3331);
   test.ok(groups.every(function(group) {
     return group.representative.max_hp === 10 && group.sources.length > 0;
   }));
@@ -1814,11 +1860,47 @@ exports.testRestrictedMatchupGame = function(test) {
 
   test.deepEqual(matrix, [ [ 0.5, 0.5 ], [ 0.5, 0.5 ] ]);
   test.deepEqual(MatchupGame.candidateMatchup(player1, player2), {
+    win_probability: 0.5,
+    draw_probability: 0,
+    expected_hp_lost: 5,
+    expected_hp_lost_on_win: 0,
+    zero_damage_win_probability: 1,
+    expected_healing_cost: 3.5,
+    expected_healing_cost_on_win: 0,
     score: 0.5,
     score_error_bound: 0,
-    win_probability: 0.5,
-    expected_healing_cost: 3.5,
   });
+  test.deepEqual(MatchupGame.roleAveragedCandidateMatchup(player1, player2), {
+    win_probability: 0.5,
+    draw_probability: 0,
+    expected_hp_lost: 5,
+    expected_hp_lost_on_win: 0,
+    zero_damage_win_probability: 1,
+    expected_healing_cost: 3.5,
+    expected_healing_cost_on_win: 0,
+    score: 0.5,
+    score_error_bound: 0,
+  });
+
+  let quick = Object.assign({}, player1, { speed: 120 });
+  Object.defineProperty(quick, 'normal_mode_stats', {
+    value: { speed: 100, accuracy: 500, dodge: 100 },
+    enumerable: false,
+  });
+  test.equal(MatchupGame.candidateMatchup(quick, player2).score, 1);
+  test.equal(MatchupGame.roleAveragedCandidateMatchup(quick, player2).score, 0.75);
+  test.equal(
+    MatchupGame.roleAveragedCandidateMatchup(quick, player2).score,
+    MatchupGame.symmetrizedScore(quick, player2)
+  );
+  let other_neutral = Object.assign({}, quick);
+  Object.defineProperty(other_neutral, 'normal_mode_stats', {
+    value: { speed: 101, accuracy: 500, dodge: 100 },
+    enumerable: false,
+  });
+  test.notEqual(
+    CombatSim.combatSignature(quick), CombatSim.combatSignature(other_neutral)
+  );
 
   let helpless = Object.assign({}, player1, {
     weapon1: { skill: 'gun_skill', min_damage: 0, max_damage: 0 },
@@ -2011,6 +2093,23 @@ exports.testSeedBuildCatalogAnalysis = function(test) {
   test.deepEqual(
     analysis.matrix_order,
     analysis.candidates.map(function(candidate) { return candidate.id; })
+  );
+  let first_player = Player.generateBuild(BuildCatalogs[1][analysis.matrix_order[0]]);
+  let second_player = Player.generateBuild(BuildCatalogs[1][analysis.matrix_order[1]]);
+  let role_matchup = MatchupGame.roleAveragedCandidateMatchup(
+    first_player, second_player
+  );
+  test.equal(analysis.score_matrix[0][1], role_matchup.score);
+  test.equal(analysis.win_probability_matrix[0][1], role_matchup.win_probability);
+  test.equal(analysis.draw_matrix[0][1], role_matchup.draw_probability);
+  test.equal(analysis.hp_loss_matrix[0][1], role_matchup.expected_hp_lost);
+  test.equal(analysis.win_hp_loss_matrix[0][1], role_matchup.expected_hp_lost_on_win);
+  test.equal(
+    analysis.zero_damage_win_matrix[0][1], role_matchup.zero_damage_win_probability
+  );
+  test.equal(analysis.healing_cost_matrix[0][1], role_matchup.expected_healing_cost);
+  test.equal(
+    analysis.win_healing_cost_matrix[0][1], role_matchup.expected_healing_cost_on_win
   );
   analysis.candidates.forEach(function(candidate, player) {
     test.equal(candidate.frontier, candidate.dominated_by.length === 0);

@@ -225,6 +225,7 @@ CombatSim.attackDamageDistribution = function(att, def) {
 };
 
 CombatSim.combatSignature = function(player) {
+  let neutral = player.normal_mode_stats || player;
   let weapons = [ player.weapon1, player.weapon2 ].map(function(weapon) {
     return [ weapon.skill, weapon.min_damage, weapon.max_damage ];
   });
@@ -244,6 +245,7 @@ CombatSim.combatSignature = function(player) {
     player.speed,
     player.accuracy,
     player.dodge,
+    [ neutral.speed, neutral.accuracy, neutral.dodge ],
     player.def_skill,
     active_skills,
     weapons,
@@ -624,6 +626,11 @@ Player.generatePlayer = function(name, raw_stats, items, attack_type) {
   if (!attack_type_multipliers) {
     throw new Error('Unknown attack type: ' + attack_type + '.');
   }
+  let normal_mode_stats = {
+    speed: stats.speed,
+    accuracy: stats.accuracy,
+    dodge: stats.dodge,
+  };
   for (let stat in attack_type_multipliers) {
     // Assume all attack-type adjustments happen before the final result is
     // rounded up.
@@ -642,12 +649,28 @@ Player.generatePlayer = function(name, raw_stats, items, attack_type) {
   stats.weapon2.min_damage += idx(equip_stats.weapon2, 'min_damage', 0);
   stats.weapon2.max_damage += idx(equip_stats.weapon2, 'max_damage', 0);
 
+  Object.defineProperty(stats, 'normal_mode_stats', {
+    value: normal_mode_stats,
+    enumerable: false,
+  });
+
   return stats;
 };
 
-Player.generateBuild = function(build) {
+Player.asDefender = function(player) {
+  if (!player.normal_mode_stats) {
+    return player;
+  }
+  return Object.assign({}, player, player.normal_mode_stats);
+};
+
+Player.generateBuild = function(build, role) {
   if (build.level !== 80) {
     throw new Error('Builds require level 80.');
+  }
+  let selected_role = role || 'attacker';
+  if (selected_role !== 'attacker' && selected_role !== 'defender') {
+    throw new Error('Build role must be attacker or defender.');
   }
 
   let slots = [
@@ -672,7 +695,46 @@ Player.generateBuild = function(build) {
     return item;
   });
 
-  return Player.generateFullyTrainedPlayer(build.name, build.stats, items, build.attack_type);
+  return Player.generateFullyTrainedPlayer(
+    build.name,
+    build.stats,
+    items,
+    selected_role === 'attacker' ? build.attack_type : 'normal'
+  );
+};
+
+Player.generateBuildMatchup = function(attacker, defender) {
+  return {
+    attacker: this.generateBuild(attacker, 'attacker'),
+    defender: this.generateBuild(defender, 'defender'),
+  };
+};
+
+Player.generateBuildMixture = function(catalog, support) {
+  let total_weight = support.reduce(function(sum, entry) {
+    if (!catalog[entry.candidate]) {
+      throw new Error('Build catalog is missing ' + entry.candidate + '.');
+    }
+    if (!(entry.weight >= 0)) {
+      throw new Error('Build mixture weights must be non-negative.');
+    }
+    return sum + entry.weight;
+  }, 0);
+  if (!(total_weight > 0)) {
+    throw new Error('Build mixture must have positive weight.');
+  }
+  return {
+    ids: support.map(function(entry) { return entry.candidate; }),
+    players: support.map(function(entry) {
+      return Player.generateBuild(catalog[entry.candidate]);
+    }),
+    weights: support.map(function(entry) { return entry.weight / total_weight; }),
+  };
+};
+
+CombatSim.simulateBuildCombat = function(attacker, defender, fights) {
+  let matchup = Player.generateBuildMatchup(attacker, defender);
+  return this.simulateCombat(matchup.attacker, matchup.defender, fights);
 };
 
 Player.groupEquivalentBuilds = function(builds) {
@@ -2064,13 +2126,14 @@ BuildSearch.initiativeSpeedPoints = function(build, opponents, attack_type) {
   }
 
   opponents.forEach(function(opponent) {
+    let defender_speed = Player.asDefender(opponent).speed;
     for (let speed_points = minimum_speed_points;
       speed_points <= maximum_speed_points; speed_points++) {
       let speed = speed_by_points.get(speed_points);
-      if (speed === opponent.speed) {
+      if (speed === defender_speed) {
         selected_points.add(speed_points);
       }
-      if (speed > opponent.speed) {
+      if (speed > defender_speed) {
         selected_points.add(speed_points);
         break;
       }
@@ -2167,11 +2230,11 @@ BuildSearch.statAllocationGroups = function(build, opponents, attack_types, opti
 function MatchupGame() {}
 
 MatchupGame.symmetrizedScore = function(player, opponent) {
-  let forward = CombatSim.combatOutcomeDistribution(player, opponent);
-  let reverse = CombatSim.combatOutcomeDistribution(opponent, player);
-  let forward_score = forward.player1_wins + (forward.draws / 2);
-  let reverse_score = reverse.player2_wins + (reverse.draws / 2);
-  return (forward_score + reverse_score) / 2;
+  return this.roleAveragedCandidateMatchup(player, opponent).score;
+};
+
+MatchupGame.directionalCombatResult = function(attacker, defender, cache) {
+  return CombatSim.combatResultDistribution(attacker, Player.asDefender(defender), cache);
 };
 
 MatchupGame.payoffMatrix = function(players) {
@@ -2308,15 +2371,18 @@ MatchupGame.mixedEquilibrium = function(matrix, options) {
   };
 };
 
-MatchupGame.candidateMatchup = function(player, opponent, cache) {
-  let forward = CombatSim.combatResultDistribution(player, opponent, cache);
+MatchupGame.candidateMatchup = function(player, opponent, cache, include_opponent) {
+  let defending_opponent = Player.asDefender(opponent);
+  let forward = this.directionalCombatResult(player, opponent, cache);
   let results = [ forward.player1 ];
+  let opponent_results = [ forward.player2 ];
   let outcomes = [ forward.outcome ];
   let error_bounds = [ forward.outcome_error_bound ];
 
-  if (player.speed === opponent.speed) {
-    let reverse = CombatSim.combatResultDistribution(opponent, player, cache);
+  if (player.speed === defending_opponent.speed) {
+    let reverse = CombatSim.combatResultDistribution(defending_opponent, player, cache);
     results.push(reverse.player2);
+    opponent_results.push(reverse.player1);
     outcomes.push({
       player1_wins: reverse.outcome.player2_wins,
       player2_wins: reverse.outcome.player1_wins,
@@ -2325,19 +2391,87 @@ MatchupGame.candidateMatchup = function(player, opponent, cache) {
     error_bounds.push(reverse.outcome_error_bound);
   }
 
-  let total_wins = results.reduce(function(sum, result) { return sum + result.wins; }, 0);
-  return {
+  let aggregate = function(entries, outcome_key) {
+    let total_wins = entries.reduce(function(sum, result) {
+      return sum + result.wins;
+    }, 0);
+    let conditionalMetric = function(metric) {
+      if (total_wins === 0) {
+        return null;
+      }
+      return entries.reduce(function(sum, result) {
+        return sum + (result.wins * (result[metric] || 0));
+      }, 0) / total_wins;
+    };
+    return {
+      win_probability: outcomes.reduce(function(sum, outcome) {
+        return sum + outcome[outcome_key];
+      }, 0) / outcomes.length,
+      draw_probability: outcomes.reduce(function(sum, outcome) {
+        return sum + outcome.draws;
+      }, 0) / outcomes.length,
+      expected_hp_lost: entries.reduce(function(sum, result) {
+        return sum + result.expected_hp_lost;
+      }, 0) / entries.length,
+      expected_hp_lost_on_win: conditionalMetric('expected_hp_lost_on_win'),
+      zero_damage_win_probability: conditionalMetric('zero_damage_win_probability'),
+      expected_healing_cost: entries.reduce(function(sum, result) {
+        return sum + result.expected_healing_cost;
+      }, 0) / entries.length,
+      expected_healing_cost_on_win: conditionalMetric('expected_healing_cost_on_win'),
+    };
+  };
+  let player_metrics = aggregate(results, 'player1_wins');
+  let matchup = Object.assign({}, player_metrics, {
     score: outcomes.reduce(function(sum, outcome) {
       return sum + outcome.player1_wins + (outcome.draws / 2);
     }, 0) / outcomes.length,
     score_error_bound: error_bounds.reduce(function(sum, error) {
       return sum + error;
     }, 0) / error_bounds.length,
-    win_probability: total_wins / results.length,
-    expected_healing_cost: results.reduce(function(sum, result) {
-      return sum + result.expected_healing_cost;
-    }, 0) / results.length,
+  });
+  if (include_opponent) {
+    matchup.opponent = aggregate(opponent_results, 'player2_wins');
+  }
+  return matchup;
+};
+
+MatchupGame.roleAveragedCandidateMatchup = function(
+  player, opponent, cache, include_opponent
+) {
+  let attacking = this.candidateMatchup(player, opponent, cache, true);
+  let defending = this.candidateMatchup(opponent, player, cache, true);
+  let combine = function(left, right) {
+    let total_wins = left.win_probability + right.win_probability;
+    let conditionalMetric = function(metric) {
+      if (total_wins === 0) {
+        return null;
+      }
+      return (
+        (left.win_probability * (left[metric] || 0)) +
+        (right.win_probability * (right[metric] || 0))
+      ) / total_wins;
+    };
+    return {
+      win_probability: (left.win_probability + right.win_probability) / 2,
+      draw_probability: (left.draw_probability + right.draw_probability) / 2,
+      expected_hp_lost: (left.expected_hp_lost + right.expected_hp_lost) / 2,
+      expected_hp_lost_on_win: conditionalMetric('expected_hp_lost_on_win'),
+      zero_damage_win_probability: conditionalMetric('zero_damage_win_probability'),
+      expected_healing_cost:
+        (left.expected_healing_cost + right.expected_healing_cost) / 2,
+      expected_healing_cost_on_win: conditionalMetric('expected_healing_cost_on_win'),
+    };
   };
+  let matchup = Object.assign({}, combine(attacking, defending.opponent), {
+    score: (attacking.score + 1 - defending.score) / 2,
+    score_error_bound:
+      (attacking.score_error_bound + defending.score_error_bound) / 2,
+  });
+  if (include_opponent) {
+    matchup.opponent = combine(attacking.opponent, defending);
+  }
+  return matchup;
 };
 
 MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, options) {
@@ -2410,7 +2544,9 @@ MatchupGame.candidateFrontiers = function(groups, opponents, opponent_ids, optio
       }
       matchup_cache.misses++;
       evaluated_matchups++;
-      let matchup = MatchupGame.candidateMatchup(group.representative, opponent, defeat_cache);
+      let matchup = MatchupGame.roleAveragedCandidateMatchup(
+        group.representative, opponent, defeat_cache
+      );
       matchup_cache.values.set(matchup_key, matchup);
       return matchup;
     });
@@ -3708,112 +3844,45 @@ MatchupGame.analyzeBuildCatalog = function(catalog, options) {
   let win_healing_cost_matrix = players.map(function() {
     return new Array(players.length).fill(null);
   });
-  let average = function(left, right) { return (left + right) / 2; };
-  let combinedWinMetric = function(left, right, metric) {
-    let wins = left.wins + right.wins;
-    if (wins === 0) {
-      return null;
-    }
-    return (
-      (left.wins * (left[metric] || 0)) +
-      (right.wins * (right[metric] || 0))
-    ) / wins;
-  };
-  let combatResult = function(player, opponent) {
+  let defeat_cache = CombatSim.createDefeatRoundCache();
+  let matchupResult = function(player, opponent) {
     let key = JSON.stringify([
       CombatSim.combatSignature(player),
       CombatSim.combatSignature(opponent),
+      'role-averaged',
     ]);
     if (matchup_cache.values.has(key)) {
       matchup_cache.hits++;
       return matchup_cache.values.get(key);
     }
     matchup_cache.misses++;
-    let result = CombatSim.combatResultDistribution(player, opponent);
+    let result = MatchupGame.roleAveragedCandidateMatchup(
+      player, opponent, defeat_cache, true
+    );
     matchup_cache.values.set(key, result);
     return result;
   };
+  let assignMetrics = function(row, column, result) {
+    score_matrix[row][column] = result.score;
+    win_probability_matrix[row][column] = result.win_probability;
+    draw_matrix[row][column] = result.draw_probability;
+    hp_loss_matrix[row][column] = result.expected_hp_lost;
+    win_hp_loss_matrix[row][column] = result.expected_hp_lost_on_win;
+    zero_damage_win_matrix[row][column] = result.zero_damage_win_probability;
+    healing_cost_matrix[row][column] = result.expected_healing_cost;
+    win_healing_cost_matrix[row][column] = result.expected_healing_cost_on_win;
+  };
 
   for (let i = 0; i < players.length; i++) {
-    let self_result = combatResult(players[i], players[i]);
+    let self_result = matchupResult(players[i], players[i]);
+    assignMetrics(i, i, self_result);
     score_matrix[i][i] = 0.5;
-    win_probability_matrix[i][i] = average(
-      self_result.outcome.player1_wins,
-      self_result.outcome.player2_wins
-    );
-    draw_matrix[i][i] = self_result.outcome.draws;
-    hp_loss_matrix[i][i] = average(
-      self_result.player1.expected_hp_lost,
-      self_result.player2.expected_hp_lost
-    );
-    win_hp_loss_matrix[i][i] = combinedWinMetric(
-      self_result.player1, self_result.player2, 'expected_hp_lost_on_win'
-    );
-    zero_damage_win_matrix[i][i] = combinedWinMetric(
-      self_result.player1, self_result.player2, 'zero_damage_win_probability'
-    );
-    healing_cost_matrix[i][i] = average(
-      self_result.player1.expected_healing_cost,
-      self_result.player2.expected_healing_cost
-    );
-    win_healing_cost_matrix[i][i] = combinedWinMetric(
-      self_result.player1, self_result.player2, 'expected_healing_cost_on_win'
-    );
 
     for (let j = i + 1; j < players.length; j++) {
-      let forward_result = combatResult(players[i], players[j]);
-      let reverse_result = combatResult(players[j], players[i]);
-      let forward = forward_result.outcome;
-      let reverse = reverse_result.outcome;
-      let score = (
-        forward.player1_wins + (forward.draws / 2) +
-        reverse.player2_wins + (reverse.draws / 2)
-      ) / 2;
-      let draws = (forward.draws + reverse.draws) / 2;
-      score_matrix[i][j] = score;
-      score_matrix[j][i] = 1 - score;
-      win_probability_matrix[i][j] = average(
-        forward.player1_wins, reverse.player2_wins
-      );
-      win_probability_matrix[j][i] = average(
-        forward.player2_wins, reverse.player1_wins
-      );
-      draw_matrix[i][j] = draws;
-      draw_matrix[j][i] = draws;
-      hp_loss_matrix[i][j] = average(
-        forward_result.player1.expected_hp_lost,
-        reverse_result.player2.expected_hp_lost
-      );
-      hp_loss_matrix[j][i] = average(
-        forward_result.player2.expected_hp_lost,
-        reverse_result.player1.expected_hp_lost
-      );
-      win_hp_loss_matrix[i][j] = combinedWinMetric(
-        forward_result.player1, reverse_result.player2, 'expected_hp_lost_on_win'
-      );
-      win_hp_loss_matrix[j][i] = combinedWinMetric(
-        forward_result.player2, reverse_result.player1, 'expected_hp_lost_on_win'
-      );
-      zero_damage_win_matrix[i][j] = combinedWinMetric(
-        forward_result.player1, reverse_result.player2, 'zero_damage_win_probability'
-      );
-      zero_damage_win_matrix[j][i] = combinedWinMetric(
-        forward_result.player2, reverse_result.player1, 'zero_damage_win_probability'
-      );
-      healing_cost_matrix[i][j] = average(
-        forward_result.player1.expected_healing_cost,
-        reverse_result.player2.expected_healing_cost
-      );
-      healing_cost_matrix[j][i] = average(
-        forward_result.player2.expected_healing_cost,
-        reverse_result.player1.expected_healing_cost
-      );
-      win_healing_cost_matrix[i][j] = combinedWinMetric(
-        forward_result.player1, reverse_result.player2, 'expected_healing_cost_on_win'
-      );
-      win_healing_cost_matrix[j][i] = combinedWinMetric(
-        forward_result.player2, reverse_result.player1, 'expected_healing_cost_on_win'
-      );
+      let result = matchupResult(players[i], players[j]);
+      assignMetrics(i, j, result);
+      assignMetrics(j, i, result.opponent);
+      score_matrix[j][i] = 1 - result.score;
     }
   }
 

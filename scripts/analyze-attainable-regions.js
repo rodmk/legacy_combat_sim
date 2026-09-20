@@ -2,6 +2,8 @@
 'use strict';
 
 let childProcess = require('child_process');
+let fs = require('fs');
+let path = require('path');
 let src = require('../combatsim');
 
 let profiles = [
@@ -21,6 +23,9 @@ let global_shortlist_size = Number(process.env.GLOBAL_SHORTLIST_SIZE || 2000);
 let bucket_shortlist_size = Number(process.env.BUCKET_SHORTLIST_SIZE || 2);
 let second_stage_global_size = Number(process.env.SECOND_STAGE_GLOBAL_SIZE || 125);
 let second_stage_bucket_size = Number(process.env.SECOND_STAGE_BUCKET_SIZE || 1);
+let opponent_catalog_path = process.env.REGION_OPPONENT_CATALOG ||
+  path.join('data', 'kernel-builds.json');
+let opponent_report_path = process.env.REGION_OPPONENT_REPORT;
 
 let skill_by_type = {
   melee: 'melee_skill',
@@ -35,10 +40,31 @@ let attack_multipliers = {
 };
 let screen_stat_templates = [
   { hp: 173, speed: 2, accuracy: 4, dodge: 4 },
+  { hp: 145, speed: 2, accuracy: 4, dodge: 32 },
+  { hp: 123, speed: 2, accuracy: 4, dodge: 54 },
+  { hp: 101, speed: 2, accuracy: 4, dodge: 76 },
   { hp: 70, speed: 2, accuracy: 4, dodge: 107 },
+  { hp: 145, speed: 2, accuracy: 32, dodge: 4 },
+  { hp: 123, speed: 2, accuracy: 54, dodge: 4 },
+  { hp: 101, speed: 2, accuracy: 76, dodge: 4 },
   { hp: 70, speed: 2, accuracy: 107, dodge: 4 },
   { hp: 70, speed: 37, accuracy: 38, dodge: 38 },
 ];
+
+let loadOpponentMixture = function() {
+  let catalog = JSON.parse(fs.readFileSync(opponent_catalog_path));
+  let support;
+  if (opponent_report_path) {
+    let report = JSON.parse(fs.readFileSync(opponent_report_path));
+    support = report.support;
+  } else {
+    let ids = Object.keys(catalog).sort();
+    support = ids.map(function(id) {
+      return { candidate: id, weight: 1 / ids.length };
+    });
+  }
+  return src.Player.generateBuildMixture(catalog, support);
+};
 
 let envelopePlayer = function(envelope, stats, attack_type) {
   let multiplier = attack_multipliers[attack_type];
@@ -55,6 +81,14 @@ let envelopePlayer = function(envelope, stats, attack_type) {
     proj_skill: 450 + (envelope.maximum.proj_skill || 0),
     def_skill: 450 + envelope.maximum.def_skill,
   };
+  Object.defineProperty(player, 'normal_mode_stats', {
+    value: {
+      speed: player.speed,
+      accuracy: player.accuracy,
+      dodge: player.dodge,
+    },
+    enumerable: false,
+  });
   [ 'speed', 'accuracy', 'dodge' ].forEach(function(stat) {
     player[stat] = Math.ceil(player[stat] * (multiplier[stat] || 1));
   });
@@ -82,20 +116,29 @@ let expectedRoundDamage = function(attacker, defender) {
 };
 
 let proxyMatchupScore = function(player, opponent) {
-  let damage = expectedRoundDamage(player, opponent);
-  let return_damage = expectedRoundDamage(opponent, player);
-  let rounds_to_win = damage > 0 ? opponent.max_hp / damage : Infinity;
-  let rounds_to_lose = return_damage > 0 ? player.max_hp / return_damage : Infinity;
+  let defending_opponent = src.Player.asDefender(opponent);
+  let defending_player = src.Player.asDefender(player);
+  let damage = expectedRoundDamage(player, defending_opponent);
+  let return_damage = expectedRoundDamage(opponent, defending_player);
+  let rounds_to_win = damage > 0 ? defending_opponent.max_hp / damage : Infinity;
+  let rounds_to_lose = return_damage > 0 ? defending_player.max_hp / return_damage : Infinity;
   if (rounds_to_win === Infinity && rounds_to_lose === Infinity) {
     return 0.5;
   }
   let margin = Math.log((rounds_to_lose + 0.5) / (rounds_to_win + 0.5));
-  if (player.speed > opponent.speed) {
+  if (player.speed > defending_opponent.speed) {
     margin += 0.1;
-  } else if (player.speed < opponent.speed) {
+  } else if (player.speed < defending_opponent.speed) {
     margin -= 0.1;
   }
   return 1 / (1 + Math.exp(-2 * margin));
+};
+
+let roleAveragedProxyMatchupScore = function(player, opponent) {
+  return (
+    proxyMatchupScore(player, opponent) +
+    1 - proxyMatchupScore(opponent, player)
+  ) / 2;
 };
 
 let screenScore = function(envelope, opponents, weights) {
@@ -104,7 +147,7 @@ let screenScore = function(envelope, opponents, weights) {
     Object.keys(attack_multipliers).forEach(function(attack_type) {
       let player = envelopePlayer(envelope, stats, attack_type);
       let score = opponents.reduce(function(sum, opponent, index) {
-        return sum + (weights[index] * proxyMatchupScore(player, opponent));
+        return sum + (weights[index] * roleAveragedProxyMatchupScore(player, opponent));
       }, 0);
       best = Math.max(best, score);
     });
@@ -114,6 +157,7 @@ let screenScore = function(envelope, opponents, weights) {
 
 let configuredProxyScore = function(entry, opponents, weights) {
   let best = null;
+  let best_by_attack_type = {};
   let specializations = src.BuildSearch.signatureSpecializations(entry);
   specializations.forEach(function(build) {
     screen_stat_templates.forEach(function(stats) {
@@ -124,10 +168,16 @@ let configuredProxyScore = function(entry, opponents, weights) {
         });
         let player = src.Player.generateBuild(candidate);
         let score = opponents.reduce(function(sum, opponent, index) {
-          return sum + (weights[index] * proxyMatchupScore(player, opponent));
+          return sum + (
+            weights[index] * roleAveragedProxyMatchupScore(player, opponent)
+          );
         }, 0);
         if (!best || score > best.score) {
           best = { score: score, build: candidate };
+        }
+        if (!best_by_attack_type[attack_type] ||
+            score > best_by_attack_type[attack_type].score) {
+          best_by_attack_type[attack_type] = { score: score, build: candidate };
         }
       });
     });
@@ -135,6 +185,9 @@ let configuredProxyScore = function(entry, opponents, weights) {
   return {
     score: best.score,
     build: best.build,
+    configurations: Object.keys(best_by_attack_type).map(function(attack_type) {
+      return best_by_attack_type[attack_type];
+    }),
     specialization_count: specializations.length,
   };
 };
@@ -154,7 +207,7 @@ let relaxedPlayers = function(envelope) {
 
 let weightedScore = function(player, opponents, weights, cache) {
   return opponents.reduce(function(score, opponent, index) {
-    return score + weights[index] * src.MatchupGame.candidateMatchup(
+    return score + weights[index] * src.MatchupGame.roleAveragedCandidateMatchup(
       player, opponent, cache
     ).score;
   }, 0);
@@ -228,15 +281,10 @@ if (profile_key) {
     });
   });
   let dominance_elapsed_ms = Date.now() - envelope_started;
-  let opponent_ids = [
-    'ShadowDojoDLGunBuild3',
-    'ShadowDojoHFCoreVoid',
-    'ShadowDojoSG1SplitBombs',
-  ];
-  let opponents = opponent_ids.map(function(id) {
-    return src.Player.generateBuild(src.Build[id]);
-  });
-  let weights = opponents.map(function() { return 1 / opponents.length; });
+  let opponent_mixture = loadOpponentMixture();
+  let opponent_ids = opponent_mixture.ids;
+  let opponents = opponent_mixture.players;
+  let weights = opponent_mixture.weights;
   let screening_started = Date.now();
   let screened = [];
   let buckets = new Map();
@@ -286,6 +334,7 @@ if (profile_key) {
       equipment: entry.equipment,
       score: result.score,
       build: result.build,
+      configurations: result.configurations,
       specialization_count: result.specialization_count,
     });
   });
@@ -312,6 +361,9 @@ if (profile_key) {
   });
   second_stage_buckets.forEach(function(bucket) {
     bucket.forEach(function(entry) { second_stage_shortlist.add(entry.signature); });
+  });
+  let second_stage_finalists = second_stage_screened.filter(function(entry) {
+    return second_stage_shortlist.has(entry.signature);
   });
   let second_stage_elapsed_ms = Date.now() - second_stage_started;
   let validation_entries = src.BuildSearch.sampleEquipmentSignatures(
@@ -370,6 +422,9 @@ if (profile_key) {
   });
   console.log(JSON.stringify({
     profile: profile_key,
+    opponent_mixture: opponent_ids.map(function(id, index) {
+      return { candidate: id, weight: weights[index] };
+    }),
     signature_space: {
       weapon_descriptors: [ space.left_weapons.length, space.right_weapons.length ],
       weapon_pairs: space.weapon_pair_count,
@@ -441,6 +496,7 @@ if (profile_key) {
         second_stage_promoted_order[0].configured_search.score >=
           promoted_order[0].configured_search.score,
       leaders: second_stage_screened.slice(0, 5),
+      finalists: second_stage_finalists,
     },
   }));
 } else {
@@ -459,6 +515,9 @@ if (profile_key) {
   });
   console.log(JSON.stringify({
     generated_at: new Date().toISOString(),
+    opponent_catalog: opponent_catalog_path,
+    opponent_report: opponent_report_path || null,
+    opponent_mixture: results[0].opponent_mixture,
     profiles: results,
     totals: {
       signatures: results.reduce(function(sum, result) {
