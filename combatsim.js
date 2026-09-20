@@ -2279,6 +2279,61 @@ MatchupGame.equipmentSearchCacheStats = function(options) {
   };
 };
 
+MatchupGame.jointEquipmentStatResponseBeam = function(
+  build, opponents, opponent_ids, opponent_weights, attack_types, options
+) {
+  options = options || {};
+  let equipment_started = Date.now();
+  let equipment = this.adaptiveEquipmentResponseBeam(
+    build, opponents, opponent_ids, opponent_weights, options
+  );
+  let equipment_ms = Date.now() - equipment_started;
+  let stat_ms = 0;
+  let responses_by_signature = new Map();
+
+  equipment.beam.forEach(function(entry) {
+    let equipment_build = entry.best_response.sources[0].build;
+    let stat_started = Date.now();
+    let stats = MatchupGame.adaptiveStatFrontiers(
+      equipment_build,
+      opponents,
+      opponent_ids,
+      attack_types,
+      Object.assign({}, options, { opponentWeights: opponent_weights })
+    );
+    stat_ms += Date.now() - stat_started;
+    let source = stats.best_weighted.sources[0];
+    let response_build = Object.assign({}, equipment_build, {
+      stats: source.stats,
+      attack_type: source.attack_type,
+    });
+    let signature = CombatSim.combatSignature(Player.generateBuild(response_build));
+    let response = {
+      signature: signature,
+      concept_signature: BuildSearch.equipmentConceptSignature(response_build),
+      weighted_score: stats.best_weighted.weighted_score,
+      build: response_build,
+      stat_search: stats,
+    };
+    let existing = responses_by_signature.get(signature);
+    if (!existing || response.weighted_score > existing.weighted_score) {
+      responses_by_signature.set(signature, response);
+    }
+  });
+
+  return {
+    beam: Array.from(responses_by_signature.values()).sort(function(left, right) {
+      return right.weighted_score - left.weighted_score;
+    }),
+    equipment_response: equipment,
+    timings_ms: {
+      equipment: equipment_ms,
+      stats: stat_ms,
+      total: equipment_ms + stat_ms,
+    },
+  };
+};
+
 MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, attack_types, options) {
   options = options || {};
   let point_strides = options.pointStrides || [ 11, 5, 2, 1 ];
@@ -2350,6 +2405,10 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
     return added;
   };
 
+  let current_attack_type = build.attack_type || 'normal';
+  if (attack_types.includes(current_attack_type)) {
+    addSource({ attack_type: current_attack_type, stats: build.stats });
+  }
   attack_types.forEach(function(attack_type) {
     let speed_points = BuildSearch.initiativeSpeedPoints(build, opponents, attack_type);
     BuildSearch.forEachStatAllocation(speed_points, {
@@ -2371,6 +2430,7 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         defeatCache: search_cache,
         matchupCache: matchup_cache,
         previousResult: frontier_result,
+        opponentWeights: options.opponentWeights,
       }
     );
     pending_groups = [];
@@ -2414,6 +2474,7 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
         defeatCache: search_cache,
         matchupCache: matchup_cache,
         previousResult: frontier_result,
+        opponentWeights: options.opponentWeights,
       }
     );
     pending_groups = [];
@@ -2438,7 +2499,9 @@ MatchupGame.adaptiveStatFrontiers = function(build, opponents, opponent_ids, att
       return finalist_source_keys.has(JSON.stringify([ source.attack_type, source.stats ]));
     });
   });
-  let exact_result = MatchupGame.candidateFrontiers(finalists, opponents, opponent_ids);
+  let exact_result = MatchupGame.candidateFrontiers(finalists, opponents, opponent_ids, {
+    opponentWeights: options.opponentWeights,
+  });
   exact_result.search_candidate_count = frontier_result.candidate_count;
   exact_result.search_evaluated_matchups = frontier_result.evaluated_matchups;
   exact_result.search_defeat_cache = frontier_result.defeat_cache;

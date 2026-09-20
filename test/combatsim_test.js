@@ -1516,6 +1516,37 @@ exports.testStatAllocationGeneration = function(test) {
   test.done();
 };
 
+exports.testJointEquipmentStatResponseBeam = function(test) {
+  let build = Build.ControlledKernel;
+  let opponent = Player.generateBuild(build);
+  let response = MatchupGame.jointEquipmentStatResponseBeam(
+    build,
+    [ opponent ],
+    [ 'ControlledKernel' ],
+    [ 1 ],
+    [ 'normal' ],
+    {
+      beamWidth: 2,
+      maxIterations: 1,
+      slots: [ 'weapon1' ],
+      itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
+      crystalKeys: [ 'PerfectFire' ],
+      hpPoints: [ 70 ],
+      pointStrides: [ 11 ],
+      minimumSurvivalProbability: 1e-6,
+    }
+  );
+
+  test.ok(response.beam.length > 0);
+  test.ok(response.beam.every(function(entry) {
+    return entry.build.stats.hp === 70 && entry.build.attack_type === 'normal';
+  }));
+  test.ok(response.beam[0].weighted_score >=
+    response.equipment_response.beam[0].best_response.weighted_score);
+  test.ok(response.timings_ms.total >= response.timings_ms.equipment);
+  test.done();
+};
+
 exports.testRestrictedMatchupGame = function(test) {
   let player1 = {
     max_hp: 10,
