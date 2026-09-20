@@ -20,7 +20,7 @@ let settings = {
   batchSize: 2,
   minimumSurvivalProbability: 0.01,
   attackTypes: [ 'normal', 'quick', 'aimed', 'cover' ],
-  improvementTolerance: 1e-6,
+  improvementTolerance: 1e-3,
 };
 let config_json = JSON.stringify(settings);
 fs.mkdirSync(path.dirname(database_path), { recursive: true });

@@ -5,7 +5,7 @@ let src = require('../combatsim');
 let build = src.Build.ControlledKernel;
 let opponent = src.Player.generateBuild(build);
 let widths = [ 8 ];
-let tolerances = (process.env.SEARCH_TOLERANCES || '0.000001').split(',').map(Number);
+let tolerances = (process.env.SEARCH_TOLERANCES || '0.001').split(',').map(Number);
 
 let results = widths.flatMap(function(width) {
   return tolerances.map(function(tolerance) {

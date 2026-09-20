@@ -2325,7 +2325,7 @@ MatchupGame.jointEquipmentStatResponseBeam = function(
   let maximum_iterations = options.jointMaxIterations === undefined ?
     Infinity : options.jointMaxIterations;
   let improvement_tolerance = options.improvementTolerance === undefined ?
-    1e-6 : options.improvementTolerance;
+    1e-3 : options.improvementTolerance;
   let progressive_stat_fidelity = options.progressiveStatFidelity !== false;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
