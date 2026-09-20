@@ -1833,6 +1833,7 @@ exports.testBatchedEquipmentArchiveExpansion = function(test) {
 
 exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
   let kernel = BuildCatalogs[2];
+  let checkpoints = [];
   let search = MatchupGame.endogenousEquipmentSearch(kernel, {
     beamWidth: 2,
     batchSize: 2,
@@ -1844,10 +1845,18 @@ exports.testEndogenousEquipmentSearchReusesMatchups = function(test) {
     itemKeysBySlot: { weapon1: [ 'CrystalSword', 'CrystalSwordT2' ] },
     crystalKeys: [ 'PerfectFire' ],
     minimumSurvivalProbability: 0.01,
+    roundOffset: 4,
+    onRound: function(checkpoint) { checkpoints.push(checkpoint); },
   });
 
   test.ok(search.converged);
   test.equal(search.rounds.length, 3);
+  test.deepEqual(search.rounds.map(function(round) { return round.round; }), [ 5, 6, 7 ]);
+  test.deepEqual(checkpoints.map(function(checkpoint) {
+    return checkpoint.round.round;
+  }), [ 5, 6, 7 ]);
+  test.equal(checkpoints[0].converged, false);
+  test.equal(checkpoints[2].converged, true);
   test.equal(search.rounds[0].added.length, 1);
   test.equal(search.rounds[1].added.length, 1);
   test.equal(search.rounds[2].added.length, 0);

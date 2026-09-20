@@ -2204,6 +2204,7 @@ MatchupGame.expandEquipmentArchive = function(catalog, options) {
 MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
   options = options || {};
   let maximum_rounds = options.maxRounds === undefined ? Infinity : options.maxRounds;
+  let round_offset = options.roundOffset || 0;
   let minimum_survival_probability = options.minimumSurvivalProbability === undefined ?
     0.01 : options.minimumSurvivalProbability;
   let shared_options = Object.assign({}, options, {
@@ -2227,7 +2228,7 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       return entry.candidate;
     }));
     rounds.push({
-      round: round,
+      round: round_offset + round,
       archive_size_before: Object.keys(current_catalog).length,
       archive_size_after: Object.keys(expansion.catalog).length,
       added: expansion.added,
@@ -2242,6 +2243,13 @@ MatchupGame.endogenousEquipmentSearch = function(catalog, options) {
       timings_ms: expansion.timings_ms,
     });
     current_catalog = expansion.catalog;
+    if (options.onRound) {
+      options.onRound({
+        catalog: current_catalog,
+        round: rounds[rounds.length - 1],
+        converged: expansion.added.length === 0,
+      });
+    }
     if (expansion.added.length === 0) {
       return {
         catalog: current_catalog,
