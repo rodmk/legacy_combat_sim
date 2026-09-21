@@ -37,3 +37,5 @@ pub mod exact;
 pub mod game;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
+/// Stat-allocation and candidate-frontier search primitives.
+pub mod search;

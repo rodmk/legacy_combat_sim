@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 /// Additive combat and equipment statistics.
 pub struct Stats {
     #[serde(default)]
@@ -63,7 +63,7 @@ pub enum WeaponType {
     Projectile,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 /// A build's selected attack mode.
 pub enum AttackType {
@@ -87,7 +87,7 @@ pub enum MatchupRole {
     Opponent,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// A build as represented in a JSON build catalog.
 pub struct BuildDefinition {
     /// Display name.
@@ -106,7 +106,7 @@ pub struct BuildDefinition {
     pub equipment: Loadout,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 /// Allocated character-stat points before training and equipment bonuses.
 pub struct StatAllocation {
     /// HP points; each point grants five HP.
@@ -119,7 +119,7 @@ pub struct StatAllocation {
     pub dodge: i32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// The five equipment slots in a build.
 pub struct Loadout {
     /// Armor slot.
@@ -134,7 +134,7 @@ pub struct Loadout {
     pub misc2: ItemSelection,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// An equipment catalog key with optional crystals and weapon modifications.
 pub struct ItemSelection {
     /// Equipment catalog key.
