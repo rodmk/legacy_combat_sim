@@ -230,6 +230,83 @@ pub struct EquipmentBestResponse {
     pub exact_matchups: usize,
 }
 
+/// Best exact candidate retained for one equipment concept.
+#[derive(Clone, Debug)]
+pub struct EquipmentBeamEntry {
+    /// Canonical concept signature, insensitive to weapon and misc slot order.
+    pub concept_signature: String,
+    /// Best exact combat variant for the concept.
+    pub best_response: FrontierCandidate<EquipmentSource>,
+}
+
+/// Bounded collection of distinct equipment concepts after exact validation.
+#[derive(Clone, Debug)]
+pub struct EquipmentResponseBeam {
+    /// Concepts ordered by decreasing exact weighted score.
+    pub beam: Vec<EquipmentBeamEntry>,
+    /// Distinct concepts found during approximate evaluation.
+    pub concept_count: usize,
+    /// Concepts selected for exact validation.
+    pub selected_concept_count: usize,
+    /// Unique combat candidates in the neighborhood.
+    pub candidate_count: usize,
+    /// Approximate candidates surviving interval screening.
+    pub finalist_count: usize,
+    /// Approximate matchup evaluations.
+    pub evaluated_matchups: usize,
+    /// Exact matchup evaluations.
+    pub exact_matchups: usize,
+}
+
+/// One pass in adaptive equipment response closure.
+#[derive(Clone, Debug)]
+pub struct EquipmentResponseIteration {
+    /// One-based pass number.
+    pub iteration: usize,
+    /// Combat signatures retained after the pass.
+    pub signatures: Vec<CombatSignature>,
+    /// Unique candidates evaluated during the pass.
+    pub candidate_count: usize,
+    /// Exact finalists evaluated during the pass.
+    pub finalist_count: usize,
+}
+
+/// Equipment beam repeatedly expanded until it stops improving.
+#[derive(Clone, Debug)]
+pub struct AdaptiveEquipmentResponse {
+    /// Final distinct concepts ordered by score.
+    pub beam: Vec<EquipmentBeamEntry>,
+    /// Per-pass convergence record.
+    pub iterations: Vec<EquipmentResponseIteration>,
+    /// Whether every entry stabilized or the beam repeated.
+    pub converged: bool,
+}
+
+/// Returns a canonical equipment identity that ignores interchangeable slot order
+/// and repeated copies of the same crystal type.
+pub fn equipment_concept_signature(build: &BuildDefinition) -> String {
+    fn descriptor(item: &ItemSelection) -> (String, Vec<String>, Vec<String>) {
+        let mut mods = item.mods.clone();
+        mods.sort();
+        let mut crystals = item.crystals.clone();
+        crystals.sort();
+        crystals.dedup();
+        (item.item.clone(), mods, crystals)
+    }
+    let mut weapons = [
+        descriptor(&build.equipment.weapon1),
+        descriptor(&build.equipment.weapon2),
+    ];
+    weapons.sort();
+    let mut miscs = [
+        descriptor(&build.equipment.misc1),
+        descriptor(&build.equipment.misc2),
+    ];
+    miscs.sort();
+    serde_json::to_string(&(descriptor(&build.equipment.armor), weapons, miscs))
+        .expect("equipment descriptors are serializable")
+}
+
 /// Runs bounded-error screening followed by exact evaluation of surviving equipment.
 pub fn equipment_best_response(
     catalogs: &Catalogs,
@@ -279,6 +356,231 @@ pub fn equipment_best_response(
         evaluated_matchups: approximate.evaluated_matchups,
         finalist_count: finalists.len(),
         exact_matchups: exact.evaluated_matchups,
+    })
+}
+
+/// Selects distinct equipment concepts approximately, then validates their
+/// interval-surviving combat variants exactly.
+#[allow(clippy::too_many_arguments)]
+pub fn equipment_response_beam(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: Option<&[f64]>,
+    options: &EquipmentNeighborhoodOptions,
+    minimum_survival_probability: f64,
+    beam_width: usize,
+) -> Result<EquipmentResponseBeam> {
+    if beam_width == 0 {
+        bail!("equipment response beam width must be positive");
+    }
+    let neighborhood = equipment_neighborhood(catalogs, build, options)?;
+    let approximate = candidate_frontiers(
+        &neighborhood.groups,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        minimum_survival_probability,
+    )?;
+    let mut by_concept = HashMap::<String, Vec<FrontierCandidate<EquipmentSource>>>::new();
+    for candidate in &approximate.candidates {
+        for source in &candidate.sources {
+            by_concept
+                .entry(equipment_concept_signature(&source.build))
+                .or_default()
+                .push(candidate.clone());
+        }
+    }
+    let concept_count = by_concept.len();
+    let mut selected = by_concept
+        .into_iter()
+        .map(|(signature, candidates)| {
+            let approximate_score = candidates
+                .iter()
+                .map(|candidate| candidate.weighted_score)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let lower_bound = candidates
+                .iter()
+                .map(|candidate| candidate.weighted_score - candidate.weighted_score_error_bound)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let finalists = candidates
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.weighted_score + candidate.weighted_score_error_bound
+                        >= lower_bound - 1e-12
+                })
+                .map(|candidate| candidate.signature)
+                .collect::<HashSet<_>>();
+            (signature, approximate_score, finalists)
+        })
+        .collect::<Vec<_>>();
+    selected.sort_by(|left, right| right.1.total_cmp(&left.1));
+    selected.truncate(beam_width);
+    let finalist_signatures = selected
+        .iter()
+        .flat_map(|(_, _, finalists)| finalists.iter().cloned())
+        .collect::<HashSet<_>>();
+    let finalists = neighborhood
+        .groups
+        .iter()
+        .filter(|group| finalist_signatures.contains(&group.signature))
+        .cloned()
+        .collect::<Vec<_>>();
+    let exact = candidate_frontiers(&finalists, opponents, opponent_ids, opponent_weights, 0.0)?;
+    let exact_by_signature = exact
+        .candidates
+        .into_iter()
+        .map(|candidate| (candidate.signature.clone(), candidate))
+        .collect::<HashMap<_, _>>();
+    let mut beam = Vec::with_capacity(selected.len());
+    for (concept_signature, _, signatures) in selected {
+        let mut candidates = signatures
+            .iter()
+            .filter_map(|signature| exact_by_signature.get(signature).cloned())
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
+        if let Some(mut best_response) = candidates.into_iter().next() {
+            best_response
+                .sources
+                .retain(|source| equipment_concept_signature(&source.build) == concept_signature);
+            if !best_response.sources.is_empty() {
+                beam.push(EquipmentBeamEntry {
+                    concept_signature,
+                    best_response,
+                });
+            }
+        }
+    }
+    beam.sort_by(|left, right| {
+        right
+            .best_response
+            .weighted_score
+            .total_cmp(&left.best_response.weighted_score)
+    });
+    Ok(EquipmentResponseBeam {
+        selected_concept_count: beam.len(),
+        beam,
+        concept_count,
+        candidate_count: neighborhood.counts.unique_combat_signatures,
+        finalist_count: finalists.len(),
+        evaluated_matchups: approximate.evaluated_matchups,
+        exact_matchups: exact.evaluated_matchups,
+    })
+}
+
+/// Repeatedly advances every improving equipment concept until the retained beam
+/// stabilizes, repeats, or reaches `maximum_iterations`.
+#[allow(clippy::too_many_arguments)]
+pub fn adaptive_equipment_response_beam(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: Option<&[f64]>,
+    options: &EquipmentNeighborhoodOptions,
+    minimum_survival_probability: f64,
+    beam_width: usize,
+    maximum_iterations: usize,
+    improvement_tolerance: f64,
+) -> Result<AdaptiveEquipmentResponse> {
+    let initial = equipment_response_beam(
+        catalogs,
+        build,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        options,
+        minimum_survival_probability,
+        beam_width,
+    )?;
+    let mut states = initial
+        .beam
+        .into_iter()
+        .map(|entry| {
+            let seen = HashSet::from([entry.best_response.signature.clone()]);
+            (entry, false, seen)
+        })
+        .collect::<Vec<_>>();
+    let mut iterations = vec![EquipmentResponseIteration {
+        iteration: 1,
+        signatures: states
+            .iter()
+            .map(|(entry, _, _)| entry.best_response.signature.clone())
+            .collect(),
+        candidate_count: initial.candidate_count,
+        finalist_count: initial.finalist_count,
+    }];
+    for iteration in 2..=maximum_iterations {
+        let previous = sorted_signatures(&states);
+        let mut candidate_count = 0;
+        let mut finalist_count = 0;
+        for (entry, stable, seen) in &mut states {
+            if *stable {
+                continue;
+            }
+            let response = equipment_best_response(
+                catalogs,
+                &entry.best_response.sources[0].build,
+                opponents,
+                opponent_ids,
+                opponent_weights,
+                options,
+                minimum_survival_probability,
+            )?;
+            candidate_count += response.candidate_count;
+            finalist_count += response.finalist_count;
+            let candidate = response.best_response;
+            let improved = candidate.weighted_score
+                > entry.best_response.weighted_score + improvement_tolerance;
+            if !improved || seen.contains(&candidate.signature) {
+                *stable = true;
+                continue;
+            }
+            seen.insert(candidate.signature.clone());
+            *entry = EquipmentBeamEntry {
+                concept_signature: equipment_concept_signature(&candidate.sources[0].build),
+                best_response: candidate,
+            };
+        }
+        let mut best_by_concept =
+            HashMap::<String, (EquipmentBeamEntry, bool, HashSet<CombatSignature>)>::new();
+        for state in states {
+            let key = state.0.concept_signature.clone();
+            if best_by_concept.get(&key).is_none_or(|existing| {
+                state.0.best_response.weighted_score > existing.0.best_response.weighted_score
+            }) {
+                best_by_concept.insert(key, state);
+            }
+        }
+        states = best_by_concept.into_values().collect();
+        states.sort_by(|left, right| {
+            right
+                .0
+                .best_response
+                .weighted_score
+                .total_cmp(&left.0.best_response.weighted_score)
+        });
+        states.truncate(beam_width);
+        let next = sorted_signatures(&states);
+        iterations.push(EquipmentResponseIteration {
+            iteration,
+            signatures: next.clone(),
+            candidate_count,
+            finalist_count,
+        });
+        if states.iter().all(|(_, stable, _)| *stable) || previous == next {
+            return Ok(AdaptiveEquipmentResponse {
+                beam: states.into_iter().map(|state| state.0).collect(),
+                iterations,
+                converged: true,
+            });
+        }
+    }
+    Ok(AdaptiveEquipmentResponse {
+        beam: states.into_iter().map(|state| state.0).collect(),
+        iterations,
+        converged: false,
     })
 }
 
@@ -630,6 +932,17 @@ fn set_slot(loadout: &mut Loadout, slot: EquipmentSlot, selection: ItemSelection
     } = selection;
 }
 
+fn sorted_signatures(
+    states: &[(EquipmentBeamEntry, bool, HashSet<CombatSignature>)],
+) -> Vec<CombatSignature> {
+    let mut signatures = states
+        .iter()
+        .map(|(entry, _, _)| entry.best_response.signature.clone())
+        .collect::<Vec<_>>();
+    signatures.sort_by_key(|signature| serde_json::to_string(signature).unwrap_or_default());
+    signatures
+}
+
 fn mean(values: &[f64]) -> f64 {
     values.iter().sum::<f64>() / values.len() as f64
 }
@@ -757,5 +1070,50 @@ mod tests {
             response.best_response.sources[0].slot,
             EquipmentSlot::Weapon1
         );
+
+        let beam_options = EquipmentNeighborhoodOptions {
+            crystal_keys: Some(
+                ["PerfectFire", "AmuletCrystal", "BerserkerCrystal"]
+                    .map(str::to_owned)
+                    .to_vec(),
+            ),
+            socket_capacity: 2,
+            ..options
+        };
+        let beam = equipment_response_beam(
+            &catalogs,
+            &build,
+            &opponents,
+            &ids,
+            Some(&[1.0]),
+            &beam_options,
+            1e-6,
+            2,
+        )
+        .unwrap();
+        assert_eq!(beam.beam.len(), 2);
+        assert_eq!(
+            beam.beam
+                .iter()
+                .map(|entry| &entry.concept_signature)
+                .collect::<HashSet<_>>()
+                .len(),
+            2
+        );
+        let adaptive = adaptive_equipment_response_beam(
+            &catalogs,
+            &build,
+            &opponents,
+            &ids,
+            Some(&[1.0]),
+            &beam_options,
+            1e-6,
+            2,
+            3,
+            1e-6,
+        )
+        .unwrap();
+        assert!(adaptive.converged);
+        assert!(adaptive.beam.len() <= 2);
     }
 }
