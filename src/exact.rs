@@ -441,7 +441,7 @@ mod tests {
     use crate::catalog::Catalogs;
 
     #[test]
-    fn exact_result_matches_legacy_fixture() {
+    fn exact_result_matches_expected_distribution() {
         let catalogs = Catalogs::bundled().unwrap();
         let matchup = catalogs
             .materialize_matchup(

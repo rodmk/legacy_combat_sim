@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Combat simulation tools for Legacy"
+readme = "README.md"
+repository = "https://github.com/rodmk/legacy_combat_sim"
 
 [dependencies]
 anyhow = "1.0"

@@ -1837,7 +1837,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stat_allocation_generation_matches_legacy_counts() {
+    fn stat_allocation_generation_matches_expected_counts() {
         let allocations = stat_allocations(&[173], None, 1).unwrap();
         assert_eq!(allocations.len(), 1);
         assert_eq!(allocations[0].hp, 2);
@@ -1876,7 +1876,7 @@ mod tests {
     }
 
     #[test]
-    fn initiative_thresholds_match_legacy_fixture() {
+    fn initiative_thresholds_match_expected_values() {
         let catalogs = Catalogs::bundled().unwrap();
         let build = catalogs.build("ShadowDojoDLGunBuild3").unwrap();
         let opponents = [
@@ -1988,7 +1988,7 @@ mod tests {
     }
 
     #[test]
-    fn equipment_normalization_matches_legacy_fixture() {
+    fn equipment_normalization_matches_expected_variants() {
         let catalogs = Catalogs::bundled().unwrap();
         let build = catalogs.build("ShadowDojoDLGunBuild3").unwrap();
         let slots = [

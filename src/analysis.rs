@@ -444,7 +444,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shadow_dojo_analysis_matches_legacy_kernel() {
+    fn shadow_dojo_analysis_matches_expected_kernel() {
         let catalogs = Catalogs::bundled().unwrap();
         let catalog = catalogs
             .builds()

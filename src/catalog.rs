@@ -146,6 +146,7 @@ impl Catalogs {
         ] {
             catalogs.merge_builds(serde_json::from_str(data).with_context(|| name.to_owned())?)?;
         }
+        catalogs.validate_relations()?;
         Ok(catalogs)
     }
 
@@ -165,6 +166,41 @@ impl Catalogs {
             bail!("duplicate build key: {key}");
         }
         self.builds.extend(builds);
+        Ok(())
+    }
+
+    fn validate_relations(&self) -> Result<()> {
+        for (mod_key, weapon_mod) in &self.weapon_mods {
+            for weapon_key in &weapon_mod.compatible {
+                let weapon =
+                    self.equipment.weapons.get(weapon_key).with_context(|| {
+                        format!("{mod_key} references unknown weapon {weapon_key}")
+                    })?;
+                if weapon.mod_slots < weapon_mod.slot {
+                    bail!("{mod_key} exceeds the modification capacity of {weapon_key}");
+                }
+            }
+        }
+        for (left_key, left) in &self.weapon_mods {
+            let mut left_compatible = left.compatible.clone();
+            left_compatible.sort();
+            for (right_key, right) in &self.weapon_mods {
+                if left_key == right_key || left.slot != right.slot {
+                    continue;
+                }
+                let mut right_compatible = right.compatible.clone();
+                right_compatible.sort();
+                if left_compatible == right_compatible
+                    && multiplier_dominates(left.mult, right.mult)
+                {
+                    bail!("{right_key} is strictly dominated by {left_key}");
+                }
+            }
+        }
+        for (build_key, build) in &self.builds {
+            self.materialize(build, MatchupRole::Active)
+                .with_context(|| format!("invalid build {build_key}"))?;
+        }
         Ok(())
     }
 
@@ -855,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn item_variants_match_legacy_fixture() {
+    fn item_variants_match_expected_reduction() {
         let catalogs = Catalogs::bundled().unwrap();
         let crystals = [
             "PerfectGreen",

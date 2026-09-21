@@ -9,8 +9,8 @@ pub const MAX_COMBAT_ROUNDS: usize = 100;
 
 /// Returns the documented probability that one statistic beats another.
 ///
-/// Division remains fractional, matching the PHP formula on which the legacy
-/// implementation is based. Equal values produce a probability of `0.5`.
+/// Division remains fractional, matching the game combat formula. Equal values
+/// produce a probability of `0.5`.
 pub fn combat_probability(offense: i32, defense: i32) -> f64 {
     let offense = f64::from(offense);
     let defense = f64::from(defense);
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn armor_damage_matches_legacy_rounding() {
+    fn armor_damage_matches_game_rounding() {
         assert_eq!(damage_after_armor(80, 65, 100), 81);
     }
 
