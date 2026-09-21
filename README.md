@@ -8,8 +8,9 @@ Combat simulator for Legacy (http://www.legacy-game.net).
 Rust CLI
 ========
 
-The Rust rewrite starts with a modular Monte Carlo simulator. Run a catalog
-build against the bundled Shadow Dojo enemy set with a reproducible seed:
+The Rust implementation provides Monte Carlo simulation, exact matchup analysis,
+equilibrium solving, and equipment/stat response search. Run a catalog build
+against the bundled Shadow Dojo enemy set with a reproducible seed:
 
 ```sh
 cargo run --release -- simulate \
@@ -44,6 +45,32 @@ Shadow Dojo catalog with:
 ```sh
 cargo run --release -- analyze --enemy-set shadow-dojo > analysis.json
 ```
+
+Jointly search equipment, allocated stats, and attack mode against that set:
+
+```sh
+cargo run --release -- search \
+  --build ShadowDojoDLGunBuild3 \
+  --enemy-set shadow-dojo > response.json
+```
+
+The search uses bounded approximate distributions only to screen candidates;
+reported beam scores are recomputed exactly. Use `--beam-width`,
+`--expansion-width`, `--max-iterations`, and `--socket-capacity` to control the
+search breadth.
+
+Close a restricted strategy archive by repeatedly solving its equilibrium and
+admitting profitable novel responses:
+
+```sh
+cargo run --release -- infer \
+  --enemy-set shadow-dojo \
+  --max-rounds 16 > inferred-meta.json
+```
+
+Each round records the pre-admission equilibrium, any safely pruned opponent
+mass, the response-search termination reason, and the admitted builds. The final
+report includes the expanded build catalog and its exact restricted-game analysis.
 
 Weapon Mods
 ===========

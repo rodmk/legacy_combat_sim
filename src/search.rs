@@ -86,6 +86,19 @@ pub struct EquipmentSource {
     pub equipment: ItemSelection,
     /// Complete candidate build.
     pub build: BuildDefinition,
+    /// Dominated crystals replaced before varying the selected slot.
+    pub normalization: Vec<EquipmentReplacement>,
+}
+
+/// One crystal-normalization replacement.
+#[derive(Clone, Debug, Serialize)]
+pub struct EquipmentReplacement {
+    /// Slot containing the replacement.
+    pub slot: EquipmentSlot,
+    /// Original descriptor.
+    pub from: ItemSelection,
+    /// Nondominated descriptor.
+    pub to: ItemSelection,
 }
 
 /// Combat-equivalent equipment replacements with one representative.
@@ -122,6 +135,8 @@ pub struct EquipmentNeighborhoodCounts {
     pub slot_variants: usize,
     /// Unique combat signatures after grouping.
     pub unique_combat_signatures: usize,
+    /// Combat-distinct normalized forms of the seed build.
+    pub normalized_builds: usize,
 }
 
 /// One-step equipment replacements grouped by combat behavior.
@@ -144,6 +159,10 @@ pub struct EquipmentNeighborhoodOptions {
     pub crystal_keys: Option<Vec<String>>,
     /// Number of sockets to fill on every generated descriptor.
     pub socket_capacity: usize,
+    /// Replace dominated seed crystals before generating neighbors.
+    pub normalize: bool,
+    /// Vary crystals and mods while keeping each slot's base item fixed.
+    pub fixed_equipment: bool,
 }
 
 impl Default for EquipmentNeighborhoodOptions {
@@ -153,6 +172,8 @@ impl Default for EquipmentNeighborhoodOptions {
             item_keys_by_slot: HashMap::new(),
             crystal_keys: None,
             socket_capacity: 4,
+            normalize: true,
+            fixed_equipment: false,
         }
     }
 }
@@ -280,6 +301,115 @@ pub struct AdaptiveEquipmentResponse {
     pub iterations: Vec<EquipmentResponseIteration>,
     /// Whether every entry stabilized or the beam repeated.
     pub converged: bool,
+}
+
+/// Controls progressive stat-allocation refinement.
+#[derive(Clone, Debug)]
+pub struct AdaptiveStatOptions {
+    /// Coarse-to-fine positive allocation strides.
+    pub point_strides: Vec<i32>,
+    /// Optional allowed HP allocations.
+    pub hp_points: Option<HashSet<i32>>,
+    /// Truncation threshold used during approximate frontier search.
+    pub minimum_survival_probability: f64,
+    /// Opponent weights; uniform when omitted.
+    pub opponent_weights: Option<Vec<f64>>,
+    /// Restrict exact validation to the weighted-best interval when true.
+    pub weighted_best_only: bool,
+    /// Continue unit-radius expansion until no allocation is added.
+    pub converge: bool,
+}
+
+impl Default for AdaptiveStatOptions {
+    fn default() -> Self {
+        Self {
+            point_strides: vec![11, 5, 2, 1],
+            hp_points: None,
+            minimum_survival_probability: 0.0,
+            opponent_weights: None,
+            weighted_best_only: false,
+            converge: true,
+        }
+    }
+}
+
+/// One coarse-to-fine stat search stage.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct StatSearchStage {
+    /// Allocation stride used to seed or expand this stage.
+    pub point_stride: i32,
+    /// Combat-equivalent candidates accumulated at this stage.
+    pub candidate_count: usize,
+    /// Combat frontier size.
+    pub combat_frontier_count: usize,
+    /// Combat-and-economy frontier size.
+    pub combat_economy_frontier_count: usize,
+}
+
+/// Exact stat frontiers plus approximate-search accounting.
+#[derive(Clone, Debug)]
+pub struct AdaptiveStatFrontiers {
+    /// Exact evaluation of interval-surviving frontier candidates.
+    pub exact: CandidateFrontiers<StatAllocationSource>,
+    /// Approximate combat-equivalent candidate count.
+    pub search_candidate_count: usize,
+    /// Approximate matchup evaluation count.
+    pub search_evaluated_matchups: usize,
+    /// Exact finalist count.
+    pub exact_finalist_count: usize,
+    /// Coarse-to-fine stage summaries.
+    pub stages: Vec<StatSearchStage>,
+    /// Number of unit-radius convergence passes.
+    pub convergence_iterations: usize,
+    /// Whether unit-radius expansion found no further allocation.
+    pub converged: bool,
+}
+
+/// One jointly optimized equipment and stat response.
+#[derive(Clone, Debug)]
+pub struct JointResponseEntry {
+    /// Canonical combat signature.
+    pub signature: CombatSignature,
+    /// Canonical equipment concept signature.
+    pub concept_signature: String,
+    /// Exact weighted score against the target mixture.
+    pub weighted_score: f64,
+    /// Complete response build.
+    pub build: BuildDefinition,
+}
+
+/// One pass of alternating equipment and stat optimization.
+#[derive(Clone, Debug, Serialize)]
+pub struct JointResponseIteration {
+    /// One-based pass number.
+    pub iteration: usize,
+    /// Seeds expanded during this pass.
+    pub seed_count: usize,
+    /// Equipment candidates evaluated.
+    pub equipment_candidate_count: usize,
+    /// Exact equipment finalists evaluated.
+    pub equipment_finalist_count: usize,
+    /// Adaptive stat searches performed.
+    pub stat_search_requests: usize,
+    /// Approximate stat candidates evaluated.
+    pub stat_candidate_count: usize,
+    /// Exact stat finalists evaluated.
+    pub exact_stat_finalist_count: usize,
+    /// Improvement in the leading exact score after the first pass.
+    pub improvement: Option<f64>,
+}
+
+/// Result of alternating equipment and stat response search.
+#[derive(Clone, Debug)]
+pub struct JointEquipmentStatResponse {
+    /// Final response beam ordered by exact weighted score.
+    pub beam: Vec<JointResponseEntry>,
+    /// Per-pass search accounting.
+    pub iterations: Vec<JointResponseIteration>,
+    /// Whether a beam repeated or score improvement reached the tolerance.
+    pub converged: bool,
+    /// Stable machine-readable termination reason.
+    pub convergence_reason: &'static str,
 }
 
 /// Returns a canonical equipment identity that ignores interchangeable slot order
@@ -584,6 +714,159 @@ pub fn adaptive_equipment_response_beam(
     })
 }
 
+/// Alternates bounded equipment response beams with adaptive stat refinement.
+///
+/// Every retained score is exact. Approximate distributions only decide which
+/// equipment and stat candidates require exact validation.
+#[allow(clippy::too_many_arguments)]
+pub fn joint_equipment_stat_response_beam(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: Option<&[f64]>,
+    attack_types: &[AttackType],
+    equipment_options: &EquipmentNeighborhoodOptions,
+    stat_options: &AdaptiveStatOptions,
+    minimum_survival_probability: f64,
+    beam_width: usize,
+    expansion_width: usize,
+    maximum_iterations: usize,
+    improvement_tolerance: f64,
+) -> Result<JointEquipmentStatResponse> {
+    if beam_width == 0 || expansion_width == 0 || maximum_iterations == 0 {
+        bail!("joint response widths and iteration limit must be positive");
+    }
+    let mut seeds = vec![build.clone()];
+    let mut seen_beams = HashSet::<Vec<String>>::new();
+    let mut iterations = Vec::new();
+    let mut beam = Vec::new();
+    let mut previous_best_score = None;
+    for iteration in 1..=maximum_iterations {
+        let expanded_seeds = seeds.iter().take(expansion_width).collect::<Vec<_>>();
+        let mut equipment_by_signature = HashMap::<CombatSignature, EquipmentBeamEntry>::new();
+        let mut equipment_candidate_count = 0;
+        let mut equipment_finalist_count = 0;
+        for seed in &expanded_seeds {
+            let response = equipment_response_beam(
+                catalogs,
+                seed,
+                opponents,
+                opponent_ids,
+                opponent_weights,
+                equipment_options,
+                minimum_survival_probability,
+                beam_width,
+            )?;
+            equipment_candidate_count += response.candidate_count;
+            equipment_finalist_count += response.finalist_count;
+            for entry in response.beam {
+                let signature = entry.best_response.signature.clone();
+                if equipment_by_signature
+                    .get(&signature)
+                    .is_none_or(|existing| {
+                        entry.best_response.weighted_score > existing.best_response.weighted_score
+                    })
+                {
+                    equipment_by_signature.insert(signature, entry);
+                }
+            }
+        }
+        let mut equipment_beam = equipment_by_signature.into_values().collect::<Vec<_>>();
+        equipment_beam.sort_by(|left, right| {
+            right
+                .best_response
+                .weighted_score
+                .total_cmp(&left.best_response.weighted_score)
+        });
+        equipment_beam.truncate(beam_width);
+
+        let mut response_by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
+        let mut stat_candidate_count = 0;
+        let mut exact_stat_finalist_count = 0;
+        for entry in &equipment_beam {
+            let equipment_build = &entry.best_response.sources[0].build;
+            let mut search_options = stat_options.clone();
+            search_options.opponent_weights = opponent_weights.map(<[f64]>::to_vec);
+            search_options.weighted_best_only = true;
+            let stats = adaptive_stat_frontiers(
+                catalogs,
+                equipment_build,
+                opponents,
+                opponent_ids,
+                attack_types,
+                &search_options,
+            )?;
+            stat_candidate_count += stats.search_candidate_count;
+            exact_stat_finalist_count += stats.exact_finalist_count;
+            let best = stats
+                .exact
+                .best_weighted
+                .context("stat response produced no candidates")?;
+            let source = &best.sources[0];
+            let mut response_build = equipment_build.clone();
+            response_build.stats = source.stats;
+            response_build.attack_type = source.attack_type;
+            let response = JointResponseEntry {
+                signature: best.signature.clone(),
+                concept_signature: equipment_concept_signature(&response_build),
+                weighted_score: best.weighted_score,
+                build: response_build,
+            };
+            if response_by_signature
+                .get(&response.signature)
+                .is_none_or(|existing| response.weighted_score > existing.weighted_score)
+            {
+                response_by_signature.insert(response.signature.clone(), response);
+            }
+        }
+        beam = response_by_signature.into_values().collect();
+        beam.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
+        beam.truncate(beam_width);
+        if beam.is_empty() {
+            bail!("joint response produced an empty beam");
+        }
+        let improvement = previous_best_score.map(|score| beam[0].weighted_score - score);
+        iterations.push(JointResponseIteration {
+            iteration,
+            seed_count: expanded_seeds.len(),
+            equipment_candidate_count,
+            equipment_finalist_count,
+            stat_search_requests: equipment_beam.len(),
+            stat_candidate_count,
+            exact_stat_finalist_count,
+            improvement,
+        });
+        let mut beam_key = beam
+            .iter()
+            .map(|entry| serde_json::to_string(&entry.signature).unwrap_or_default())
+            .collect::<Vec<_>>();
+        beam_key.sort();
+        let repeated = !seen_beams.insert(beam_key);
+        let within_tolerance = improvement.is_some_and(|value| value <= improvement_tolerance);
+        if repeated || within_tolerance {
+            return Ok(JointEquipmentStatResponse {
+                beam,
+                iterations,
+                converged: true,
+                convergence_reason: if repeated {
+                    "repeated_beam"
+                } else {
+                    "score_tolerance"
+                },
+            });
+        }
+        previous_best_score = Some(beam[0].weighted_score);
+        seeds = beam.iter().map(|entry| entry.build.clone()).collect();
+    }
+    Ok(JointEquipmentStatResponse {
+        beam,
+        iterations,
+        converged: false,
+        convergence_reason: "iteration_limit",
+    })
+}
+
 /// Builds the one-slot equipment neighborhood used by response search.
 pub fn equipment_neighborhood(
     catalogs: &Catalogs,
@@ -601,72 +884,94 @@ pub fn equipment_neighborhood(
     } else {
         options.slots.clone()
     };
+    let normalized_builds = if options.normalize {
+        normalize_equipment(catalogs, build, &slots)?
+    } else {
+        vec![(build.clone(), Vec::new())]
+    };
     let mut groups = Vec::<EquipmentGroup>::new();
     let mut group_by_signature = HashMap::<CombatSignature, usize>::new();
     let mut slot_variants = 0;
-    for slot in slots {
-        let category = slot_category(slot);
-        let item_keys = match options.item_keys_by_slot.get(&slot) {
-            Some(keys) => keys.clone(),
-            None => catalogs
-                .item_keys(category)?
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
-        };
-        for item_key in item_keys {
-            if !catalogs.item_keys(category)?.contains(&item_key.as_str()) {
-                bail!("unknown {category} item: {item_key}");
-            }
-            let mut weapon_types = [
-                catalogs.item_weapon_type(&build.equipment.weapon1.item)?,
-                catalogs.item_weapon_type(&build.equipment.weapon2.item)?,
-            ];
-            match slot {
-                EquipmentSlot::Weapon1 => {
-                    weapon_types[0] = catalogs.item_weapon_type(&item_key)?;
+    for (base_build, normalization) in &normalized_builds {
+        for slot in slots.iter().copied() {
+            let category = slot_category(slot);
+            let item_keys = if options.fixed_equipment {
+                vec![get_slot(&base_build.equipment, slot).item.clone()]
+            } else {
+                match options.item_keys_by_slot.get(&slot) {
+                    Some(keys) => keys.clone(),
+                    None => catalogs
+                        .item_keys(category)?
+                        .into_iter()
+                        .map(str::to_owned)
+                        .collect(),
                 }
-                EquipmentSlot::Weapon2 => {
-                    weapon_types[1] = catalogs.item_weapon_type(&item_key)?;
+            };
+            for item_key in item_keys {
+                if !catalogs.item_keys(category)?.contains(&item_key.as_str()) {
+                    bail!("unknown {category} item: {item_key}");
                 }
-                _ => {}
-            }
-            let active_weapon_types = weapon_types
-                .into_iter()
-                .flatten()
-                .collect::<Vec<WeaponType>>();
-            let report = catalogs.item_variant_report(
-                &item_key,
-                &active_weapon_types,
-                options.crystal_keys.as_deref(),
-                options.socket_capacity,
-            )?;
-            slot_variants += report.nondominated_groups.len();
-            for variant in report.nondominated_groups {
-                for descriptor in variant.sources {
-                    let selection = ItemSelection {
-                        item: descriptor.item,
-                        crystals: descriptor.crystals,
-                        mods: descriptor.mods,
-                    };
-                    let mut candidate = build.clone();
-                    set_slot(&mut candidate.equipment, slot, selection.clone());
-                    let representative = catalogs.materialize(&candidate, MatchupRole::Active)?;
-                    let signature = combat_signature(&representative);
-                    let source = EquipmentSource {
-                        slot,
-                        equipment: selection,
-                        build: candidate,
-                    };
-                    if let Some(index) = group_by_signature.get(&signature) {
-                        groups[*index].sources.push(source);
-                    } else {
-                        group_by_signature.insert(signature.clone(), groups.len());
-                        groups.push(EquipmentGroup {
-                            signature,
-                            representative,
-                            sources: vec![source],
-                        });
+                let mut weapon_types = [
+                    catalogs.item_weapon_type(&base_build.equipment.weapon1.item)?,
+                    catalogs.item_weapon_type(&base_build.equipment.weapon2.item)?,
+                ];
+                match slot {
+                    EquipmentSlot::Weapon1 => {
+                        weapon_types[0] = catalogs.item_weapon_type(&item_key)?;
+                    }
+                    EquipmentSlot::Weapon2 => {
+                        weapon_types[1] = catalogs.item_weapon_type(&item_key)?;
+                    }
+                    _ => {}
+                }
+                let active_weapon_types = weapon_types
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<WeaponType>>();
+                let report = if options.fixed_equipment {
+                    catalogs.descriptor_variant_report(
+                        get_slot(&base_build.equipment, slot),
+                        &active_weapon_types,
+                        options.crystal_keys.as_deref(),
+                        options.socket_capacity,
+                    )?
+                } else {
+                    catalogs.item_variant_report(
+                        &item_key,
+                        &active_weapon_types,
+                        options.crystal_keys.as_deref(),
+                        options.socket_capacity,
+                    )?
+                };
+                slot_variants += report.nondominated_groups.len();
+                for variant in report.nondominated_groups {
+                    for descriptor in variant.sources {
+                        let selection = ItemSelection {
+                            item: descriptor.item,
+                            crystals: descriptor.crystals,
+                            mods: descriptor.mods,
+                        };
+                        let mut candidate = base_build.clone();
+                        set_slot(&mut candidate.equipment, slot, selection.clone());
+                        let representative =
+                            catalogs.materialize(&candidate, MatchupRole::Active)?;
+                        let signature = combat_signature(&representative);
+                        let source = EquipmentSource {
+                            slot,
+                            equipment: selection,
+                            build: candidate,
+                            normalization: normalization.clone(),
+                        };
+                        if let Some(index) = group_by_signature.get(&signature) {
+                            groups[*index].sources.push(source);
+                        } else {
+                            group_by_signature.insert(signature.clone(), groups.len());
+                            groups.push(EquipmentGroup {
+                                signature,
+                                representative,
+                                sources: vec![source],
+                            });
+                        }
                     }
                 }
             }
@@ -676,6 +981,7 @@ pub fn equipment_neighborhood(
         counts: EquipmentNeighborhoodCounts {
             slot_variants,
             unique_combat_signatures: groups.len(),
+            normalized_builds: normalized_builds.len(),
         },
         groups,
     })
@@ -795,6 +1101,261 @@ pub fn stat_allocation_groups(
         }
     }
     Ok(groups)
+}
+
+/// Progressively refines stat allocations around approximate Pareto frontiers,
+/// then evaluates all interval-surviving finalists exactly.
+pub fn adaptive_stat_frontiers(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    attack_types: &[AttackType],
+    options: &AdaptiveStatOptions,
+) -> Result<AdaptiveStatFrontiers> {
+    if options.point_strides.is_empty() || options.point_strides.iter().any(|stride| *stride <= 0) {
+        bail!("adaptive stat search requires positive point strides");
+    }
+    let mut groups = Vec::<StatAllocationGroup>::new();
+    let mut group_by_signature = HashMap::<CombatSignature, usize>::new();
+    let mut source_keys = HashSet::<(AttackType, StatAllocation)>::new();
+    let incumbent = (build.attack_type, build.stats);
+    if attack_types.contains(&build.attack_type) {
+        add_stat_source(
+            catalogs,
+            build,
+            StatAllocationSource {
+                attack_type: build.attack_type,
+                stats: build.stats,
+            },
+            options.hp_points.as_ref(),
+            &mut groups,
+            &mut group_by_signature,
+            &mut source_keys,
+        )?;
+    }
+    for attack_type in attack_types {
+        let speeds = initiative_speed_points(catalogs, build, opponents, *attack_type)?;
+        for stats in stat_allocations(
+            &speeds,
+            options.hp_points.as_ref(),
+            options.point_strides[0],
+        )? {
+            add_stat_source(
+                catalogs,
+                build,
+                StatAllocationSource {
+                    attack_type: *attack_type,
+                    stats,
+                },
+                options.hp_points.as_ref(),
+                &mut groups,
+                &mut group_by_signature,
+                &mut source_keys,
+            )?;
+        }
+    }
+
+    let mut stages = Vec::new();
+    let mut approximate = None;
+    for (stage, point_stride) in options.point_strides.iter().copied().enumerate() {
+        let result = candidate_frontiers(
+            &groups,
+            opponents,
+            opponent_ids,
+            options.opponent_weights.as_deref(),
+            options.minimum_survival_probability,
+        )?;
+        stages.push(StatSearchStage {
+            point_stride,
+            candidate_count: result.candidate_count,
+            combat_frontier_count: result.combat_frontier.len(),
+            combat_economy_frontier_count: result.combat_economy_frontier.len(),
+        });
+        if let Some(next_stride) = options.point_strides.get(stage + 1).copied() {
+            expand_stat_frontiers(
+                catalogs,
+                build,
+                &result,
+                point_stride,
+                next_stride,
+                options.hp_points.as_ref(),
+                &mut groups,
+                &mut group_by_signature,
+                &mut source_keys,
+            )?;
+        }
+        approximate = Some(result);
+    }
+    let mut approximate = approximate.context("adaptive stat search produced no stage")?;
+    let mut convergence_iterations = 0;
+    let mut converged = !options.converge;
+    if options.converge {
+        loop {
+            convergence_iterations += 1;
+            let added = expand_stat_frontiers(
+                catalogs,
+                build,
+                &approximate,
+                1,
+                1,
+                options.hp_points.as_ref(),
+                &mut groups,
+                &mut group_by_signature,
+                &mut source_keys,
+            )?;
+            if added == 0 {
+                converged = true;
+                break;
+            }
+            approximate = candidate_frontiers(
+                &groups,
+                opponents,
+                opponent_ids,
+                options.opponent_weights.as_deref(),
+                options.minimum_survival_probability,
+            )?;
+        }
+    }
+
+    let mut frontier_candidates = approximate
+        .combat_frontier
+        .iter()
+        .chain(&approximate.combat_economy_frontier)
+        .collect::<Vec<_>>();
+    if options.weighted_best_only {
+        let lower_bound = frontier_candidates
+            .iter()
+            .map(|candidate| candidate.weighted_score - candidate.weighted_score_error_bound)
+            .fold(f64::NEG_INFINITY, f64::max);
+        frontier_candidates.retain(|candidate| {
+            candidate.weighted_score + candidate.weighted_score_error_bound >= lower_bound - 1e-12
+        });
+    }
+    let mut finalist_sources = frontier_candidates
+        .iter()
+        .flat_map(|candidate| &candidate.sources)
+        .map(|source| (source.attack_type, source.stats))
+        .collect::<HashSet<_>>();
+    if source_keys.contains(&incumbent) {
+        finalist_sources.insert(incumbent);
+    }
+    let finalists = groups
+        .iter()
+        .filter(|group| {
+            group
+                .sources
+                .iter()
+                .any(|source| finalist_sources.contains(&(source.attack_type, source.stats)))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let exact = candidate_frontiers(
+        &finalists,
+        opponents,
+        opponent_ids,
+        options.opponent_weights.as_deref(),
+        0.0,
+    )?;
+    Ok(AdaptiveStatFrontiers {
+        search_candidate_count: approximate.candidate_count,
+        search_evaluated_matchups: approximate.evaluated_matchups,
+        exact_finalist_count: finalists.len(),
+        exact,
+        stages,
+        convergence_iterations,
+        converged,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_stat_source(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    source: StatAllocationSource,
+    hp_points: Option<&HashSet<i32>>,
+    groups: &mut Vec<StatAllocationGroup>,
+    group_by_signature: &mut HashMap<CombatSignature, usize>,
+    source_keys: &mut HashSet<(AttackType, StatAllocation)>,
+) -> Result<bool> {
+    let stats = source.stats;
+    if stats.hp < 2
+        || stats.speed < 2
+        || stats.accuracy < 4
+        || stats.dodge < 4
+        || stats.hp + stats.speed + stats.accuracy + stats.dodge != 183
+        || hp_points.is_some_and(|allowed| !allowed.contains(&stats.hp))
+        || !source_keys.insert((source.attack_type, stats))
+    {
+        return Ok(false);
+    }
+    let mut candidate = build.clone();
+    candidate.stats = stats;
+    candidate.attack_type = source.attack_type;
+    let representative = catalogs.materialize(&candidate, MatchupRole::Active)?;
+    let signature = combat_signature(&representative);
+    if let Some(index) = group_by_signature.get(&signature) {
+        groups[*index].sources.push(source);
+    } else {
+        group_by_signature.insert(signature.clone(), groups.len());
+        groups.push(StatAllocationGroup {
+            signature,
+            representative,
+            sources: vec![source],
+        });
+    }
+    Ok(true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expand_stat_frontiers(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    frontier: &CandidateFrontiers<StatAllocationSource>,
+    radius: i32,
+    stride: i32,
+    hp_points: Option<&HashSet<i32>>,
+    groups: &mut Vec<StatAllocationGroup>,
+    group_by_signature: &mut HashMap<CombatSignature, usize>,
+    source_keys: &mut HashSet<(AttackType, StatAllocation)>,
+) -> Result<usize> {
+    let sources = frontier
+        .combat_frontier
+        .iter()
+        .chain(&frontier.combat_economy_frontier)
+        .flat_map(|candidate| candidate.sources.clone())
+        .collect::<Vec<_>>();
+    let mut added = 0;
+    for source in sources {
+        for hp_offset in (-radius..=radius).step_by(stride as usize) {
+            for accuracy_offset in (-radius..=radius).step_by(stride as usize) {
+                let stats = StatAllocation {
+                    hp: source.stats.hp + hp_offset,
+                    speed: source.stats.speed,
+                    accuracy: source.stats.accuracy + accuracy_offset,
+                    dodge: 183
+                        - source.stats.speed
+                        - source.stats.hp
+                        - hp_offset
+                        - source.stats.accuracy
+                        - accuracy_offset,
+                };
+                added += usize::from(add_stat_source(
+                    catalogs,
+                    build,
+                    StatAllocationSource {
+                        attack_type: source.attack_type,
+                        stats,
+                    },
+                    hp_points,
+                    groups,
+                    group_by_signature,
+                    source_keys,
+                )?);
+            }
+        }
+    }
+    Ok(added)
 }
 
 /// Evaluates stat groups and retains combat and economic Pareto frontiers.
@@ -932,6 +1493,73 @@ fn set_slot(loadout: &mut Loadout, slot: EquipmentSlot, selection: ItemSelection
     } = selection;
 }
 
+fn get_slot(loadout: &Loadout, slot: EquipmentSlot) -> &ItemSelection {
+    match slot {
+        EquipmentSlot::Armor => &loadout.armor,
+        EquipmentSlot::Weapon1 => &loadout.weapon1,
+        EquipmentSlot::Weapon2 => &loadout.weapon2,
+        EquipmentSlot::Misc1 => &loadout.misc1,
+        EquipmentSlot::Misc2 => &loadout.misc2,
+    }
+}
+
+fn normalize_equipment(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    slots: &[EquipmentSlot],
+) -> Result<Vec<(BuildDefinition, Vec<EquipmentReplacement>)>> {
+    let mut variants = vec![(build.clone(), Vec::new())];
+    for slot in slots {
+        let mut next = Vec::new();
+        for (candidate, replacements) in variants {
+            let original = get_slot(&candidate.equipment, *slot).clone();
+            let mut crystal_sets = vec![Vec::<String>::new()];
+            for crystal in &original.crystals {
+                let replacements = catalogs.nondominated_crystal_replacements(crystal)?;
+                crystal_sets = crystal_sets
+                    .into_iter()
+                    .flat_map(|selected| {
+                        replacements.iter().map(move |replacement| {
+                            let mut next = selected.clone();
+                            next.push(replacement.clone());
+                            next
+                        })
+                    })
+                    .collect();
+            }
+            let mut descriptors = HashSet::<ItemSelection>::new();
+            for mut crystals in crystal_sets {
+                crystals.sort();
+                let mut replacement = original.clone();
+                replacement.crystals = crystals;
+                if !descriptors.insert(replacement.clone()) {
+                    continue;
+                }
+                let mut normalized = candidate.clone();
+                set_slot(&mut normalized.equipment, *slot, replacement.clone());
+                let mut history = replacements.clone();
+                if replacement != original {
+                    history.push(EquipmentReplacement {
+                        slot: *slot,
+                        from: original.clone(),
+                        to: replacement,
+                    });
+                }
+                next.push((normalized, history));
+            }
+        }
+        variants = next;
+    }
+    let mut signatures = HashSet::new();
+    variants.retain(|(candidate, _)| {
+        catalogs
+            .materialize(candidate, MatchupRole::Active)
+            .map(|player| signatures.insert(combat_signature(&player)))
+            .unwrap_or(false)
+    });
+    Ok(variants)
+}
+
 fn sorted_signatures(
     states: &[(EquipmentBeamEntry, bool, HashSet<CombatSignature>)],
 ) -> Vec<CombatSignature> {
@@ -1042,6 +1670,7 @@ mod tests {
             )]),
             crystal_keys: Some(vec!["PerfectFire".to_owned()]),
             socket_capacity: 1,
+            ..EquipmentNeighborhoodOptions::default()
         };
         let neighborhood = equipment_neighborhood(&catalogs, &build, &options).unwrap();
         assert!(!neighborhood.groups.is_empty());
@@ -1115,5 +1744,132 @@ mod tests {
         .unwrap();
         assert!(adaptive.converged);
         assert!(adaptive.beam.len() <= 2);
+    }
+
+    #[test]
+    fn equipment_normalization_matches_legacy_fixture() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("ShadowDojoDLGunBuild3").unwrap();
+        let slots = [
+            EquipmentSlot::Armor,
+            EquipmentSlot::Weapon1,
+            EquipmentSlot::Weapon2,
+            EquipmentSlot::Misc1,
+            EquipmentSlot::Misc2,
+        ];
+        let normalized = normalize_equipment(&catalogs, build, &slots).unwrap();
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].1.len(), 3);
+        assert_eq!(
+            normalized[0].0.equipment.weapon2.crystals,
+            vec!["BerserkerCrystal".to_owned(); 4]
+        );
+        assert_eq!(
+            normalized[0].0.equipment.misc1.crystals,
+            vec!["GreenInferno".to_owned(); 4]
+        );
+        assert_eq!(
+            normalized[0].0.equipment.misc2.crystals,
+            vec!["GreenInferno".to_owned(); 4]
+        );
+    }
+
+    #[test]
+    fn adaptive_stat_search_matches_exhaustive_best() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("ShadowDojoDLGunBuild3").unwrap();
+        let opponent_ids = [
+            "ShadowDojoArmorStackCores",
+            "ShadowDojoDLGunBuild3",
+            "ShadowDojoHFCoreVoid",
+            "ShadowDojoSG1SplitBombs",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let opponents = opponent_ids
+            .iter()
+            .map(|key| {
+                catalogs
+                    .materialize(catalogs.build(key).unwrap(), MatchupRole::Active)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let hp_points = HashSet::from([2]);
+        let exhaustive_groups = stat_allocation_groups(
+            &catalogs,
+            build,
+            &opponents,
+            &[AttackType::Normal],
+            Some(&hp_points),
+            1,
+        )
+        .unwrap();
+        let exhaustive =
+            candidate_frontiers(&exhaustive_groups, &opponents, &opponent_ids, None, 1e-6).unwrap();
+        let adaptive = adaptive_stat_frontiers(
+            &catalogs,
+            build,
+            &opponents,
+            &opponent_ids,
+            &[AttackType::Normal],
+            &AdaptiveStatOptions {
+                hp_points: Some(hp_points),
+                minimum_survival_probability: 1e-6,
+                weighted_best_only: true,
+                ..AdaptiveStatOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(adaptive.converged);
+        assert_eq!(
+            adaptive.exact.best_weighted.unwrap().signature,
+            exhaustive.best_weighted.unwrap().signature
+        );
+        assert!(adaptive.search_candidate_count < exhaustive_groups.len());
+    }
+
+    #[test]
+    fn joint_response_combines_equipment_and_stats() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("ShadowDojoDLGunBuild2").unwrap();
+        let opponent_ids = vec!["ShadowDojoDLGunBuild2".to_owned()];
+        let opponents = vec![catalogs.materialize(build, MatchupRole::Active).unwrap()];
+        let equipment_options = EquipmentNeighborhoodOptions {
+            slots: vec![EquipmentSlot::Weapon1],
+            item_keys_by_slot: HashMap::from([(
+                EquipmentSlot::Weapon1,
+                vec!["RiftGun".to_owned(), "AlienRifle".to_owned()],
+            )]),
+            crystal_keys: Some(vec!["PerfectFire".to_owned()]),
+            socket_capacity: 1,
+            ..EquipmentNeighborhoodOptions::default()
+        };
+        let response = joint_equipment_stat_response_beam(
+            &catalogs,
+            build,
+            &opponents,
+            &opponent_ids,
+            Some(&[1.0]),
+            &[AttackType::Normal],
+            &equipment_options,
+            &AdaptiveStatOptions {
+                point_strides: vec![20],
+                hp_points: Some(HashSet::from([build.stats.hp])),
+                converge: false,
+                ..AdaptiveStatOptions::default()
+            },
+            1e-6,
+            2,
+            1,
+            2,
+            1e-6,
+        )
+        .unwrap();
+        assert!(!response.beam.is_empty());
+        assert!(response
+            .beam
+            .iter()
+            .all(|entry| (0.0..=1.0).contains(&entry.weighted_score)));
+        assert!(!response.iterations.is_empty());
     }
 }

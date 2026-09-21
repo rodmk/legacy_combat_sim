@@ -198,6 +198,37 @@ impl Catalogs {
         Ok(keys)
     }
 
+    /// Returns the minimal crystal keys that dominate `key`, or the key itself
+    /// when it is not dominated componentwise across multiplier fields.
+    pub fn nondominated_crystal_replacements(&self, key: &str) -> Result<Vec<String>> {
+        let crystal = self
+            .crystals
+            .get(key)
+            .with_context(|| format!("unknown crystal: {key}"))?;
+        let mut dominators = self
+            .crystals
+            .iter()
+            .filter(|(_, candidate)| multiplier_dominates(candidate.mult, crystal.mult))
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let candidates = dominators.clone();
+        dominators.retain(|candidate| {
+            !candidates.iter().any(|other| {
+                other != candidate
+                    && multiplier_dominates(
+                        self.crystals[other].mult,
+                        self.crystals[candidate].mult,
+                    )
+            })
+        });
+        if dominators.is_empty() {
+            Ok(vec![key.to_owned()])
+        } else {
+            dominators.sort();
+            Ok(dominators)
+        }
+    }
+
     /// Generates canonical socket and modification variants for an item.
     ///
     /// Crystals that cannot affect a nonzero combat statistic used by either
@@ -210,6 +241,40 @@ impl Catalogs {
         active_weapon_types: &[WeaponType],
         crystal_keys: Option<&[String]>,
         socket_capacity: usize,
+    ) -> Result<ItemVariantReport> {
+        self.item_variant_report_with_mods(
+            item_key,
+            active_weapon_types,
+            crystal_keys,
+            socket_capacity,
+            None,
+        )
+    }
+
+    /// Generates crystal variants while preserving a descriptor's item and mods.
+    pub fn descriptor_variant_report(
+        &self,
+        descriptor: &ItemSelection,
+        active_weapon_types: &[WeaponType],
+        crystal_keys: Option<&[String]>,
+        socket_capacity: usize,
+    ) -> Result<ItemVariantReport> {
+        self.item_variant_report_with_mods(
+            &descriptor.item,
+            active_weapon_types,
+            crystal_keys,
+            socket_capacity,
+            Some(&descriptor.mods),
+        )
+    }
+
+    fn item_variant_report_with_mods(
+        &self,
+        item_key: &str,
+        active_weapon_types: &[WeaponType],
+        crystal_keys: Option<&[String]>,
+        socket_capacity: usize,
+        fixed_mods: Option<&[String]>,
     ) -> Result<ItemVariantReport> {
         let definition = self.item_definition(item_key)?;
         let mut crystals = crystal_keys.map(<[String]>::to_vec).unwrap_or_else(|| {
@@ -232,7 +297,17 @@ impl Catalogs {
         });
         let useful_crystals = crystals.clone();
         let crystal_sets = crystal_multisets(&crystals, socket_capacity);
-        let mod_sets = self.mod_combinations(item_key, definition)?;
+        let mod_sets = match fixed_mods {
+            Some(mods) => {
+                self.materialize_item(&ItemSelection {
+                    item: item_key.to_owned(),
+                    crystals: Vec::new(),
+                    mods: mods.to_vec(),
+                })?;
+                vec![mods.to_vec()]
+            }
+            None => self.mod_combinations(item_key, definition)?,
+        };
         let mut groups = Vec::<ItemVariantGroup>::new();
         let mut group_by_key = HashMap::<(Option<WeaponType>, Vec<i32>), usize>::new();
         for mods in &mod_sets {
@@ -634,6 +709,27 @@ fn useful_multiplier(stats: Stats, multiplier: Multipliers, weapon_types: &[Weap
 fn dominates_stats(left: &[i32], right: &[i32]) -> bool {
     left.iter().zip(right).all(|(left, right)| left >= right)
         && left.iter().zip(right).any(|(left, right)| left > right)
+}
+
+fn multiplier_dominates(left: Multipliers, right: Multipliers) -> bool {
+    let fields = [
+        (left.armor, right.armor),
+        (left.speed, right.speed),
+        (left.accuracy, right.accuracy),
+        (left.dodge, right.dodge),
+        (left.melee_skill, right.melee_skill),
+        (left.gun_skill, right.gun_skill),
+        (left.proj_skill, right.proj_skill),
+        (left.def_skill, right.def_skill),
+        (left.min_damage, right.min_damage),
+        (left.max_damage, right.max_damage),
+    ];
+    fields
+        .iter()
+        .all(|(left, right)| left.unwrap_or(1.0) >= right.unwrap_or(1.0))
+        && fields
+            .iter()
+            .any(|(left, right)| left.unwrap_or(1.0) > right.unwrap_or(1.0))
 }
 
 fn weapon_from_item(item: &MaterializedItem) -> Result<Weapon> {

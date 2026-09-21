@@ -35,6 +35,8 @@ pub mod combat;
 pub mod exact;
 /// Matchup metrics, payoff matrices, and finite-game analysis.
 pub mod game;
+/// Restricted-meta inference and endogenous response closure.
+pub mod inference;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
 /// Stat-allocation and candidate-frontier search primitives.

@@ -63,7 +63,7 @@ pub enum WeaponType {
     Projectile,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 /// A build's selected attack mode.
 pub enum AttackType {
@@ -106,7 +106,7 @@ pub struct BuildDefinition {
     pub equipment: Loadout,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// Allocated character-stat points before training and equipment bonuses.
 pub struct StatAllocation {
     /// HP points; each point grants five HP.

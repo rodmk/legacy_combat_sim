@@ -5,7 +5,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use legacy_combat_sim::analysis::analyze_build_catalog;
 use legacy_combat_sim::catalog::{BuildCatalog, Catalogs};
 use legacy_combat_sim::combat;
-use legacy_combat_sim::model::MatchupRole;
+use legacy_combat_sim::inference::{endogenous_equipment_search, InferenceOptions};
+use legacy_combat_sim::model::{AttackType, BuildDefinition, CombatSignature, MatchupRole};
+use legacy_combat_sim::search::{
+    joint_equipment_stat_response_beam, AdaptiveStatOptions, EquipmentNeighborhoodOptions,
+};
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use serde::Serialize;
@@ -58,6 +62,60 @@ enum Command {
         #[arg(long = "catalog")]
         catalogs: Vec<PathBuf>,
     },
+    /// Search equipment and stat responses against an enemy set.
+    Search {
+        /// Seed build key from a bundled or supplied catalog.
+        #[arg(long)]
+        build: String,
+        /// Named enemy set: shadow-dojo or reference.
+        #[arg(long, default_value = "shadow-dojo")]
+        enemy_set: String,
+        /// Additional JSON build catalog; may be specified more than once.
+        #[arg(long = "catalog")]
+        catalogs: Vec<PathBuf>,
+        /// Maximum distinct responses retained per pass.
+        #[arg(long, default_value_t = 8)]
+        beam_width: usize,
+        /// Seeds expanded per pass.
+        #[arg(long, default_value_t = 2)]
+        expansion_width: usize,
+        /// Maximum alternating equipment/stat passes.
+        #[arg(long, default_value_t = 8)]
+        max_iterations: usize,
+        /// Crystal sockets filled on generated equipment.
+        #[arg(long, default_value_t = 4)]
+        socket_capacity: usize,
+        /// Approximate-distribution survival threshold used for screening.
+        #[arg(long, default_value_t = 0.01)]
+        minimum_survival_probability: f64,
+    },
+    /// Close a restricted meta by admitting profitable joint responses.
+    Infer {
+        /// Named initial strategy set: shadow-dojo or reference.
+        #[arg(long, default_value = "shadow-dojo")]
+        enemy_set: String,
+        /// Additional JSON build catalog; may be specified more than once.
+        #[arg(long = "catalog")]
+        catalogs: Vec<PathBuf>,
+        /// Maximum archive-expansion rounds.
+        #[arg(long, default_value_t = 16)]
+        max_rounds: usize,
+        /// Novel responses admitted per round.
+        #[arg(long, default_value_t = 2)]
+        batch_size: usize,
+        /// Maximum distinct responses retained by each oracle pass.
+        #[arg(long, default_value_t = 8)]
+        beam_width: usize,
+        /// Maximum alternating equipment/stat passes per round.
+        #[arg(long, default_value_t = 8)]
+        max_iterations: usize,
+        /// Crystal sockets filled on generated equipment.
+        #[arg(long, default_value_t = 4)]
+        socket_capacity: usize,
+        /// Score above 0.5 required for archive admission.
+        #[arg(long, default_value_t = 0.001)]
+        improvement_tolerance: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -85,6 +143,24 @@ struct Report {
     matchups: Vec<MatchupReport>,
 }
 
+#[derive(Debug, Serialize)]
+struct SearchEntry {
+    signature: CombatSignature,
+    concept_signature: String,
+    weighted_score: f64,
+    build: BuildDefinition,
+}
+
+#[derive(Debug, Serialize)]
+struct SearchReport {
+    seed_build: String,
+    enemy_set: String,
+    converged: bool,
+    convergence_reason: String,
+    iterations: Vec<legacy_combat_sim::search::JointResponseIteration>,
+    beam: Vec<SearchEntry>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -106,6 +182,109 @@ fn main() -> Result<()> {
             for (key, _) in catalogs.builds() {
                 println!("{key}");
             }
+        }
+        Command::Search {
+            build,
+            enemy_set,
+            catalogs,
+            beam_width,
+            expansion_width,
+            max_iterations,
+            socket_capacity,
+            minimum_survival_probability,
+        } => {
+            let catalogs = load_catalogs(&catalogs)?;
+            let seed = catalogs.build(&build)?;
+            let enemies = catalogs.enemy_set(&enemy_set)?;
+            if enemies.is_empty() {
+                bail!("enemy selection is empty");
+            }
+            let opponent_ids = enemies
+                .iter()
+                .map(|(key, _)| (*key).to_owned())
+                .collect::<Vec<_>>();
+            let opponents = enemies
+                .iter()
+                .map(|(_, enemy)| catalogs.materialize(enemy, MatchupRole::Active))
+                .collect::<Result<Vec<_>>>()?;
+            let response = joint_equipment_stat_response_beam(
+                &catalogs,
+                seed,
+                &opponents,
+                &opponent_ids,
+                None,
+                &[
+                    AttackType::Normal,
+                    AttackType::Quick,
+                    AttackType::Aimed,
+                    AttackType::Cover,
+                ],
+                &EquipmentNeighborhoodOptions {
+                    socket_capacity,
+                    ..EquipmentNeighborhoodOptions::default()
+                },
+                &AdaptiveStatOptions {
+                    minimum_survival_probability,
+                    ..AdaptiveStatOptions::default()
+                },
+                minimum_survival_probability,
+                beam_width,
+                expansion_width,
+                max_iterations,
+                1e-3,
+            )?;
+            let report = SearchReport {
+                seed_build: build,
+                enemy_set,
+                converged: response.converged,
+                convergence_reason: response.convergence_reason.to_owned(),
+                iterations: response.iterations,
+                beam: response
+                    .beam
+                    .into_iter()
+                    .map(|entry| SearchEntry {
+                        signature: entry.signature,
+                        concept_signature: entry.concept_signature,
+                        weighted_score: entry.weighted_score,
+                        build: entry.build,
+                    })
+                    .collect(),
+            };
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::Infer {
+            enemy_set,
+            catalogs,
+            max_rounds,
+            batch_size,
+            beam_width,
+            max_iterations,
+            socket_capacity,
+            improvement_tolerance,
+        } => {
+            let catalogs = load_catalogs(&catalogs)?;
+            let initial = catalogs
+                .enemy_set(&enemy_set)?
+                .into_iter()
+                .map(|(key, build)| (key.to_owned(), build.clone()))
+                .collect::<BuildCatalog>();
+            let result = endogenous_equipment_search(
+                &catalogs,
+                &initial,
+                &InferenceOptions {
+                    maximum_rounds: max_rounds,
+                    batch_size,
+                    improvement_tolerance,
+                    beam_width,
+                    joint_maximum_iterations: max_iterations,
+                    equipment: EquipmentNeighborhoodOptions {
+                        socket_capacity,
+                        ..EquipmentNeighborhoodOptions::default()
+                    },
+                    ..InferenceOptions::default()
+                },
+            )?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
         }
         Command::Simulate {
             build,
