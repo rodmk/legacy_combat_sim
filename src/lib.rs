@@ -29,5 +29,7 @@
 pub mod catalog;
 /// Monte Carlo combat rules and probability helpers.
 pub mod combat;
+/// Exact combat distributions and economic outcome metrics.
+pub mod exact;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
