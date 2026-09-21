@@ -3,7 +3,9 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::model::{
     AttackType, BuildDefinition, EquivalentBuildGroup, ItemSelection, Matchup, MatchupRole,
@@ -125,11 +127,24 @@ struct MaterializedItem {
 }
 
 impl Catalogs {
-    /// Loads the equipment data and primary build catalogs bundled with the crate.
+    /// Loads and validates the equipment data and primary build catalogs bundled
+    /// with the crate.
     pub fn bundled() -> Result<Self> {
-        let equipment = serde_json::from_str(include_str!("../data/equipment.json"))?;
-        let crystals = serde_json::from_str(include_str!("../data/crystals.json"))?;
-        let weapon_mods = serde_json::from_str(include_str!("../data/weapon-mods.json"))?;
+        let equipment = deserialize_validated(
+            "equipment.json",
+            include_str!("../data/equipment.json"),
+            include_str!("../data/equipment.schema.json"),
+        )?;
+        let crystals = deserialize_validated(
+            "crystals.json",
+            include_str!("../data/crystals.json"),
+            include_str!("../data/crystals.schema.json"),
+        )?;
+        let weapon_mods = deserialize_validated(
+            "weapon-mods.json",
+            include_str!("../data/weapon-mods.json"),
+            include_str!("../data/weapon-mods.schema.json"),
+        )?;
         let mut catalogs = Self {
             equipment,
             crystals,
@@ -144,7 +159,11 @@ impl Catalogs {
                 include_str!("../data/kernel-builds.json"),
             ),
         ] {
-            catalogs.merge_builds(serde_json::from_str(data).with_context(|| name.to_owned())?)?;
+            catalogs.merge_builds(deserialize_validated(
+                name,
+                data,
+                include_str!("../data/builds.schema.json"),
+            )?)?;
         }
         catalogs.validate_relations()?;
         Ok(catalogs)
@@ -152,12 +171,17 @@ impl Catalogs {
 
     /// Merges a schema-compatible JSON build catalog from disk.
     ///
-    /// Returns an error if a key duplicates any previously loaded build.
+    /// Returns an error if the document violates the build schema, contains an
+    /// invalid build, or duplicates any previously loaded key.
     pub fn add_build_catalog(&mut self, path: &Path) -> Result<()> {
         let data = fs::read_to_string(path)
             .with_context(|| format!("failed to read build catalog {}", path.display()))?;
-        let builds = serde_json::from_str(&data)
-            .with_context(|| format!("failed to parse build catalog {}", path.display()))?;
+        let builds = deserialize_validated(
+            &path.display().to_string(),
+            &data,
+            include_str!("../data/builds.schema.json"),
+        )?;
+        self.validate_builds(&builds)?;
         self.merge_builds(builds)
     }
 
@@ -197,7 +221,11 @@ impl Catalogs {
                 }
             }
         }
-        for (build_key, build) in &self.builds {
+        self.validate_builds(&self.builds)
+    }
+
+    fn validate_builds(&self, builds: &BuildCatalog) -> Result<()> {
+        for (build_key, build) in builds {
             self.materialize(build, MatchupRole::Active)
                 .with_context(|| format!("invalid build {build_key}"))?;
         }
@@ -673,6 +701,22 @@ impl Catalogs {
     }
 }
 
+fn deserialize_validated<T: DeserializeOwned>(name: &str, data: &str, schema: &str) -> Result<T> {
+    let instance =
+        serde_json::from_str::<Value>(data).with_context(|| format!("failed to parse {name}"))?;
+    let schema = serde_json::from_str::<Value>(schema).context("failed to parse JSON schema")?;
+    let validator = jsonschema::validator_for(&schema)
+        .map_err(|error| anyhow::anyhow!("failed to compile JSON schema: {error}"))?;
+    let errors = validator
+        .iter_errors(&instance)
+        .map(|error| error.to_string())
+        .collect::<Vec<_>>();
+    if !errors.is_empty() {
+        bail!("{name} failed schema validation: {}", errors.join("; "));
+    }
+    serde_json::from_value(instance).with_context(|| format!("failed to deserialize {name}"))
+}
+
 fn crystal_multisets(keys: &[String], capacity: usize) -> Vec<Vec<String>> {
     fn add(
         keys: &[String],
@@ -924,5 +968,23 @@ mod tests {
                 nondominated: 2,
             }
         );
+    }
+
+    #[test]
+    fn build_schema_rejects_unknown_properties() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("ShadowDojoDLGunBuild2").unwrap();
+        let mut document = serde_json::to_value(BuildCatalog::from([(
+            "candidate".to_owned(),
+            build.clone(),
+        )]))
+        .unwrap();
+        document["candidate"]["unexpected"] = Value::Bool(true);
+        let result = deserialize_validated::<BuildCatalog>(
+            "candidate.json",
+            &serde_json::to_string(&document).unwrap(),
+            include_str!("../data/builds.schema.json"),
+        );
+        assert!(result.is_err());
     }
 }

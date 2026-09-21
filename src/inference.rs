@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
@@ -8,8 +8,8 @@ use crate::catalog::{BuildCatalog, Catalogs};
 use crate::combat::combat_signature;
 use crate::model::{AttackType, BuildDefinition, CombatSignature, MatchupRole, Player};
 use crate::search::{
-    candidate_frontiers, joint_equipment_stat_response_beam, AdaptiveStatOptions, CandidateGroup,
-    EquipmentNeighborhoodOptions,
+    candidate_frontiers, equipment_concept_signature, joint_equipment_stat_response_beam,
+    AdaptiveStatOptions, CandidateGroup, EquipmentNeighborhoodOptions, JointResponseEntry,
 };
 
 #[derive(Clone)]
@@ -150,6 +150,8 @@ pub struct InferenceRound {
     pub equilibrium: crate::analysis::InferredMeta,
     /// Opponent-mixture pruning report.
     pub opponent_mixture: PrunedMixture,
+    /// Distinct supported equipment concepts used to seed response search.
+    pub response_seed_count: usize,
     /// Whether the joint oracle itself converged.
     pub response_converged: bool,
     /// Joint oracle termination reason.
@@ -207,33 +209,47 @@ pub fn endogenous_equipment_search(
             .iter()
             .map(|entry| entry.weight)
             .collect::<Vec<_>>();
-        let starting_id = mixture
-            .retained
-            .iter()
-            .max_by(|left, right| left.weight.total_cmp(&right.weight))
-            .context("equilibrium has no support")?
-            .candidate
-            .clone();
-        let mut response = joint_equipment_stat_response_beam(
-            catalogs,
-            &catalog[&starting_id],
-            &opponents,
-            &opponent_ids,
-            Some(&opponent_weights),
-            &[
-                AttackType::Normal,
-                AttackType::Quick,
-                AttackType::Aimed,
-                AttackType::Cover,
-            ],
-            &options.equipment,
-            &options.stats,
-            options.stats.minimum_survival_probability,
-            options.beam_width,
-            options.expansion_width,
-            options.joint_maximum_iterations,
-            options.improvement_tolerance,
-        )?;
+        let starting_ids = equilibrium_seed_ids(&catalog, &before.inferred_meta.weights)?;
+        let response_seed_count = starting_ids.len();
+        let mut response_by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
+        let mut response_converged = true;
+        let mut response_reasons = Vec::with_capacity(starting_ids.len());
+        for starting_id in starting_ids {
+            let response = joint_equipment_stat_response_beam(
+                catalogs,
+                &catalog[&starting_id],
+                &opponents,
+                &opponent_ids,
+                Some(&opponent_weights),
+                &[
+                    AttackType::Normal,
+                    AttackType::Quick,
+                    AttackType::Aimed,
+                    AttackType::Cover,
+                ],
+                &options.equipment,
+                &options.stats,
+                options.stats.minimum_survival_probability,
+                options.beam_width,
+                options.expansion_width,
+                options.joint_maximum_iterations,
+                options.improvement_tolerance,
+            )?;
+            response_converged &= response.converged;
+            response_reasons.push(response.convergence_reason);
+            for entry in response.beam {
+                if response_by_signature
+                    .get(&entry.signature)
+                    .is_none_or(|existing| entry.weighted_score > existing.weighted_score)
+                {
+                    response_by_signature.insert(entry.signature.clone(), entry);
+                }
+            }
+        }
+        let mut response_beam = response_by_signature.into_values().collect::<Vec<_>>();
+        response_reasons.sort_unstable();
+        response_reasons.dedup();
+        let response_convergence_reason = response_reasons.join(",");
         let full_opponents = before
             .inferred_meta
             .weights
@@ -252,8 +268,7 @@ pub fn endogenous_equipment_search(
             .iter()
             .map(|entry| entry.weight)
             .collect::<Vec<_>>();
-        let response_groups = response
-            .beam
+        let response_groups = response_beam
             .iter()
             .map(|entry| {
                 Ok(ResponseGroup {
@@ -270,7 +285,7 @@ pub fn endogenous_equipment_search(
             Some(&full_weights),
             0.0,
         )?;
-        for entry in &mut response.beam {
+        for entry in &mut response_beam {
             entry.weighted_score = validation
                 .candidates
                 .iter()
@@ -278,9 +293,7 @@ pub fn endogenous_equipment_search(
                 .context("validated response signature is missing")?
                 .weighted_score;
         }
-        response
-            .beam
-            .sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
+        response_beam.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
         let archived = catalog
             .values()
             .map(|build| {
@@ -289,8 +302,7 @@ pub fn endogenous_equipment_search(
                     .map(|player| combat_signature(&player))
             })
             .collect::<Result<HashSet<_>>>()?;
-        let profitable = response
-            .beam
+        let profitable = response_beam
             .iter()
             .filter(|entry| {
                 entry.weighted_score > 0.5 + options.improvement_tolerance
@@ -322,15 +334,16 @@ pub fn endogenous_equipment_search(
             added,
             equilibrium: before.inferred_meta,
             opponent_mixture: mixture,
-            response_converged: response.converged,
-            response_convergence_reason: response.convergence_reason.to_owned(),
+            response_seed_count,
+            response_converged,
+            response_convergence_reason,
         });
         if no_admission {
             let analysis = analyze_build_catalog(catalogs, &catalog)?;
             return Ok(InferenceResult {
                 catalog,
                 rounds,
-                converged: true,
+                converged: response_converged,
                 analysis,
             });
         }
@@ -342,6 +355,23 @@ pub fn endogenous_equipment_search(
         converged: false,
         analysis,
     })
+}
+
+fn equilibrium_seed_ids(catalog: &BuildCatalog, weights: &[StrategyWeight]) -> Result<Vec<String>> {
+    let mut concepts = HashSet::new();
+    let mut seeds = Vec::new();
+    for entry in weights.iter().filter(|entry| entry.weight > 0.0) {
+        let build = catalog
+            .get(&entry.candidate)
+            .with_context(|| format!("equilibrium references {}", entry.candidate))?;
+        if concepts.insert(equipment_concept_signature(build)) {
+            seeds.push(entry.candidate.clone());
+        }
+    }
+    if seeds.is_empty() {
+        bail!("equilibrium has no support");
+    }
+    Ok(seeds)
 }
 
 #[cfg(test)]
@@ -370,40 +400,71 @@ mod tests {
     }
 
     #[test]
+    fn response_seeds_cover_supported_equipment_concepts() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let first = catalogs.build("ShadowDojoDLGunBuild2").unwrap().clone();
+        let mut equivalent = first.clone();
+        equivalent.attack_type = AttackType::Quick;
+        let distinct = catalogs.build("ShadowDojoArmorStackCores").unwrap().clone();
+        let catalog = BuildCatalog::from([
+            ("first".to_owned(), first),
+            ("equivalent".to_owned(), equivalent),
+            ("distinct".to_owned(), distinct),
+        ]);
+        let weights = vec![
+            StrategyWeight {
+                candidate: "first".to_owned(),
+                weight: 0.5,
+            },
+            StrategyWeight {
+                candidate: "equivalent".to_owned(),
+                weight: 0.25,
+            },
+            StrategyWeight {
+                candidate: "distinct".to_owned(),
+                weight: 0.25,
+            },
+        ];
+        assert_eq!(
+            equilibrium_seed_ids(&catalog, &weights).unwrap(),
+            ["first", "distinct"]
+        );
+    }
+
+    #[test]
     fn closed_single_build_archive_terminates() {
         let catalogs = Catalogs::bundled().unwrap();
         let seed = catalogs.build("ShadowDojoDLGunBuild2").unwrap().clone();
         let catalog = BuildCatalog::from([("seed".to_owned(), seed.clone())]);
-        let result = endogenous_equipment_search(
-            &catalogs,
-            &catalog,
-            &InferenceOptions {
-                maximum_rounds: 1,
-                batch_size: 1,
-                improvement_tolerance: 1.0,
-                beam_width: 1,
-                expansion_width: 1,
-                joint_maximum_iterations: 1,
-                equipment: EquipmentNeighborhoodOptions {
-                    slots: vec![EquipmentSlot::Weapon1],
-                    item_keys_by_slot: HashMap::from([(
-                        EquipmentSlot::Weapon1,
-                        vec![seed.equipment.weapon1.item.clone()],
-                    )]),
-                    crystal_keys: Some(Vec::new()),
-                    socket_capacity: 0,
-                    ..EquipmentNeighborhoodOptions::default()
-                },
-                stats: AdaptiveStatOptions {
-                    point_strides: vec![32],
-                    hp_points: Some(HashSet::from([seed.stats.hp])),
-                    converge: false,
-                    ..AdaptiveStatOptions::default()
-                },
-                ..InferenceOptions::default()
+        let mut options = InferenceOptions {
+            maximum_rounds: 1,
+            batch_size: 1,
+            improvement_tolerance: 1.0,
+            beam_width: 1,
+            expansion_width: 1,
+            joint_maximum_iterations: 1,
+            equipment: EquipmentNeighborhoodOptions {
+                slots: vec![EquipmentSlot::Weapon1],
+                item_keys_by_slot: HashMap::from([(
+                    EquipmentSlot::Weapon1,
+                    vec![seed.equipment.weapon1.item.clone()],
+                )]),
+                crystal_keys: Some(Vec::new()),
+                socket_capacity: 0,
+                ..EquipmentNeighborhoodOptions::default()
             },
-        )
-        .unwrap();
+            stats: AdaptiveStatOptions {
+                point_strides: vec![32],
+                hp_points: Some(HashSet::from([seed.stats.hp])),
+                converge: false,
+                ..AdaptiveStatOptions::default()
+            },
+            ..InferenceOptions::default()
+        };
+        let incomplete = endogenous_equipment_search(&catalogs, &catalog, &options).unwrap();
+        assert!(!incomplete.converged);
+        options.joint_maximum_iterations = 2;
+        let result = endogenous_equipment_search(&catalogs, &catalog, &options).unwrap();
         assert!(result.converged);
         assert_eq!(result.catalog.len(), 1);
         assert!(result.rounds[0].added.is_empty());
