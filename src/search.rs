@@ -606,34 +606,38 @@ fn equipment_response_beam_cached(
         opponent_weights,
         approximate_cache,
     )?;
-    let mut by_concept = HashMap::<String, Vec<FrontierCandidate<EquipmentSource>>>::new();
-    for candidate in &approximate.candidates {
+    let mut by_concept = HashMap::<String, Vec<usize>>::new();
+    for (candidate_index, candidate) in approximate.candidates.iter().enumerate() {
         for source in &candidate.sources {
             by_concept
                 .entry(equipment_concept_signature(&source.build))
                 .or_default()
-                .push(candidate.clone());
+                .push(candidate_index);
         }
     }
     let concept_count = by_concept.len();
     let mut selected = by_concept
         .into_iter()
-        .map(|(signature, candidates)| {
-            let approximate_score = candidates
+        .map(|(signature, candidate_indices)| {
+            let approximate_score = candidate_indices
                 .iter()
-                .map(|candidate| candidate.weighted_score)
+                .map(|index| approximate.candidates[*index].weighted_score)
                 .fold(f64::NEG_INFINITY, f64::max);
-            let lower_bound = candidates
+            let lower_bound = candidate_indices
                 .iter()
-                .map(|candidate| candidate.weighted_score - candidate.weighted_score_error_bound)
+                .map(|index| {
+                    let candidate = &approximate.candidates[*index];
+                    candidate.weighted_score - candidate.weighted_score_error_bound
+                })
                 .fold(f64::NEG_INFINITY, f64::max);
-            let finalists = candidates
+            let finalists = candidate_indices
                 .into_iter()
-                .filter(|candidate| {
+                .filter(|index| {
+                    let candidate = &approximate.candidates[*index];
                     candidate.weighted_score + candidate.weighted_score_error_bound
                         >= lower_bound - 1e-12
                 })
-                .map(|candidate| candidate.signature)
+                .map(|index| approximate.candidates[index].signature.clone())
                 .collect::<HashSet<_>>();
             (signature, approximate_score, finalists)
         })
