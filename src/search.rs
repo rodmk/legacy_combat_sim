@@ -3,10 +3,11 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 
-use crate::catalog::Catalogs;
+use crate::catalog::{Catalogs, ItemVariantReport};
 use crate::combat::combat_signature;
 use crate::exact::DefeatRoundCache;
 use crate::game::role_averaged_matchup;
+use crate::game::MatchupResult;
 use crate::model::{
     AttackType, BuildDefinition, CombatSignature, ItemSelection, Loadout, MatchupRole, Player,
     StatAllocation, WeaponType,
@@ -23,6 +24,52 @@ pub trait CandidateGroup {
     fn representative(&self) -> &Player;
     /// Concrete inputs represented by the group.
     fn sources(&self) -> &[Self::Source];
+}
+
+/// Reusable exact or truncated matchup cache for search stages sharing one
+/// survival threshold.
+#[derive(Debug)]
+pub struct MatchupEvaluationCache {
+    defeat_rounds: DefeatRoundCache,
+    matchups: HashMap<(CombatSignature, CombatSignature), MatchupResult>,
+    /// Number of complete matchup-cache hits.
+    pub hits: u64,
+    /// Number of complete matchup-cache misses.
+    pub misses: u64,
+}
+
+impl MatchupEvaluationCache {
+    /// Creates an empty search cache with the specified tail threshold.
+    pub fn new(minimum_survival_probability: f64) -> Self {
+        Self {
+            defeat_rounds: DefeatRoundCache::new(minimum_survival_probability),
+            matchups: HashMap::new(),
+            hits: 0,
+            misses: 0,
+        }
+    }
+
+    /// Number of complete role-averaged matchups retained.
+    pub fn len(&self) -> usize {
+        self.matchups.len()
+    }
+
+    /// Whether no complete role-averaged matchup is retained.
+    pub fn is_empty(&self) -> bool {
+        self.matchups.is_empty()
+    }
+
+    fn evaluate(&mut self, player: &Player, opponent: &Player) -> MatchupResult {
+        let key = (combat_signature(player), combat_signature(opponent));
+        if let Some(result) = self.matchups.get(&key) {
+            self.hits += 1;
+            return *result;
+        }
+        self.misses += 1;
+        let result = role_averaged_matchup(player, opponent, Some(&mut self.defeat_rounds), false);
+        self.matchups.insert(key, result);
+        result
+    }
 }
 
 /// One stat allocation and attack mode represented by a combat-equivalent group.
@@ -163,6 +210,20 @@ pub struct EquipmentNeighborhoodOptions {
     pub normalize: bool,
     /// Vary crystals and mods while keeping each slot's base item fixed.
     pub fixed_equipment: bool,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ItemVariantCacheKey {
+    item: String,
+    weapon_types: Vec<WeaponType>,
+    crystal_keys: Option<Vec<String>>,
+    socket_capacity: usize,
+    fixed_mods: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default)]
+struct ItemVariantReportCache {
+    reports: HashMap<ItemVariantCacheKey, ItemVariantReport>,
 }
 
 impl Default for EquipmentNeighborhoodOptions {
@@ -383,6 +444,8 @@ pub struct JointResponseEntry {
 pub struct JointResponseIteration {
     /// One-based pass number.
     pub iteration: usize,
+    /// Whether this pass used the complete configured stat-refinement schedule.
+    pub full_stat_fidelity: bool,
     /// Seeds expanded during this pass.
     pub seed_count: usize,
     /// Equipment candidates evaluated.
@@ -502,16 +565,46 @@ pub fn equipment_response_beam(
     minimum_survival_probability: f64,
     beam_width: usize,
 ) -> Result<EquipmentResponseBeam> {
+    let mut approximate_cache = MatchupEvaluationCache::new(minimum_survival_probability);
+    let mut exact_cache = MatchupEvaluationCache::new(0.0);
+    let mut variant_cache = ItemVariantReportCache::default();
+    equipment_response_beam_cached(
+        catalogs,
+        build,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        options,
+        beam_width,
+        &mut variant_cache,
+        &mut approximate_cache,
+        &mut exact_cache,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn equipment_response_beam_cached(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: Option<&[f64]>,
+    options: &EquipmentNeighborhoodOptions,
+    beam_width: usize,
+    variant_cache: &mut ItemVariantReportCache,
+    approximate_cache: &mut MatchupEvaluationCache,
+    exact_cache: &mut MatchupEvaluationCache,
+) -> Result<EquipmentResponseBeam> {
     if beam_width == 0 {
         bail!("equipment response beam width must be positive");
     }
-    let neighborhood = equipment_neighborhood(catalogs, build, options)?;
-    let approximate = candidate_frontiers(
+    let neighborhood = equipment_neighborhood_cached(catalogs, build, options, variant_cache)?;
+    let approximate = candidate_frontiers_cached(
         &neighborhood.groups,
         opponents,
         opponent_ids,
         opponent_weights,
-        minimum_survival_probability,
+        approximate_cache,
     )?;
     let mut by_concept = HashMap::<String, Vec<FrontierCandidate<EquipmentSource>>>::new();
     for candidate in &approximate.candidates {
@@ -557,7 +650,13 @@ pub fn equipment_response_beam(
         .filter(|group| finalist_signatures.contains(&group.signature))
         .cloned()
         .collect::<Vec<_>>();
-    let exact = candidate_frontiers(&finalists, opponents, opponent_ids, opponent_weights, 0.0)?;
+    let exact = candidate_frontiers_cached(
+        &finalists,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        exact_cache,
+    )?;
     let exact_by_signature = exact
         .candidates
         .into_iter()
@@ -742,44 +841,67 @@ pub fn joint_equipment_stat_response_beam(
     let mut iterations = Vec::new();
     let mut beam = Vec::new();
     let mut previous_best_score = None;
+    let progressive_stat_fidelity = stat_options.point_strides.len() > 1 || stat_options.converge;
+    let mut full_stat_fidelity = !progressive_stat_fidelity;
+    let mut skip_equipment_expansion = false;
+    let mut retained_equipment_beam = Vec::<EquipmentBeamEntry>::new();
+    let mut stat_approximate_cache =
+        MatchupEvaluationCache::new(stat_options.minimum_survival_probability);
+    let mut stat_exact_cache = MatchupEvaluationCache::new(0.0);
+    let mut equipment_approximate_cache = MatchupEvaluationCache::new(minimum_survival_probability);
+    let mut equipment_exact_cache = MatchupEvaluationCache::new(0.0);
+    let mut item_variant_cache = ItemVariantReportCache::default();
     for iteration in 1..=maximum_iterations {
-        let expanded_seeds = seeds.iter().take(expansion_width).collect::<Vec<_>>();
-        let mut equipment_by_signature = HashMap::<CombatSignature, EquipmentBeamEntry>::new();
+        let expanded_seeds = if skip_equipment_expansion {
+            Vec::new()
+        } else {
+            seeds.iter().take(expansion_width).collect::<Vec<_>>()
+        };
         let mut equipment_candidate_count = 0;
         let mut equipment_finalist_count = 0;
-        for seed in &expanded_seeds {
-            let response = equipment_response_beam(
-                catalogs,
-                seed,
-                opponents,
-                opponent_ids,
-                opponent_weights,
-                equipment_options,
-                minimum_survival_probability,
-                beam_width,
-            )?;
-            equipment_candidate_count += response.candidate_count;
-            equipment_finalist_count += response.finalist_count;
-            for entry in response.beam {
-                let signature = entry.best_response.signature.clone();
-                if equipment_by_signature
-                    .get(&signature)
-                    .is_none_or(|existing| {
-                        entry.best_response.weighted_score > existing.best_response.weighted_score
-                    })
-                {
-                    equipment_by_signature.insert(signature, entry);
+        let equipment_beam = if skip_equipment_expansion {
+            retained_equipment_beam.clone()
+        } else {
+            let mut equipment_by_signature = HashMap::<CombatSignature, EquipmentBeamEntry>::new();
+            for seed in &expanded_seeds {
+                let response = equipment_response_beam_cached(
+                    catalogs,
+                    seed,
+                    opponents,
+                    opponent_ids,
+                    opponent_weights,
+                    equipment_options,
+                    beam_width,
+                    &mut item_variant_cache,
+                    &mut equipment_approximate_cache,
+                    &mut equipment_exact_cache,
+                )?;
+                equipment_candidate_count += response.candidate_count;
+                equipment_finalist_count += response.finalist_count;
+                for entry in response.beam {
+                    let signature = entry.best_response.signature.clone();
+                    if equipment_by_signature
+                        .get(&signature)
+                        .is_none_or(|existing| {
+                            entry.best_response.weighted_score
+                                > existing.best_response.weighted_score
+                        })
+                    {
+                        equipment_by_signature.insert(signature, entry);
+                    }
                 }
             }
-        }
-        let mut equipment_beam = equipment_by_signature.into_values().collect::<Vec<_>>();
-        equipment_beam.sort_by(|left, right| {
-            right
-                .best_response
-                .weighted_score
-                .total_cmp(&left.best_response.weighted_score)
-        });
-        equipment_beam.truncate(beam_width);
+            let mut equipment_beam = equipment_by_signature.into_values().collect::<Vec<_>>();
+            equipment_beam.sort_by(|left, right| {
+                right
+                    .best_response
+                    .weighted_score
+                    .total_cmp(&left.best_response.weighted_score)
+            });
+            equipment_beam.truncate(beam_width);
+            retained_equipment_beam = equipment_beam.clone();
+            equipment_beam
+        };
 
         let mut response_by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
         let mut stat_candidate_count = 0;
@@ -789,13 +911,19 @@ pub fn joint_equipment_stat_response_beam(
             let mut search_options = stat_options.clone();
             search_options.opponent_weights = opponent_weights.map(<[f64]>::to_vec);
             search_options.weighted_best_only = true;
-            let stats = adaptive_stat_frontiers(
+            if !full_stat_fidelity {
+                search_options.point_strides = vec![stat_options.point_strides[0]];
+                search_options.converge = false;
+            }
+            let stats = adaptive_stat_frontiers_cached(
                 catalogs,
                 equipment_build,
                 opponents,
                 opponent_ids,
                 attack_types,
                 &search_options,
+                &mut stat_approximate_cache,
+                &mut stat_exact_cache,
             )?;
             stat_candidate_count += stats.search_candidate_count;
             exact_stat_finalist_count += stats.exact_finalist_count;
@@ -829,6 +957,7 @@ pub fn joint_equipment_stat_response_beam(
         let improvement = previous_best_score.map(|score| beam[0].weighted_score - score);
         iterations.push(JointResponseIteration {
             iteration,
+            full_stat_fidelity,
             seed_count: expanded_seeds.len(),
             equipment_candidate_count,
             equipment_finalist_count,
@@ -844,7 +973,7 @@ pub fn joint_equipment_stat_response_beam(
         beam_key.sort();
         let repeated = !seen_beams.insert(beam_key);
         let within_tolerance = improvement.is_some_and(|value| value <= improvement_tolerance);
-        if repeated || within_tolerance {
+        if (repeated || within_tolerance) && full_stat_fidelity {
             return Ok(JointEquipmentStatResponse {
                 beam,
                 iterations,
@@ -858,6 +987,10 @@ pub fn joint_equipment_stat_response_beam(
         }
         previous_best_score = Some(beam[0].weighted_score);
         seeds = beam.iter().map(|entry| entry.build.clone()).collect();
+        skip_equipment_expansion = (repeated || within_tolerance) && !full_stat_fidelity;
+        if skip_equipment_expansion {
+            full_stat_fidelity = true;
+        }
     }
     Ok(JointEquipmentStatResponse {
         beam,
@@ -872,6 +1005,16 @@ pub fn equipment_neighborhood(
     catalogs: &Catalogs,
     build: &BuildDefinition,
     options: &EquipmentNeighborhoodOptions,
+) -> Result<EquipmentNeighborhood> {
+    let mut cache = ItemVariantReportCache::default();
+    equipment_neighborhood_cached(catalogs, build, options, &mut cache)
+}
+
+fn equipment_neighborhood_cached(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    options: &EquipmentNeighborhoodOptions,
+    variant_cache: &mut ItemVariantReportCache,
 ) -> Result<EquipmentNeighborhood> {
     let slots = if options.slots.is_empty() {
         vec![
@@ -924,24 +1067,48 @@ pub fn equipment_neighborhood(
                     }
                     _ => {}
                 }
-                let active_weapon_types = weapon_types
+                let mut active_weapon_types = weapon_types
                     .into_iter()
                     .flatten()
                     .collect::<Vec<WeaponType>>();
-                let report = if options.fixed_equipment {
-                    catalogs.descriptor_variant_report(
-                        get_slot(&base_build.equipment, slot),
-                        &active_weapon_types,
-                        options.crystal_keys.as_deref(),
-                        options.socket_capacity,
-                    )?
+                active_weapon_types.sort();
+                active_weapon_types.dedup();
+                let mut crystal_keys = options.crystal_keys.clone();
+                if let Some(keys) = &mut crystal_keys {
+                    keys.sort();
+                }
+                let fixed_mods = options.fixed_equipment.then(|| {
+                    let mut mods = get_slot(&base_build.equipment, slot).mods.clone();
+                    mods.sort();
+                    mods
+                });
+                let cache_key = ItemVariantCacheKey {
+                    item: item_key.clone(),
+                    weapon_types: active_weapon_types.clone(),
+                    crystal_keys,
+                    socket_capacity: options.socket_capacity,
+                    fixed_mods,
+                };
+                let report = if let Some(report) = variant_cache.reports.get(&cache_key) {
+                    report.clone()
                 } else {
-                    catalogs.item_variant_report(
-                        &item_key,
-                        &active_weapon_types,
-                        options.crystal_keys.as_deref(),
-                        options.socket_capacity,
-                    )?
+                    let report = if options.fixed_equipment {
+                        catalogs.descriptor_variant_report(
+                            get_slot(&base_build.equipment, slot),
+                            &active_weapon_types,
+                            options.crystal_keys.as_deref(),
+                            options.socket_capacity,
+                        )?
+                    } else {
+                        catalogs.item_variant_report(
+                            &item_key,
+                            &active_weapon_types,
+                            options.crystal_keys.as_deref(),
+                            options.socket_capacity,
+                        )?
+                    };
+                    variant_cache.reports.insert(cache_key, report.clone());
+                    report
                 };
                 slot_variants += report.nondominated_groups.len();
                 for variant in report.nondominated_groups {
@@ -1113,6 +1280,31 @@ pub fn adaptive_stat_frontiers(
     attack_types: &[AttackType],
     options: &AdaptiveStatOptions,
 ) -> Result<AdaptiveStatFrontiers> {
+    let mut approximate_cache = MatchupEvaluationCache::new(options.minimum_survival_probability);
+    let mut exact_cache = MatchupEvaluationCache::new(0.0);
+    adaptive_stat_frontiers_cached(
+        catalogs,
+        build,
+        opponents,
+        opponent_ids,
+        attack_types,
+        options,
+        &mut approximate_cache,
+        &mut exact_cache,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn adaptive_stat_frontiers_cached(
+    catalogs: &Catalogs,
+    build: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    attack_types: &[AttackType],
+    options: &AdaptiveStatOptions,
+    approximate_cache: &mut MatchupEvaluationCache,
+    exact_cache: &mut MatchupEvaluationCache,
+) -> Result<AdaptiveStatFrontiers> {
     if options.point_strides.is_empty() || options.point_strides.iter().any(|stride| *stride <= 0) {
         bail!("adaptive stat search requires positive point strides");
     }
@@ -1159,12 +1351,12 @@ pub fn adaptive_stat_frontiers(
     let mut stages = Vec::new();
     let mut approximate = None;
     for (stage, point_stride) in options.point_strides.iter().copied().enumerate() {
-        let result = candidate_frontiers(
+        let result = candidate_frontiers_cached(
             &groups,
             opponents,
             opponent_ids,
             options.opponent_weights.as_deref(),
-            options.minimum_survival_probability,
+            approximate_cache,
         )?;
         stages.push(StatSearchStage {
             point_stride,
@@ -1208,12 +1400,12 @@ pub fn adaptive_stat_frontiers(
                 converged = true;
                 break;
             }
-            approximate = candidate_frontiers(
+            approximate = candidate_frontiers_cached(
                 &groups,
                 opponents,
                 opponent_ids,
                 options.opponent_weights.as_deref(),
-                options.minimum_survival_probability,
+                approximate_cache,
             )?;
         }
     }
@@ -1250,12 +1442,12 @@ pub fn adaptive_stat_frontiers(
         })
         .cloned()
         .collect::<Vec<_>>();
-    let exact = candidate_frontiers(
+    let exact = candidate_frontiers_cached(
         &finalists,
         opponents,
         opponent_ids,
         options.opponent_weights.as_deref(),
-        0.0,
+        exact_cache,
     )?;
     Ok(AdaptiveStatFrontiers {
         search_candidate_count: approximate.candidate_count,
@@ -1366,6 +1558,25 @@ pub fn candidate_frontiers<G: CandidateGroup>(
     opponent_weights: Option<&[f64]>,
     minimum_survival_probability: f64,
 ) -> Result<CandidateFrontiers<G::Source>> {
+    let mut cache = MatchupEvaluationCache::new(minimum_survival_probability);
+    candidate_frontiers_cached(
+        groups,
+        opponents,
+        opponent_ids,
+        opponent_weights,
+        &mut cache,
+    )
+}
+
+/// Evaluates candidates while reusing complete matchup and directional defeat
+/// distributions from preceding search stages.
+pub fn candidate_frontiers_cached<G: CandidateGroup>(
+    groups: &[G],
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: Option<&[f64]>,
+    cache: &mut MatchupEvaluationCache,
+) -> Result<CandidateFrontiers<G::Source>> {
     if opponents.is_empty() || opponents.len() != opponent_ids.len() {
         bail!("opponents and opponent IDs must be non-empty and have equal length");
     }
@@ -1375,7 +1586,6 @@ pub fn candidate_frontiers<G: CandidateGroup>(
     if weights.len() != opponents.len() || (weights.iter().sum::<f64>() - 1.0).abs() > 1e-12 {
         bail!("opponent weights must match the opponents and sum to one");
     }
-    let mut cache = DefeatRoundCache::new(minimum_survival_probability);
     let mut combat_frontier = Vec::new();
     let mut economy_frontier = Vec::new();
     let mut best_worst_case: Option<FrontierCandidate<G::Source>> = None;
@@ -1387,9 +1597,7 @@ pub fn candidate_frontiers<G: CandidateGroup>(
     for group in groups {
         let matchups = opponents
             .iter()
-            .map(|opponent| {
-                role_averaged_matchup(group.representative(), opponent, Some(&mut cache), false)
-            })
+            .map(|opponent| cache.evaluate(group.representative(), opponent))
             .collect::<Vec<_>>();
         let scores = matchups
             .iter()
@@ -1632,6 +1840,35 @@ mod tests {
         assert_eq!(allocations[0].dodge, 4);
         let hp = HashSet::from([2]);
         assert_eq!(stat_allocations(&[2], Some(&hp), 1).unwrap().len(), 172);
+    }
+
+    #[test]
+    fn candidate_evaluation_cache_reuses_complete_matchups() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("ShadowDojoDLGunBuild3").unwrap();
+        let player = catalogs.materialize(build, MatchupRole::Active).unwrap();
+        let group = StatAllocationGroup {
+            signature: combat_signature(&player),
+            representative: player.clone(),
+            sources: vec![StatAllocationSource {
+                attack_type: build.attack_type,
+                stats: build.stats,
+            }],
+        };
+        let mut cache = MatchupEvaluationCache::new(1e-6);
+        let ids = vec!["opponent".to_owned()];
+        candidate_frontiers_cached(
+            std::slice::from_ref(&group),
+            std::slice::from_ref(&player),
+            &ids,
+            Some(&[1.0]),
+            &mut cache,
+        )
+        .unwrap();
+        candidate_frontiers_cached(&[group], &[player], &ids, Some(&[1.0]), &mut cache).unwrap();
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+        assert_eq!(cache.len(), 1);
     }
 
     #[test]
