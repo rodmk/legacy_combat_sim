@@ -6,8 +6,8 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::model::{
-    AttackType, BuildDefinition, CombatRole, CrystalDefinition, ItemDefinition, ItemSelection,
-    Matchup, Multipliers, Player, Stats, Weapon, WeaponModDefinition, WeaponType,
+    AttackType, BuildDefinition, ItemSelection, Matchup, MatchupRole, Player, Stats, Weapon,
+    WeaponType,
 };
 
 /// Ordered mapping from stable build keys to build definitions.
@@ -18,6 +18,44 @@ struct EquipmentCatalog {
     armor: HashMap<String, ItemDefinition>,
     weapons: HashMap<String, ItemDefinition>,
     miscs: HashMap<String, ItemDefinition>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ItemDefinition {
+    name: String,
+    #[serde(rename = "type")]
+    weapon_type: Option<WeaponType>,
+    #[serde(default)]
+    mod_slots: u8,
+    #[serde(flatten)]
+    stats: Stats,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct CrystalDefinition {
+    mult: Multipliers,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct WeaponModDefinition {
+    name: String,
+    slot: u8,
+    compatible: Vec<String>,
+    mult: Multipliers,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+struct Multipliers {
+    armor: Option<f64>,
+    speed: Option<f64>,
+    accuracy: Option<f64>,
+    dodge: Option<f64>,
+    melee_skill: Option<f64>,
+    gun_skill: Option<f64>,
+    proj_skill: Option<f64>,
+    def_skill: Option<f64>,
+    min_damage: Option<f64>,
+    max_damage: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -73,11 +111,10 @@ impl Catalogs {
     }
 
     fn merge_builds(&mut self, builds: BuildCatalog) -> Result<()> {
-        for (key, build) in builds {
-            if self.builds.insert(key.clone(), build).is_some() {
-                bail!("duplicate build key: {key}");
-            }
+        if let Some(key) = builds.keys().find(|key| self.builds.contains_key(*key)) {
+            bail!("duplicate build key: {key}");
         }
+        self.builds.extend(builds);
         Ok(())
     }
 
@@ -86,11 +123,6 @@ impl Catalogs {
         self.builds
             .get(key)
             .with_context(|| format!("unknown build: {key}"))
-    }
-
-    /// Iterates over build keys in stable lexical order.
-    pub fn build_keys(&self) -> impl Iterator<Item = &str> {
-        self.builds.keys().map(String::as_str)
     }
 
     /// Iterates over build keys and definitions in stable lexical order.
@@ -126,8 +158,8 @@ impl Catalogs {
 
     /// Validates and converts a build definition into combat-ready statistics.
     ///
-    /// [`CombatRole::Attacker`] applies the build's selected attack mode.
-    /// [`CombatRole::Defender`] uses normal-mode speed, accuracy, and dodge.
+    /// [`MatchupRole::Active`] applies the build's selected attack mode.
+    /// [`MatchupRole::Opponent`] uses normal-mode speed, accuracy, and dodge.
     /// Builds must be level 80, allocate exactly 183 points, and respect the
     /// minimum allocation for each statistic. HP and speed points grant five
     /// points each; fully trained base statistics and the five-damage Combat
@@ -138,7 +170,7 @@ impl Catalogs {
     /// before crystals. Within each modifier group, bonuses are calculated from
     /// the same pre-group value, summed, rounded up, and then added. Attack-mode
     /// multipliers are applied last and rounded up.
-    pub fn materialize(&self, build: &BuildDefinition, role: CombatRole) -> Result<Player> {
+    pub fn materialize(&self, build: &BuildDefinition, role: MatchupRole) -> Result<Player> {
         if build.level != 80 {
             bail!("builds require level 80");
         }
@@ -198,7 +230,7 @@ impl Catalogs {
             stats.add(bonuses);
         }
 
-        if role == CombatRole::Attacker {
+        if role == MatchupRole::Active {
             apply_attack_type(&mut stats, build.attack_type);
         }
         Ok(Player {
@@ -214,12 +246,12 @@ impl Catalogs {
     /// Materializes both sides of a directional build matchup with the correct roles.
     pub fn materialize_matchup(
         &self,
-        attacker: &BuildDefinition,
-        defender: &BuildDefinition,
+        active: &BuildDefinition,
+        opponent: &BuildDefinition,
     ) -> Result<Matchup> {
         Ok(Matchup {
-            attacker: self.materialize(attacker, CombatRole::Attacker)?,
-            defender: self.materialize(defender, CombatRole::Defender)?,
+            active: self.materialize(active, MatchupRole::Active)?,
+            opponent: self.materialize(opponent, MatchupRole::Opponent)?,
         })
     }
 
@@ -350,12 +382,26 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_catalog_merge_is_atomic() {
+        let mut catalogs = Catalogs::bundled().unwrap();
+        let original_len = catalogs.builds.len();
+        let build = catalogs.build("ShadowDojoDLGunBuild2").unwrap().clone();
+        let mut additions = BuildCatalog::new();
+        additions.insert("ANewBuild".to_owned(), build.clone());
+        additions.insert("ShadowDojoDLGunBuild2".to_owned(), build);
+
+        assert!(catalogs.merge_builds(additions).is_err());
+        assert_eq!(catalogs.builds.len(), original_len);
+        assert!(catalogs.build("ANewBuild").is_err());
+    }
+
+    #[test]
     fn materializes_known_build() {
         let catalogs = Catalogs::bundled().unwrap();
         let player = catalogs
             .materialize(
                 catalogs.build("ShadowDojoDLGunBuild2").unwrap(),
-                CombatRole::Attacker,
+                MatchupRole::Active,
             )
             .unwrap();
         assert_eq!(player.max_hp, 865);

@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use legacy_combat_sim::catalog::Catalogs;
 use legacy_combat_sim::combat;
-use legacy_combat_sim::model::CombatRole;
+use legacy_combat_sim::model::MatchupRole;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use serde::Serialize;
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
     match cli.command {
         Command::ListBuilds { catalogs } => {
             let catalogs = load_catalogs(&catalogs)?;
-            for key in catalogs.build_keys() {
+            for (key, _) in catalogs.builds() {
                 println!("{key}");
             }
         }
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
             }
             let catalogs = load_catalogs(&catalogs)?;
             let build_definition = catalogs.build(&build)?;
-            let player = catalogs.materialize(build_definition, CombatRole::Attacker)?;
+            let player = catalogs.materialize(build_definition, MatchupRole::Active)?;
             let enemies = if !enemy.is_empty() {
                 enemy
                     .iter()
@@ -115,7 +115,7 @@ fn main() -> Result<()> {
             let mut rng = SmallRng::seed_from_u64(seed);
             let mut matchups = Vec::with_capacity(enemies.len());
             for (enemy_key, enemy_build) in enemies {
-                let opponent = catalogs.materialize(enemy_build, CombatRole::Defender)?;
+                let opponent = catalogs.materialize(enemy_build, MatchupRole::Opponent)?;
                 let result = combat::simulate(&player, &opponent, fights, &mut rng);
                 matchups.push(MatchupReport {
                     enemy: enemy_key.to_owned(),

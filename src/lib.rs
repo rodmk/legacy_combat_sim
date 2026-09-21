@@ -19,7 +19,7 @@
 //!     catalogs.build("ShadowDojoDLGunBuild2")?,
 //! )?;
 //! let mut rng = SmallRng::seed_from_u64(42);
-//! let result = combat::simulate(&matchup.attacker, &matchup.defender, 100_000, &mut rng);
+//! let result = combat::simulate(&matchup.active, &matchup.opponent, 100_000, &mut rng);
 //! assert_eq!(result.player1_wins + result.player2_wins + result.draws, 100_000);
 //! # Ok(())
 //! # }

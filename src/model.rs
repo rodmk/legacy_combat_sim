@@ -78,76 +78,13 @@ pub enum AttackType {
     Cover,
 }
 
-/// The role for which a build is materialized.
+/// The directional role for which a build is materialized.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CombatRole {
-    /// Apply the build's selected attack mode.
-    Attacker,
-    /// Use normal-mode speed, accuracy, and dodge.
-    Defender,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-/// Raw equipment data loaded from the equipment catalog.
-pub struct ItemDefinition {
-    /// Display name.
-    pub name: String,
-    #[serde(rename = "type")]
-    /// Weapon family, or `None` for armor and miscellaneous equipment.
-    pub weapon_type: Option<WeaponType>,
-    #[serde(default)]
-    /// Number of available weapon modification slots.
-    pub mod_slots: u8,
-    #[serde(flatten)]
-    /// Additive statistics granted by the item.
-    pub stats: Stats,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-/// Raw crystal data loaded from the crystal catalog.
-pub struct CrystalDefinition {
-    /// Display name.
-    pub name: String,
-    /// Multipliers applied to the socketed item's base statistics.
-    pub mult: Multipliers,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-/// Raw weapon-modification data loaded from the weapon-mod catalog.
-pub struct WeaponModDefinition {
-    /// Display name.
-    pub name: String,
-    /// One-based slot occupied by this modification.
-    pub slot: u8,
-    /// Equipment catalog keys that accept this modification.
-    pub compatible: Vec<String>,
-    /// Multipliers applied to the weapon before crystal multipliers.
-    pub mult: Multipliers,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
-/// Optional per-stat multipliers used by crystals and weapon modifications.
-pub struct Multipliers {
-    /// Armor multiplier.
-    pub armor: Option<f64>,
-    /// Speed multiplier.
-    pub speed: Option<f64>,
-    /// Accuracy multiplier.
-    pub accuracy: Option<f64>,
-    /// Dodge multiplier.
-    pub dodge: Option<f64>,
-    /// Melee-skill multiplier.
-    pub melee_skill: Option<f64>,
-    /// Gun-skill multiplier.
-    pub gun_skill: Option<f64>,
-    /// Projectile-skill multiplier.
-    pub proj_skill: Option<f64>,
-    /// Defense-skill multiplier.
-    pub def_skill: Option<f64>,
-    /// Minimum-damage multiplier.
-    pub min_damage: Option<f64>,
-    /// Maximum-damage multiplier.
-    pub max_damage: Option<f64>,
+pub enum MatchupRole {
+    /// Apply the build's selected attack mode for the active side of a matchup.
+    Active,
+    /// Use normal-mode speed, accuracy, and dodge for the opposing side.
+    Opponent,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -241,10 +178,10 @@ pub struct Player {
 /// Role-correct combatants for a directional build matchup.
 #[derive(Clone, Debug)]
 pub struct Matchup {
-    /// The initiating build with its selected attack mode applied.
-    pub attacker: Player,
-    /// The opposing build in normal defensive mode.
-    pub defender: Player,
+    /// The directional active build with its selected attack mode applied.
+    pub active: Player,
+    /// The opposing build in normal mode.
+    pub opponent: Player,
 }
 
 impl Player {
