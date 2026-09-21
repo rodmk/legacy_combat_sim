@@ -38,6 +38,13 @@ List all bundled build keys with:
 cargo run -- list-builds
 ```
 
+Run the exact matchup, dominance, and restricted-equilibrium analysis for the
+Shadow Dojo catalog with:
+
+```sh
+cargo run --release -- analyze --enemy-set shadow-dojo > analysis.json
+```
+
 Weapon Mods
 ===========
 

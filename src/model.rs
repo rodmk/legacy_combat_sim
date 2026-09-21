@@ -262,6 +262,15 @@ impl Player {
             WeaponType::Projectile => self.stats.proj_skill,
         }
     }
+
+    /// Returns this player with normal-mode speed, accuracy, and dodge restored.
+    pub fn in_normal_mode(&self) -> Self {
+        let mut player = self.clone();
+        player.stats.speed = self.normal_mode.speed;
+        player.stats.accuracy = self.normal_mode.accuracy;
+        player.stats.dodge = self.normal_mode.dodge;
+        player
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]

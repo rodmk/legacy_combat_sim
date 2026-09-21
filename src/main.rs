@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use legacy_combat_sim::catalog::Catalogs;
+use legacy_combat_sim::analysis::analyze_build_catalog;
+use legacy_combat_sim::catalog::{BuildCatalog, Catalogs};
 use legacy_combat_sim::combat;
 use legacy_combat_sim::model::MatchupRole;
 use rand::rngs::SmallRng;
@@ -18,6 +19,15 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Analyze a named enemy set with exact combat distributions.
+    Analyze {
+        /// Named build set: shadow-dojo or reference.
+        #[arg(long, default_value = "shadow-dojo")]
+        enemy_set: String,
+        /// Additional JSON build catalog; may be specified more than once.
+        #[arg(long = "catalog")]
+        catalogs: Vec<PathBuf>,
+    },
     /// Run a build against an enemy set or selected enemies.
     Simulate {
         /// Build key from a bundled or supplied catalog.
@@ -78,6 +88,19 @@ struct Report {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Analyze {
+            enemy_set,
+            catalogs,
+        } => {
+            let catalogs = load_catalogs(&catalogs)?;
+            let catalog = catalogs
+                .enemy_set(&enemy_set)?
+                .into_iter()
+                .map(|(key, build)| (key.to_owned(), build.clone()))
+                .collect::<BuildCatalog>();
+            let report = analyze_build_catalog(&catalogs, &catalog)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         Command::ListBuilds { catalogs } => {
             let catalogs = load_catalogs(&catalogs)?;
             for (key, _) in catalogs.builds() {

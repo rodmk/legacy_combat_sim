@@ -25,11 +25,15 @@
 //! # }
 //! ```
 
+/// Catalog-level matchup analysis and equilibrium reports.
+pub mod analysis;
 /// JSON catalog loading and build materialization.
 pub mod catalog;
 /// Monte Carlo combat rules and probability helpers.
 pub mod combat;
 /// Exact combat distributions and economic outcome metrics.
 pub mod exact;
+/// Matchup metrics, payoff matrices, and finite-game analysis.
+pub mod game;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
