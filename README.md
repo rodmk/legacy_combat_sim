@@ -39,16 +39,24 @@ cargo run --release -- search \
 ```
 
 The search uses bounded approximate distributions to screen candidates and recomputes every reported beam score exactly. Search breadth is controlled with `--beam-width`, `--expansion-width`, `--max-iterations`, and `--socket-capacity`.
+Use `--fixed-equipment` to optimize crystals, allocated stats, and attack mode
+without replacing the five base items or their weapon modifications.
 
 Close a restricted strategy archive by solving its equilibrium and admitting profitable novel responses:
 
 ```sh
 cargo run --release -- infer \
   --enemy-set shadow-dojo \
+  --checkpoint inference-state.json \
   --max-rounds 16 > inferred-meta.json
 ```
 
 Each inference round records the pre-admission equilibrium, safely pruned opponent mass, response-search termination reason, and admitted builds. The final report contains the expanded build catalog and its exact restricted-game analysis.
+An existing checkpoint is resumed when its settings match. Add
+`--global-seeds 12` to screen all base weapon pairs, retain diversified leaders,
+and run the joint response oracle from those leaders as well as every supported
+equipment concept. Global screening is approximate; every promoted response and
+reported score is validated exactly against the full equilibrium mixture.
 
 Run `cargo run -- <command> --help` for all options accepted by a subcommand.
 

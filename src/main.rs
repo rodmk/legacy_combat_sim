@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -12,7 +13,8 @@ use legacy_combat_sim::search::{
 };
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -88,6 +90,9 @@ enum Command {
         /// Approximate-distribution survival threshold used for screening.
         #[arg(long, default_value_t = 0.01)]
         minimum_survival_probability: f64,
+        /// Keep the five base items and weapon modifications fixed.
+        #[arg(long)]
+        fixed_equipment: bool,
     },
     /// Close a restricted meta by admitting profitable joint responses.
     Infer {
@@ -115,6 +120,15 @@ enum Command {
         /// Score above 0.5 required for archive admission.
         #[arg(long, default_value_t = 0.001)]
         improvement_tolerance: f64,
+        /// Resume and update inference state at this path after every round.
+        #[arg(long)]
+        checkpoint: Option<PathBuf>,
+        /// Keep each seed's base items and weapon modifications fixed.
+        #[arg(long)]
+        fixed_equipment: bool,
+        /// Diversified weapon-pair seeds screened globally per round.
+        #[arg(long, default_value_t = 0)]
+        global_seeds: usize,
     },
 }
 
@@ -133,6 +147,15 @@ struct MatchupReport {
     losses: u64,
     draws: u64,
     win_rate: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct InferenceCheckpoint {
+    settings: Value,
+    catalog: BuildCatalog,
+    rounds: Vec<Value>,
+    completed_rounds: usize,
+    converged: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -192,6 +215,7 @@ fn main() -> Result<()> {
             max_iterations,
             socket_capacity,
             minimum_survival_probability,
+            fixed_equipment,
         } => {
             let catalogs = load_catalogs(&catalogs)?;
             let seed = catalogs.build(&build)?;
@@ -221,6 +245,7 @@ fn main() -> Result<()> {
                 ],
                 &EquipmentNeighborhoodOptions {
                     socket_capacity,
+                    fixed_equipment,
                     ..EquipmentNeighborhoodOptions::default()
                 },
                 &AdaptiveStatOptions {
@@ -261,6 +286,9 @@ fn main() -> Result<()> {
             max_iterations,
             socket_capacity,
             improvement_tolerance,
+            checkpoint,
+            fixed_equipment,
+            global_seeds,
         } => {
             let catalogs = load_catalogs(&catalogs)?;
             let initial = catalogs
@@ -268,23 +296,27 @@ fn main() -> Result<()> {
                 .into_iter()
                 .map(|(key, build)| (key.to_owned(), build.clone()))
                 .collect::<BuildCatalog>();
-            let result = endogenous_equipment_search(
-                &catalogs,
-                &initial,
-                &InferenceOptions {
-                    maximum_rounds: max_rounds,
-                    batch_size,
-                    improvement_tolerance,
-                    beam_width,
-                    joint_maximum_iterations: max_iterations,
-                    equipment: EquipmentNeighborhoodOptions {
-                        socket_capacity,
-                        ..EquipmentNeighborhoodOptions::default()
-                    },
-                    ..InferenceOptions::default()
+            let options = InferenceOptions {
+                maximum_rounds: max_rounds,
+                batch_size,
+                improvement_tolerance,
+                beam_width,
+                joint_maximum_iterations: max_iterations,
+                global_seed_count: global_seeds,
+                equipment: EquipmentNeighborhoodOptions {
+                    socket_capacity,
+                    fixed_equipment,
+                    ..EquipmentNeighborhoodOptions::default()
                 },
-            )?;
-            println!("{}", serde_json::to_string_pretty(&result)?);
+                ..InferenceOptions::default()
+            };
+            if let Some(path) = checkpoint {
+                let result = run_checkpointed_inference(&catalogs, initial, &options, &path)?;
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                let result = endogenous_equipment_search(&catalogs, &initial, &options)?;
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
         }
         Command::Simulate {
             build,
@@ -347,6 +379,77 @@ fn load_catalogs(paths: &[PathBuf]) -> Result<Catalogs> {
         catalogs.add_build_catalog(path)?;
     }
     Ok(catalogs)
+}
+
+fn run_checkpointed_inference(
+    catalogs: &Catalogs,
+    initial: BuildCatalog,
+    options: &InferenceOptions,
+    path: &Path,
+) -> Result<Value> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)?;
+    }
+    let settings = json!({
+        "initial_ids": initial.keys().collect::<Vec<_>>(),
+        "batch_size": options.batch_size,
+        "improvement_tolerance": options.improvement_tolerance,
+        "opponent_pruning_tolerance": options.opponent_pruning_tolerance,
+        "beam_width": options.beam_width,
+        "expansion_width": options.expansion_width,
+        "joint_maximum_iterations": options.joint_maximum_iterations,
+        "global_seed_count": options.global_seed_count,
+        "socket_capacity": options.equipment.socket_capacity,
+        "fixed_equipment": options.equipment.fixed_equipment,
+    });
+    let mut state = if path.exists() {
+        let data = fs::read_to_string(path)?;
+        let state = serde_json::from_str::<InferenceCheckpoint>(&data)?;
+        if state.settings != settings {
+            bail!("checkpoint settings do not match the requested inference settings");
+        }
+        state
+    } else {
+        InferenceCheckpoint {
+            settings,
+            catalog: initial,
+            rounds: Vec::new(),
+            completed_rounds: 0,
+            converged: false,
+        }
+    };
+    while state.completed_rounds < options.maximum_rounds && !state.converged {
+        let mut round_options = options.clone();
+        round_options.maximum_rounds = 1;
+        let result = endogenous_equipment_search(catalogs, &state.catalog, &round_options)?;
+        let mut round = result
+            .rounds
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("inference round produced no report"))?;
+        state.completed_rounds += 1;
+        round.round = state.completed_rounds;
+        let no_admission = round.added.is_empty();
+        state.catalog = result.catalog;
+        state.converged = result.converged;
+        state.rounds.push(serde_json::to_value(round)?);
+        let temporary = path.with_extension("tmp");
+        fs::write(&temporary, serde_json::to_vec_pretty(&state)?)?;
+        fs::rename(temporary, path)?;
+        if no_admission {
+            break;
+        }
+    }
+    let analysis = analyze_build_catalog(catalogs, &state.catalog)?;
+    Ok(json!({
+        "catalog": state.catalog,
+        "rounds": state.rounds,
+        "converged": state.converged,
+        "analysis": analysis,
+    }))
 }
 
 fn print_report(report: &Report, format: OutputFormat) -> Result<()> {

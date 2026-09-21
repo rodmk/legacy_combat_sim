@@ -6,7 +6,9 @@ use serde::Serialize;
 use crate::analysis::{analyze_build_catalog, CatalogAnalysis, StrategyWeight};
 use crate::catalog::{BuildCatalog, Catalogs};
 use crate::combat::combat_signature;
-use crate::model::{AttackType, BuildDefinition, CombatSignature, MatchupRole, Player};
+use crate::model::{
+    AttackType, BuildDefinition, CombatSignature, ItemSelection, MatchupRole, Player, WeaponType,
+};
 use crate::search::{
     candidate_frontiers, equipment_concept_signature, joint_equipment_stat_response_beam,
     AdaptiveStatOptions, CandidateGroup, EquipmentNeighborhoodOptions, JointResponseEntry,
@@ -100,6 +102,9 @@ pub struct InferenceOptions {
     pub expansion_width: usize,
     /// Maximum alternating equipment/stat passes per oracle call.
     pub joint_maximum_iterations: usize,
+    /// Diversified weapon-pair seeds screened globally per round; zero disables
+    /// global discovery.
+    pub global_seed_count: usize,
     /// Equipment-neighborhood controls.
     pub equipment: EquipmentNeighborhoodOptions,
     /// Stat-refinement controls.
@@ -116,6 +121,7 @@ impl Default for InferenceOptions {
             beam_width: 8,
             expansion_width: 2,
             joint_maximum_iterations: 8,
+            global_seed_count: 0,
             equipment: EquipmentNeighborhoodOptions::default(),
             stats: AdaptiveStatOptions::default(),
         }
@@ -210,14 +216,38 @@ pub fn endogenous_equipment_search(
             .map(|entry| entry.weight)
             .collect::<Vec<_>>();
         let starting_ids = equilibrium_seed_ids(&catalog, &before.inferred_meta.weights)?;
-        let response_seed_count = starting_ids.len();
+        let mut starting_builds = starting_ids
+            .iter()
+            .map(|id| catalog[id].clone())
+            .collect::<Vec<_>>();
+        if options.global_seed_count > 0 {
+            let baseline = &starting_builds[0];
+            let global = global_weapon_seeds(
+                catalogs,
+                baseline,
+                &opponents,
+                &opponent_ids,
+                &opponent_weights,
+                options.global_seed_count,
+            )?;
+            let mut concepts = starting_builds
+                .iter()
+                .map(equipment_concept_signature)
+                .collect::<HashSet<_>>();
+            starting_builds.extend(
+                global
+                    .into_iter()
+                    .filter(|build| concepts.insert(equipment_concept_signature(build))),
+            );
+        }
+        let response_seed_count = starting_builds.len();
         let mut response_by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
         let mut response_converged = true;
         let mut response_reasons = Vec::with_capacity(starting_ids.len());
-        for starting_id in starting_ids {
+        for starting_build in starting_builds {
             let response = joint_equipment_stat_response_beam(
                 catalogs,
-                &catalog[&starting_id],
+                &starting_build,
                 &opponents,
                 &opponent_ids,
                 Some(&opponent_weights),
@@ -374,6 +404,84 @@ fn equilibrium_seed_ids(catalog: &BuildCatalog, weights: &[StrategyWeight]) -> R
     Ok(seeds)
 }
 
+fn global_weapon_seeds(
+    catalogs: &Catalogs,
+    baseline: &BuildDefinition,
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: &[f64],
+    limit: usize,
+) -> Result<Vec<BuildDefinition>> {
+    let weapon_keys = catalogs.item_keys("weapons")?;
+    let mut groups = Vec::<ResponseGroup>::new();
+    let mut group_by_signature = HashMap::<CombatSignature, usize>::new();
+    for (left_index, left) in weapon_keys.iter().enumerate() {
+        for right in &weapon_keys[left_index..] {
+            let mut build = baseline.clone();
+            build.equipment.weapon1 = ItemSelection {
+                item: (*left).to_owned(),
+                crystals: Vec::new(),
+                mods: Vec::new(),
+            };
+            build.equipment.weapon2 = ItemSelection {
+                item: (*right).to_owned(),
+                crystals: Vec::new(),
+                mods: Vec::new(),
+            };
+            let representative = catalogs.materialize(&build, MatchupRole::Active)?;
+            let signature = combat_signature(&representative);
+            if let Some(index) = group_by_signature.get(&signature) {
+                groups[*index].sources.push(build);
+            } else {
+                group_by_signature.insert(signature.clone(), groups.len());
+                groups.push(ResponseGroup {
+                    signature,
+                    representative,
+                    sources: vec![build],
+                });
+            }
+        }
+    }
+    let mut candidates = candidate_frontiers(
+        &groups,
+        opponents,
+        opponent_ids,
+        Some(opponent_weights),
+        1e-6,
+    )?
+    .candidates;
+    candidates.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
+    let mut profiles = HashSet::<(WeaponType, WeaponType)>::new();
+    let mut selected = Vec::new();
+    for candidate in &candidates {
+        let mut types = [
+            candidate.representative.weapon1.weapon_type,
+            candidate.representative.weapon2.weapon_type,
+        ];
+        types.sort();
+        if profiles.insert((types[0], types[1])) {
+            selected.push(candidate.sources[0].clone());
+            if selected.len() == limit {
+                return Ok(selected);
+            }
+        }
+    }
+    let mut concepts = selected
+        .iter()
+        .map(equipment_concept_signature)
+        .collect::<HashSet<_>>();
+    for candidate in candidates {
+        let build = &candidate.sources[0];
+        if concepts.insert(equipment_concept_signature(build)) {
+            selected.push(build.clone());
+            if selected.len() == limit {
+                break;
+            }
+        }
+    }
+    Ok(selected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,6 +537,41 @@ mod tests {
             equilibrium_seed_ids(&catalog, &weights).unwrap(),
             ["first", "distinct"]
         );
+    }
+
+    #[test]
+    fn global_weapon_screen_preserves_profile_diversity() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let baseline = catalogs.build("ControlledKernel").unwrap();
+        let opponent = catalogs.materialize(baseline, MatchupRole::Active).unwrap();
+        let seeds = global_weapon_seeds(
+            &catalogs,
+            baseline,
+            &[opponent],
+            &["ControlledKernel".to_owned()],
+            &[1.0],
+            6,
+        )
+        .unwrap();
+        assert_eq!(seeds.len(), 6);
+        let profiles = seeds
+            .iter()
+            .map(|build| {
+                let mut types = [
+                    catalogs
+                        .item_weapon_type(&build.equipment.weapon1.item)
+                        .unwrap()
+                        .unwrap(),
+                    catalogs
+                        .item_weapon_type(&build.equipment.weapon2.item)
+                        .unwrap()
+                        .unwrap(),
+                ];
+                types.sort();
+                (types[0], types[1])
+            })
+            .collect::<HashSet<_>>();
+        assert_eq!(profiles.len(), 6);
     }
 
     #[test]
