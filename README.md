@@ -57,6 +57,8 @@ An existing checkpoint is resumed when its settings match. Add
 and run the joint response oracle from those leaders as well as every supported
 equipment concept. Global screening is approximate; every promoted response and
 reported score is validated exactly against the full equilibrium mixture.
+Use repeated `--initial-build` options instead of `--enemy-set` to start from an
+explicit strategy archive.
 
 Run `cargo run -- <command> --help` for all options accepted by a subcommand.
 

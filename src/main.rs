@@ -97,8 +97,11 @@ enum Command {
     /// Close a restricted meta by admitting profitable joint responses.
     Infer {
         /// Named initial strategy set: shadow-dojo or reference.
-        #[arg(long, default_value = "shadow-dojo")]
-        enemy_set: String,
+        #[arg(long, conflicts_with = "initial_build")]
+        enemy_set: Option<String>,
+        /// Initial strategy build key; may be specified more than once.
+        #[arg(long, conflicts_with = "enemy_set")]
+        initial_build: Vec<String>,
         /// Additional JSON build catalog; may be specified more than once.
         #[arg(long = "catalog")]
         catalogs: Vec<PathBuf>,
@@ -279,6 +282,7 @@ fn main() -> Result<()> {
         }
         Command::Infer {
             enemy_set,
+            initial_build,
             catalogs,
             max_rounds,
             batch_size,
@@ -291,11 +295,18 @@ fn main() -> Result<()> {
             global_seeds,
         } => {
             let catalogs = load_catalogs(&catalogs)?;
-            let initial = catalogs
-                .enemy_set(&enemy_set)?
-                .into_iter()
-                .map(|(key, build)| (key.to_owned(), build.clone()))
-                .collect::<BuildCatalog>();
+            let initial = if initial_build.is_empty() {
+                catalogs
+                    .enemy_set(enemy_set.as_deref().unwrap_or("shadow-dojo"))?
+                    .into_iter()
+                    .map(|(key, build)| (key.to_owned(), build.clone()))
+                    .collect::<BuildCatalog>()
+            } else {
+                initial_build
+                    .iter()
+                    .map(|key| Ok((key.clone(), catalogs.build(key)?.clone())))
+                    .collect::<Result<BuildCatalog>>()?
+            };
             let options = InferenceOptions {
                 maximum_rounds: max_rounds,
                 batch_size,
