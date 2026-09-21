@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// Additive combat and equipment statistics.
 pub struct Stats {
     #[serde(default)]
@@ -134,7 +134,7 @@ pub struct Loadout {
     pub misc2: ItemSelection,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 /// An equipment catalog key with optional crystals and weapon modifications.
 pub struct ItemSelection {
     /// Equipment catalog key.

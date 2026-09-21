@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::model::{
     AttackType, BuildDefinition, EquivalentBuildGroup, ItemSelection, Matchup, MatchupRole,
@@ -12,6 +12,56 @@ use crate::model::{
 
 /// Ordered mapping from stable build keys to build definitions.
 pub type BuildCatalog = BTreeMap<String, BuildDefinition>;
+
+/// One concrete way to socket and modify an equipment item.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ItemVariantSource {
+    /// Equipment catalog key.
+    pub item: String,
+    /// One selected modification per supported modification slot.
+    pub mods: Vec<String>,
+    /// Canonically ordered crystal multiset.
+    pub crystals: Vec<String>,
+}
+
+/// Socket and modification choices with identical combat statistics.
+#[derive(Clone, Debug)]
+pub struct ItemVariantGroup {
+    /// Materialized statistics shared by the choices.
+    pub stats: Stats,
+    /// Weapon family, when the item is a weapon.
+    pub weapon_type: Option<WeaponType>,
+    /// Concrete choices represented by this group.
+    pub sources: Vec<ItemVariantSource>,
+}
+
+/// Counts recorded while reducing an item's raw variant space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct ItemVariantCounts {
+    /// Ordered crystal sequences before relevance filtering.
+    pub unfiltered_ordered: usize,
+    /// Ordered crystal sequences after relevance filtering.
+    pub filtered_ordered: usize,
+    /// Canonical multisets after relevance filtering, including modifications.
+    pub canonical: usize,
+    /// Distinct effective combat-stat groups.
+    pub unique_effective: usize,
+    /// Componentwise nondominated effective groups.
+    pub nondominated: usize,
+}
+
+/// Canonical variants and reduction statistics for one equipment item.
+#[derive(Clone, Debug)]
+pub struct ItemVariantReport {
+    /// All distinct effective variants.
+    pub groups: Vec<ItemVariantGroup>,
+    /// Variants not componentwise dominated by another variant.
+    pub nondominated_groups: Vec<ItemVariantGroup>,
+    /// Variant-space counts.
+    pub counts: ItemVariantCounts,
+    /// Crystal keys that can change a relevant nonzero item statistic.
+    pub useful_crystals: Vec<String>,
+}
 
 #[derive(Debug, Deserialize)]
 struct EquipmentCatalog {
@@ -128,6 +178,125 @@ impl Catalogs {
     /// Iterates over build keys and definitions in stable lexical order.
     pub fn builds(&self) -> impl Iterator<Item = (&str, &BuildDefinition)> {
         self.builds.iter().map(|(key, build)| (key.as_str(), build))
+    }
+
+    /// Returns the weapon family for an equipment catalog key.
+    pub fn item_weapon_type(&self, key: &str) -> Result<Option<WeaponType>> {
+        Ok(self.item_definition(key)?.weapon_type)
+    }
+
+    /// Returns stable item keys for an equipment category.
+    pub fn item_keys(&self, category: &str) -> Result<Vec<&str>> {
+        let catalog = match category {
+            "armor" => &self.equipment.armor,
+            "weapons" => &self.equipment.weapons,
+            "miscs" => &self.equipment.miscs,
+            _ => bail!("unknown equipment category: {category}"),
+        };
+        let mut keys = catalog.keys().map(String::as_str).collect::<Vec<_>>();
+        keys.sort_unstable();
+        Ok(keys)
+    }
+
+    /// Generates canonical socket and modification variants for an item.
+    ///
+    /// Crystals that cannot affect a nonzero combat statistic used by either
+    /// active weapon family are omitted. Crystals are treated as multisets and
+    /// every supported weapon-modification slot is filled. The returned frontier
+    /// removes variants whose relevant statistics are componentwise dominated.
+    pub fn item_variant_report(
+        &self,
+        item_key: &str,
+        active_weapon_types: &[WeaponType],
+        crystal_keys: Option<&[String]>,
+        socket_capacity: usize,
+    ) -> Result<ItemVariantReport> {
+        let definition = self.item_definition(item_key)?;
+        let mut crystals = crystal_keys.map(<[String]>::to_vec).unwrap_or_else(|| {
+            let mut keys = self.crystals.keys().cloned().collect::<Vec<_>>();
+            keys.sort();
+            keys
+        });
+        for key in &crystals {
+            if !self.crystals.contains_key(key) {
+                bail!("unknown crystal: {key}");
+            }
+        }
+        let unfiltered_count = crystals.len();
+        crystals.retain(|key| {
+            useful_multiplier(
+                definition.stats,
+                self.crystals[key].mult,
+                active_weapon_types,
+            )
+        });
+        let useful_crystals = crystals.clone();
+        let crystal_sets = crystal_multisets(&crystals, socket_capacity);
+        let mod_sets = self.mod_combinations(item_key, definition)?;
+        let mut groups = Vec::<ItemVariantGroup>::new();
+        let mut group_by_key = HashMap::<(Option<WeaponType>, Vec<i32>), usize>::new();
+        for mods in &mod_sets {
+            for selected_crystals in &crystal_sets {
+                let source = ItemVariantSource {
+                    item: item_key.to_owned(),
+                    mods: mods.clone(),
+                    crystals: selected_crystals.clone(),
+                };
+                let materialized = self.materialize_item(&ItemSelection {
+                    item: source.item.clone(),
+                    mods: source.mods.clone(),
+                    crystals: source.crystals.clone(),
+                })?;
+                let key = (
+                    materialized.weapon_type,
+                    relevant_stats(materialized.stats, active_weapon_types),
+                );
+                if let Some(index) = group_by_key.get(&key) {
+                    groups[*index].sources.push(source);
+                } else {
+                    group_by_key.insert(key, groups.len());
+                    groups.push(ItemVariantGroup {
+                        stats: materialized.stats,
+                        weapon_type: materialized.weapon_type,
+                        sources: vec![source],
+                    });
+                }
+            }
+        }
+        let nondominated_groups = groups
+            .iter()
+            .enumerate()
+            .filter(|(index, group)| {
+                let candidate = relevant_stats(group.stats, active_weapon_types);
+                !groups.iter().enumerate().any(|(other_index, other)| {
+                    other_index != *index
+                        && dominates_stats(
+                            &relevant_stats(other.stats, active_weapon_types),
+                            &candidate,
+                        )
+                })
+            })
+            .map(|(_, group)| group.clone())
+            .collect::<Vec<_>>();
+        let ordered = |count: usize| {
+            (if count == 0 {
+                1
+            } else {
+                count.pow(socket_capacity as u32)
+            }) * mod_sets.len()
+        };
+        Ok(ItemVariantReport {
+            counts: ItemVariantCounts {
+                unfiltered_ordered: ordered(unfiltered_count),
+                filtered_ordered: ordered(useful_crystals.len()),
+                canonical: groups.iter().map(|group| group.sources.len()).sum(),
+                unique_effective: groups.len(),
+                nondominated: nondominated_groups.len(),
+            },
+            groups,
+            nondominated_groups,
+            useful_crystals,
+        })
     }
 
     /// Returns the members of a bundled named enemy set.
@@ -290,13 +459,7 @@ impl Catalogs {
     }
 
     fn materialize_item(&self, selection: &ItemSelection) -> Result<MaterializedItem> {
-        let definition = self
-            .equipment
-            .armor
-            .get(&selection.item)
-            .or_else(|| self.equipment.weapons.get(&selection.item))
-            .or_else(|| self.equipment.miscs.get(&selection.item))
-            .with_context(|| format!("unknown item: {}", selection.item))?;
+        let definition = self.item_definition(&selection.item)?;
         let mut item = MaterializedItem {
             key: selection.item.clone(),
             weapon_type: definition.weapon_type,
@@ -351,6 +514,126 @@ impl Catalogs {
         apply_multipliers(&mut item.stats, &multipliers);
         Ok(item)
     }
+
+    fn item_definition(&self, key: &str) -> Result<&ItemDefinition> {
+        self.equipment
+            .armor
+            .get(key)
+            .or_else(|| self.equipment.weapons.get(key))
+            .or_else(|| self.equipment.miscs.get(key))
+            .with_context(|| format!("unknown item: {key}"))
+    }
+
+    fn mod_combinations(
+        &self,
+        item_key: &str,
+        definition: &ItemDefinition,
+    ) -> Result<Vec<Vec<String>>> {
+        let mut combinations = vec![Vec::new()];
+        for slot in 1..=definition.mod_slots {
+            let mut compatible = self
+                .weapon_mods
+                .iter()
+                .filter(|(_, weapon_mod)| {
+                    weapon_mod.slot == slot
+                        && weapon_mod.compatible.iter().any(|key| key == item_key)
+                })
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
+            compatible.sort();
+            if compatible.is_empty() {
+                bail!(
+                    "{} has no compatible modification for slot {slot}",
+                    definition.name
+                );
+            }
+            combinations = combinations
+                .into_iter()
+                .flat_map(|combination| {
+                    compatible.iter().map(move |key| {
+                        let mut next = combination.clone();
+                        next.push(key.clone());
+                        next
+                    })
+                })
+                .collect();
+        }
+        Ok(combinations)
+    }
+}
+
+fn crystal_multisets(keys: &[String], capacity: usize) -> Vec<Vec<String>> {
+    fn add(
+        keys: &[String],
+        start: usize,
+        remaining: usize,
+        selected: &mut Vec<String>,
+        result: &mut Vec<Vec<String>>,
+    ) {
+        if remaining == 0 {
+            result.push(selected.clone());
+            return;
+        }
+        for index in start..keys.len() {
+            selected.push(keys[index].clone());
+            add(keys, index, remaining - 1, selected, result);
+            selected.pop();
+        }
+    }
+    if keys.is_empty() {
+        return vec![Vec::new()];
+    }
+    let mut result = Vec::new();
+    add(keys, 0, capacity, &mut Vec::new(), &mut result);
+    result
+}
+
+fn relevant_stats(stats: Stats, weapon_types: &[WeaponType]) -> Vec<i32> {
+    let mut values = vec![
+        stats.min_damage,
+        stats.max_damage,
+        stats.armor,
+        stats.dodge,
+        stats.accuracy,
+        stats.speed,
+        stats.def_skill,
+    ];
+    let active = weapon_types.iter().copied().collect::<HashSet<_>>();
+    for weapon_type in [WeaponType::Gun, WeaponType::Melee, WeaponType::Projectile] {
+        if active.contains(&weapon_type) {
+            values.push(match weapon_type {
+                WeaponType::Melee => stats.melee_skill,
+                WeaponType::Gun => stats.gun_skill,
+                WeaponType::Projectile => stats.proj_skill,
+            });
+        }
+    }
+    values
+}
+
+fn useful_multiplier(stats: Stats, multiplier: Multipliers, weapon_types: &[WeaponType]) -> bool {
+    let active = weapon_types.iter().copied().collect::<HashSet<_>>();
+    (stats.armor != 0 && multiplier.armor.is_some())
+        || (stats.speed != 0 && multiplier.speed.is_some())
+        || (stats.accuracy != 0 && multiplier.accuracy.is_some())
+        || (stats.dodge != 0 && multiplier.dodge.is_some())
+        || (stats.def_skill != 0 && multiplier.def_skill.is_some())
+        || (stats.min_damage != 0 && multiplier.min_damage.is_some())
+        || (stats.max_damage != 0 && multiplier.max_damage.is_some())
+        || (active.contains(&WeaponType::Melee)
+            && stats.melee_skill != 0
+            && multiplier.melee_skill.is_some())
+        || (active.contains(&WeaponType::Gun)
+            && stats.gun_skill != 0
+            && multiplier.gun_skill.is_some())
+        || (active.contains(&WeaponType::Projectile)
+            && stats.proj_skill != 0
+            && multiplier.proj_skill.is_some())
+}
+
+fn dominates_stats(left: &[i32], right: &[i32]) -> bool {
+    left.iter().zip(right).all(|(left, right)| left >= right)
+        && left.iter().zip(right).any(|(left, right)| left > right)
 }
 
 fn weapon_from_item(item: &MaterializedItem) -> Result<Weapon> {
@@ -473,5 +756,41 @@ mod tests {
         assert_eq!(equivalent.builds[1].name, reordered.name);
         assert_eq!(equivalent.representative.name, original.name);
         assert_ne!(groups[0].signature, groups[1].signature);
+    }
+
+    #[test]
+    fn item_variants_match_legacy_fixture() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let crystals = [
+            "PerfectGreen",
+            "PerfectOrange",
+            "PerfectYellow",
+            "PerfectFire",
+        ]
+        .map(str::to_owned);
+        let report = catalogs
+            .item_variant_report(
+                "RiftGun",
+                &[WeaponType::Gun, WeaponType::Projectile],
+                Some(&crystals),
+                1,
+            )
+            .unwrap();
+
+        assert_eq!(
+            report.useful_crystals,
+            ["PerfectGreen", "PerfectFire"].map(str::to_owned)
+        );
+        assert_eq!(report.groups.len(), 2);
+        assert_eq!(
+            report.counts,
+            ItemVariantCounts {
+                unfiltered_ordered: 4,
+                filtered_ordered: 2,
+                canonical: 2,
+                unique_effective: 2,
+                nondominated: 2,
+            }
+        );
     }
 }
