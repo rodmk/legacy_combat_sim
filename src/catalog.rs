@@ -6,8 +6,8 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::model::{
-    AttackType, BuildDefinition, ItemSelection, Matchup, MatchupRole, Player, Stats, Weapon,
-    WeaponType,
+    AttackType, BuildDefinition, EquivalentBuildGroup, ItemSelection, Matchup, MatchupRole,
+    ModeStats, Player, Stats, Weapon, WeaponType,
 };
 
 /// Ordered mapping from stable build keys to build definitions.
@@ -230,6 +230,11 @@ impl Catalogs {
             stats.add(bonuses);
         }
 
+        let normal_mode = ModeStats {
+            speed: stats.speed,
+            accuracy: stats.accuracy,
+            dodge: stats.dodge,
+        };
         if role == MatchupRole::Active {
             apply_attack_type(&mut stats, build.attack_type);
         }
@@ -238,6 +243,7 @@ impl Catalogs {
             level: build.level,
             max_hp: build.stats.hp * 5,
             stats,
+            normal_mode,
             weapon1: weapon_from_item(&items[1])?,
             weapon2: weapon_from_item(&items[2])?,
         })
@@ -253,6 +259,34 @@ impl Catalogs {
             active: self.materialize(active, MatchupRole::Active)?,
             opponent: self.materialize(opponent, MatchupRole::Opponent)?,
         })
+    }
+
+    /// Groups builds by canonical combat behavior while preserving input order.
+    ///
+    /// Weapon slot order and statistics for unused weapon families do not split a
+    /// group. Attack-mode statistics and their normal-mode defensive counterparts
+    /// are both included.
+    pub fn group_equivalent_builds<'a>(
+        &self,
+        builds: impl IntoIterator<Item = &'a BuildDefinition>,
+    ) -> Result<Vec<EquivalentBuildGroup<'a>>> {
+        let mut groups = Vec::<EquivalentBuildGroup<'a>>::new();
+        let mut group_by_signature = HashMap::<crate::model::CombatSignature, usize>::new();
+        for build in builds {
+            let representative = self.materialize(build, MatchupRole::Active)?;
+            let signature = crate::combat::combat_signature(&representative);
+            if let Some(index) = group_by_signature.get(&signature) {
+                groups[*index].builds.push(build);
+            } else {
+                group_by_signature.insert(signature.clone(), groups.len());
+                groups.push(EquivalentBuildGroup {
+                    signature,
+                    representative,
+                    builds: vec![build],
+                });
+            }
+        }
+        Ok(groups)
     }
 
     fn materialize_item(&self, selection: &ItemSelection) -> Result<MaterializedItem> {
@@ -411,5 +445,33 @@ mod tests {
         assert_eq!(player.weapon2.weapon_type, WeaponType::Gun);
         assert_eq!(player.weapon2.min_damage, 120);
         assert_eq!(player.weapon2.max_damage, 138);
+    }
+
+    #[test]
+    fn groups_combat_equivalent_builds() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let original = catalogs
+            .build("CoreStaffVoidSwordWithScouts")
+            .unwrap()
+            .clone();
+        let mut reordered = original.clone();
+        reordered.name = "Reordered weapons".to_owned();
+        std::mem::swap(
+            &mut reordered.equipment.weapon1,
+            &mut reordered.equipment.weapon2,
+        );
+        let mut distinct = original.clone();
+        distinct.name = "Quick attack".to_owned();
+        distinct.attack_type = AttackType::Quick;
+
+        let groups = catalogs
+            .group_equivalent_builds([&original, &reordered, &distinct])
+            .unwrap();
+        assert_eq!(groups.len(), 2);
+        let equivalent = groups.iter().find(|group| group.builds.len() == 2).unwrap();
+        assert_eq!(equivalent.builds[0].name, original.name);
+        assert_eq!(equivalent.builds[1].name, reordered.name);
+        assert_eq!(equivalent.representative.name, original.name);
+        assert_ne!(groups[0].signature, groups[1].signature);
     }
 }

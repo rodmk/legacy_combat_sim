@@ -51,7 +51,7 @@ impl Stats {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "lowercase")]
 /// The skill family used by a weapon.
 pub enum WeaponType {
@@ -158,6 +158,17 @@ pub struct Weapon {
     pub max_damage: i32,
 }
 
+/// Speed, accuracy, and dodge before an attack-mode adjustment.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
+pub struct ModeStats {
+    /// Normal-mode speed.
+    pub speed: i32,
+    /// Normal-mode accuracy.
+    pub accuracy: i32,
+    /// Normal-mode dodge.
+    pub dodge: i32,
+}
+
 #[derive(Clone, Debug)]
 /// Fully materialized combat statistics for one role in a matchup.
 pub struct Player {
@@ -169,10 +180,68 @@ pub struct Player {
     pub max_hp: i32,
     /// Final additive statistics after equipment and attack-mode adjustments.
     pub stats: Stats,
+    /// Speed, accuracy, and dodge before attack-mode adjustments.
+    pub normal_mode: ModeStats,
     /// First weapon.
     pub weapon1: Weapon,
     /// Second weapon.
     pub weapon2: Weapon,
+}
+
+/// The combat-relevant portion of one weapon.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct WeaponSignature {
+    /// Skill family checked by the weapon.
+    pub weapon_type: WeaponType,
+    /// Inclusive minimum base damage.
+    pub min_damage: i32,
+    /// Inclusive maximum base damage.
+    pub max_damage: i32,
+}
+
+/// A skill family used by the equipped weapons and its effective value.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct ActiveSkillSignature {
+    /// Active weapon family.
+    pub weapon_type: WeaponType,
+    /// Effective skill value for that family.
+    pub value: i32,
+}
+
+/// Canonical combat behavior used to identify equivalent builds.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+pub struct CombatSignature {
+    /// Character level.
+    pub level: u32,
+    /// Maximum HP.
+    pub max_hp: i32,
+    /// Armor after equipment bonuses.
+    pub armor: i32,
+    /// Active-mode speed.
+    pub speed: i32,
+    /// Active-mode accuracy.
+    pub accuracy: i32,
+    /// Active-mode dodge.
+    pub dodge: i32,
+    /// Normal-mode speed, accuracy, and dodge.
+    pub normal_mode: ModeStats,
+    /// Defense skill.
+    pub def_skill: i32,
+    /// Values for only the skill families used by the equipped weapons.
+    pub active_skills: Vec<ActiveSkillSignature>,
+    /// Combat-relevant weapons sorted independently of equipment slot.
+    pub weapons: Vec<WeaponSignature>,
+}
+
+/// Builds that materialize to the same combat signature.
+#[derive(Debug)]
+pub struct EquivalentBuildGroup<'a> {
+    /// Shared canonical combat signature.
+    pub signature: CombatSignature,
+    /// Materialized first build in the group.
+    pub representative: Player,
+    /// Group members in input order.
+    pub builds: Vec<&'a BuildDefinition>,
 }
 
 /// Role-correct combatants for a directional build matchup.

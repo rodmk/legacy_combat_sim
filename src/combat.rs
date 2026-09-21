@@ -1,6 +1,8 @@
 use rand::Rng;
 
-use crate::model::{Player, SimulationResult, Weapon};
+use crate::model::{
+    ActiveSkillSignature, CombatSignature, Player, SimulationResult, Weapon, WeaponSignature,
+};
 
 /// Number of complete attack-and-counterattack rounds before an unresolved fight draws.
 pub const MAX_COMBAT_ROUNDS: usize = 100;
@@ -31,6 +33,54 @@ pub fn damage_after_armor(attacker_level: u32, defender_armor: i32, base_damage:
     let level_modifier = f64::from(attacker_level.min(80)) * 7.0 / 2.0;
     (f64::from(base_damage) * (level_modifier / (level_modifier + f64::from(defender_armor))))
         .round() as i32
+}
+
+/// Produces a canonical signature for every statistic that can affect combat.
+///
+/// Weapons and their active skill families are sorted so swapping weapon slots
+/// does not change the signature. Skill families unused by either weapon are
+/// intentionally excluded. Both active attack-mode statistics and normal-mode
+/// defensive statistics are retained.
+pub fn combat_signature(player: &Player) -> CombatSignature {
+    let mut weapons = [&player.weapon1, &player.weapon2]
+        .map(|weapon| WeaponSignature {
+            weapon_type: weapon.weapon_type,
+            min_damage: weapon.min_damage,
+            max_damage: weapon.max_damage,
+        })
+        .to_vec();
+    weapons.sort_unstable();
+
+    let mut weapon_types = weapons
+        .iter()
+        .map(|weapon| weapon.weapon_type)
+        .collect::<Vec<_>>();
+    weapon_types.sort_unstable();
+    weapon_types.dedup();
+    let active_skills = weapon_types
+        .into_iter()
+        .map(|weapon_type| ActiveSkillSignature {
+            weapon_type,
+            value: match weapon_type {
+                crate::model::WeaponType::Melee => player.stats.melee_skill,
+                crate::model::WeaponType::Gun => player.stats.gun_skill,
+                crate::model::WeaponType::Projectile => player.stats.proj_skill,
+            },
+        })
+        .collect();
+
+    CombatSignature {
+        level: player.level,
+        max_hp: player.max_hp,
+        armor: player.stats.armor,
+        speed: player.stats.speed,
+        accuracy: player.stats.accuracy,
+        dodge: player.stats.dodge,
+        normal_mode: player.normal_mode,
+        def_skill: player.stats.def_skill,
+        active_skills,
+        weapons,
+    }
 }
 
 /// Simulates `fights` independent combats and aggregates their outcomes.
@@ -190,5 +240,20 @@ mod tests {
     #[test]
     fn armor_damage_matches_legacy_rounding() {
         assert_eq!(damage_after_armor(80, 65, 100), 81);
+    }
+
+    #[test]
+    fn signature_ignores_unused_skills() {
+        let catalogs = crate::catalog::Catalogs::bundled().unwrap();
+        let mut player = catalogs
+            .materialize(
+                catalogs.build("ShadowDojoDLGunBuild2").unwrap(),
+                crate::model::MatchupRole::Active,
+            )
+            .unwrap();
+        let original = combat_signature(&player);
+        player.stats.melee_skill += 100;
+        player.stats.proj_skill += 100;
+        assert_eq!(combat_signature(&player), original);
     }
 }
