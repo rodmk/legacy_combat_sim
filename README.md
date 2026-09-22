@@ -24,6 +24,53 @@ List bundled builds:
 cargo run -- list-builds
 ```
 
+Generate the global configured candidate catalog by screening every canonical
+five-item equipment signature. The bundled entry-level Crystal Swords build is
+the default proxy opponent for this discovery stage:
+
+```sh
+cargo run --release -- generate-candidates > candidate-builds.json
+```
+
+The generator preserves global leaders and equipment-family diversity across
+all six weapon profiles, then specializes crystals, allocated stats, and attack
+mode for the retained signatures. Its shortlist sizes and socket capacity are
+configurable through command-line options.
+
+Meta solving starts from this endogenously generated candidate catalog. The
+entry-level proxy and the Shadow Dojo builds are benchmarks for discovery and
+validation; neither is the strategic kernel or the initial meta archive.
+
+Resolve the meta end to end with the native orchestration command:
+
+```sh
+cargo run --release -- resolve-meta \
+  --directory .local/rust-meta \
+  --workers 1 > resolved-meta.json
+```
+
+The workflow generates and solves the initial candidate pool, closes supported
+equipment configurations, generates a new candidate region against the current
+mixture, screens and confirms diverse global challengers, and repeats until a
+global challenge admits nothing. The work directory contains atomic checkpoints
+for candidate rounds, configuration rounds, promoted screening seeds, and global
+cycles. Promising seeds are confirmed first; a no-admission pass confirms every
+remaining seed before closure. Reusing the command resumes matching work; input
+fingerprints and the settings manifest reject incompatible artifacts. Increase
+`--workers` only when additional CPU and memory use is acceptable.
+
+Solve the generated pool with an active archive seeded by one candidate from
+each weapon profile:
+
+```sh
+cargo run --release -- solve-candidates \
+  --candidate-catalog candidate-builds.json \
+  --checkpoint candidate-meta-state.json > candidate-meta.json
+```
+
+The solver checkpoints every completed round, admits profitable candidates from
+the inactive pool, and stops when no response clears the configured tolerance.
+
 Analyze exact matchups, dominance, and the restricted equilibrium for an enemy set:
 
 ```sh
@@ -42,7 +89,7 @@ The search uses bounded approximate distributions to screen candidates and recom
 Use `--fixed-equipment` to optimize crystals, allocated stats, and attack mode
 without replacing the five base items or their weapon modifications.
 
-Close a restricted strategy archive by solving its equilibrium and admitting profitable novel responses:
+Explore local response closure for a selected restricted archive:
 
 ```sh
 cargo run --release -- infer \
@@ -52,6 +99,9 @@ cargo run --release -- infer \
 ```
 
 Each inference round records the pre-admission equilibrium, safely pruned opponent mass, response-search termination reason, and admitted builds. The final report contains the expanded build catalog and its exact restricted-game analysis.
+This command does not replace endogenous candidate generation when solving the
+global meta. A Shadow Dojo run measures closure around that benchmark archive;
+it is not a global-meta seed.
 An existing checkpoint is resumed when its settings match. Add
 `--global-seeds 12` to screen all base weapon pairs, retain diversified leaders,
 and run the joint response oracle from those leaders as well as every supported

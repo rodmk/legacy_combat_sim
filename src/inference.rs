@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use serde::Serialize;
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::analysis::{analyze_build_catalog, CatalogAnalysis, StrategyWeight};
 use crate::catalog::{BuildCatalog, Catalogs};
@@ -38,7 +40,7 @@ impl CandidateGroup for ResponseGroup {
 }
 
 /// A normalized opponent mixture with a bounded amount of discarded mass.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PrunedMixture {
     /// Retained and renormalized strategies.
     pub retained: Vec<StrategyWeight>,
@@ -85,6 +87,12 @@ pub fn prune_opponent_mixture(
     })
 }
 
+/// Returns whether a score against a renormalized pruned mixture proves that
+/// the corresponding full-mixture score cannot exceed `threshold`.
+pub fn pruned_score_proves_below(pruned_score: f64, dropped_weight: f64, threshold: f64) -> bool {
+    (1.0 - dropped_weight) * pruned_score + dropped_weight <= threshold
+}
+
 /// Controls iterative restricted-meta closure.
 #[derive(Clone, Debug)]
 pub struct InferenceOptions {
@@ -102,6 +110,14 @@ pub struct InferenceOptions {
     pub expansion_width: usize,
     /// Maximum alternating equipment/stat passes per oracle call.
     pub joint_maximum_iterations: usize,
+    /// Optional cheap response-search iterations run before full confirmation.
+    pub screening_iterations: Option<usize>,
+    /// Minimum screening score required for full confirmation.
+    pub screening_promotion_score: f64,
+    /// Minimum confirmed score required for admission.
+    pub admission_score: f64,
+    /// Tail threshold used for the equipment-screening pass.
+    pub equipment_screening_minimum_survival_probability: f64,
     /// Diversified weapon-pair seeds screened globally per round; zero disables
     /// global discovery.
     pub global_seed_count: usize,
@@ -117,13 +133,20 @@ impl Default for InferenceOptions {
             maximum_rounds: 16,
             batch_size: 2,
             improvement_tolerance: 1e-3,
-            opponent_pruning_tolerance: 2.5e-4,
+            opponent_pruning_tolerance: 5e-3,
             beam_width: 8,
             expansion_width: 2,
             joint_maximum_iterations: 8,
+            screening_iterations: None,
+            screening_promotion_score: 0.505,
+            admission_score: 0.501,
+            equipment_screening_minimum_survival_probability: 0.1,
             global_seed_count: 0,
             equipment: EquipmentNeighborhoodOptions::default(),
-            stats: AdaptiveStatOptions::default(),
+            stats: AdaptiveStatOptions {
+                minimum_survival_probability: 0.01,
+                ..AdaptiveStatOptions::default()
+            },
         }
     }
 }
@@ -158,10 +181,20 @@ pub struct InferenceRound {
     pub opponent_mixture: PrunedMixture,
     /// Distinct supported equipment concepts used to seed response search.
     pub response_seed_count: usize,
+    /// Screening seeds promoted to full confirmation.
+    pub promoted_seed_count: usize,
+    /// Strongest response score from the mixture used for final closure.
+    #[serde(default)]
+    pub best_response_score: f64,
+    /// Whether an ambiguous pruning bound required a full-mixture oracle pass.
+    #[serde(default)]
+    pub full_mixture_validation: bool,
     /// Whether the joint oracle itself converged.
     pub response_converged: bool,
     /// Joint oracle termination reason.
     pub response_convergence_reason: String,
+    /// Wall-clock duration of the round.
+    pub elapsed_ms: u128,
 }
 
 /// Final archive and round history from endogenous response closure.
@@ -177,6 +210,43 @@ pub struct InferenceResult {
     pub analysis: CatalogAnalysis,
 }
 
+/// Runs the joint response oracle independently from each supplied seed.
+pub fn search_response_seeds(
+    catalogs: &Catalogs,
+    seeds: &[BuildDefinition],
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: &[f64],
+    options: &InferenceOptions,
+    maximum_iterations: usize,
+) -> Result<Vec<crate::search::JointEquipmentStatResponse>> {
+    seeds
+        .par_iter()
+        .map(|seed| {
+            joint_equipment_stat_response_beam(
+                catalogs,
+                seed,
+                opponents,
+                opponent_ids,
+                Some(opponent_weights),
+                &[
+                    AttackType::Normal,
+                    AttackType::Quick,
+                    AttackType::Aimed,
+                    AttackType::Cover,
+                ],
+                &options.equipment,
+                &options.stats,
+                options.equipment_screening_minimum_survival_probability,
+                options.beam_width,
+                options.expansion_width,
+                maximum_iterations,
+                options.improvement_tolerance,
+            )
+        })
+        .collect()
+}
+
 /// Repeatedly solves the restricted game and admits novel profitable joint
 /// equipment/stat responses until closure or the round limit.
 pub fn endogenous_equipment_search(
@@ -184,12 +254,36 @@ pub fn endogenous_equipment_search(
     initial_catalog: &BuildCatalog,
     options: &InferenceOptions,
 ) -> Result<InferenceResult> {
+    endogenous_equipment_search_with_screening(catalogs, initial_catalog, options, None, |_, _| {
+        Ok(())
+    })
+}
+
+/// Runs endogenous closure with an optional completed screening phase and a
+/// callback that can persist newly promoted seeds before confirmation.
+///
+/// This is a local response search from supported equipment concepts rather
+/// than exhaustive enumeration of every legal build. Restricted equilibria
+/// are currently used even when their iterative solver reaches its iteration
+/// limit, so `InferenceResult::converged` alone is not a complete equilibrium
+/// convergence certificate.
+pub fn endogenous_equipment_search_with_screening<F>(
+    catalogs: &Catalogs,
+    initial_catalog: &BuildCatalog,
+    options: &InferenceOptions,
+    mut promoted_seeds: Option<Vec<BuildDefinition>>,
+    mut screened: F,
+) -> Result<InferenceResult>
+where
+    F: FnMut(usize, &[BuildDefinition]) -> Result<()>,
+{
     if options.maximum_rounds == 0 || options.batch_size == 0 {
         bail!("inference round and batch limits must be positive");
     }
     let mut catalog = initial_catalog.clone();
     let mut rounds = Vec::new();
     for round in 1..=options.maximum_rounds {
+        let round_started = Instant::now();
         let before = analyze_build_catalog(catalogs, &catalog)?;
         let mixture = prune_opponent_mixture(
             &before.inferred_meta.weights,
@@ -241,45 +335,101 @@ pub fn endogenous_equipment_search(
             );
         }
         let response_seed_count = starting_builds.len();
-        let mut response_by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
-        let mut response_converged = true;
-        let mut response_reasons = Vec::with_capacity(starting_ids.len());
-        for starting_build in starting_builds {
-            let response = joint_equipment_stat_response_beam(
+        let archived = catalog
+            .values()
+            .map(|build| {
+                catalogs
+                    .materialize(build, MatchupRole::Active)
+                    .map(|player| combat_signature(&player))
+            })
+            .collect::<Result<HashSet<_>>>()?;
+        let (mut responses, promoted_seed_count, fallback_seeds) = if let Some(promoted) =
+            promoted_seeds.take()
+        {
+            let count = promoted.len();
+            let promoted_concepts = promoted
+                .iter()
+                .map(equipment_concept_signature)
+                .collect::<HashSet<_>>();
+            let fallback = starting_builds
+                .iter()
+                .filter(|build| !promoted_concepts.contains(&equipment_concept_signature(build)))
+                .cloned()
+                .collect();
+            (
+                search_response_seeds(
+                    catalogs,
+                    &promoted,
+                    &opponents,
+                    &opponent_ids,
+                    &opponent_weights,
+                    options,
+                    options.joint_maximum_iterations,
+                )?,
+                count,
+                fallback,
+            )
+        } else if let Some(screening_iterations) = options.screening_iterations {
+            let screening = search_response_seeds(
                 catalogs,
-                &starting_build,
+                &starting_builds,
                 &opponents,
                 &opponent_ids,
-                Some(&opponent_weights),
-                &[
-                    AttackType::Normal,
-                    AttackType::Quick,
-                    AttackType::Aimed,
-                    AttackType::Cover,
-                ],
-                &options.equipment,
-                &options.stats,
-                options.stats.minimum_survival_probability,
-                options.beam_width,
-                options.expansion_width,
-                options.joint_maximum_iterations,
-                options.improvement_tolerance,
+                &opponent_weights,
+                options,
+                screening_iterations,
             )?;
-            response_converged &= response.converged;
-            response_reasons.push(response.convergence_reason);
-            for entry in response.beam {
-                if response_by_signature
-                    .get(&entry.signature)
-                    .is_none_or(|existing| entry.weighted_score > existing.weighted_score)
-                {
-                    response_by_signature.insert(entry.signature.clone(), entry);
-                }
-            }
-        }
-        let mut response_beam = response_by_signature.into_values().collect::<Vec<_>>();
-        response_reasons.sort_unstable();
-        response_reasons.dedup();
-        let response_convergence_reason = response_reasons.join(",");
+            let promoted = starting_builds
+                .iter()
+                .cloned()
+                .zip(screening)
+                .filter(|(_, response)| {
+                    response
+                        .beam
+                        .iter()
+                        .any(|entry| entry.weighted_score > options.screening_promotion_score)
+                })
+                .map(|(build, _)| build)
+                .collect::<Vec<_>>();
+            screened(round, &promoted)?;
+            let count = promoted.len();
+            let promoted_concepts = promoted
+                .iter()
+                .map(equipment_concept_signature)
+                .collect::<HashSet<_>>();
+            let fallback = starting_builds
+                .iter()
+                .filter(|build| !promoted_concepts.contains(&equipment_concept_signature(build)))
+                .cloned()
+                .collect();
+            (
+                search_response_seeds(
+                    catalogs,
+                    &promoted,
+                    &opponents,
+                    &opponent_ids,
+                    &opponent_weights,
+                    options,
+                    options.joint_maximum_iterations,
+                )?,
+                count,
+                fallback,
+            )
+        } else {
+            (
+                search_response_seeds(
+                    catalogs,
+                    &starting_builds,
+                    &opponents,
+                    &opponent_ids,
+                    &opponent_weights,
+                    options,
+                    options.joint_maximum_iterations,
+                )?,
+                response_seed_count,
+                Vec::new(),
+            )
+        };
         let full_opponents = before
             .inferred_meta
             .weights
@@ -298,55 +448,125 @@ pub fn endogenous_equipment_search(
             .iter()
             .map(|entry| entry.weight)
             .collect::<Vec<_>>();
-        let response_groups = response_beam
-            .iter()
-            .map(|entry| {
-                Ok(ResponseGroup {
-                    signature: entry.signature.clone(),
-                    representative: catalogs.materialize(&entry.build, MatchupRole::Active)?,
-                    sources: vec![entry.build.clone()],
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let validation = candidate_frontiers(
-            &response_groups,
+        let mut response_beam = validated_response_beam(
+            catalogs,
+            &responses,
             &full_opponents,
             &full_ids,
-            Some(&full_weights),
-            0.0,
+            &full_weights,
         )?;
-        for entry in &mut response_beam {
-            entry.weighted_score = validation
-                .candidates
-                .iter()
-                .find(|candidate| candidate.signature == entry.signature)
-                .context("validated response signature is missing")?
-                .weighted_score;
-        }
-        response_beam.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
-        let archived = catalog
-            .values()
-            .map(|build| {
-                catalogs
-                    .materialize(build, MatchupRole::Active)
-                    .map(|player| combat_signature(&player))
-            })
-            .collect::<Result<HashSet<_>>>()?;
-        let profitable = response_beam
+        let mut profitable = response_beam
             .iter()
             .filter(|entry| {
-                entry.weighted_score > 0.5 + options.improvement_tolerance
+                entry.weighted_score > options.admission_score
                     && !archived.contains(&entry.signature)
             })
             .take(options.batch_size)
             .cloned()
             .collect::<Vec<_>>();
+        if profitable.is_empty() && !fallback_seeds.is_empty() {
+            responses.extend(search_response_seeds(
+                catalogs,
+                &fallback_seeds,
+                &opponents,
+                &opponent_ids,
+                &opponent_weights,
+                options,
+                options.joint_maximum_iterations,
+            )?);
+            response_beam = validated_response_beam(
+                catalogs,
+                &responses,
+                &full_opponents,
+                &full_ids,
+                &full_weights,
+            )?;
+            profitable = response_beam
+                .iter()
+                .filter(|entry| {
+                    entry.weighted_score > options.admission_score
+                        && !archived.contains(&entry.signature)
+                })
+                .take(options.batch_size)
+                .cloned()
+                .collect();
+        }
+        let mut best_response_score = responses
+            .iter()
+            .flat_map(|response| &response.beam)
+            .map(|entry| entry.weighted_score)
+            .max_by(f64::total_cmp)
+            .unwrap_or(0.5);
+        let mut full_mixture_validation = false;
+        if profitable.is_empty()
+            && responses.iter().all(|response| response.converged)
+            && !pruned_score_proves_below(
+                best_response_score,
+                mixture.dropped_weight,
+                options.admission_score,
+            )
+        {
+            responses = search_response_seeds(
+                catalogs,
+                &starting_builds,
+                &full_opponents,
+                &full_ids,
+                &full_weights,
+                options,
+                options.joint_maximum_iterations,
+            )?;
+            response_beam = validated_response_beam(
+                catalogs,
+                &responses,
+                &full_opponents,
+                &full_ids,
+                &full_weights,
+            )?;
+            profitable = response_beam
+                .iter()
+                .filter(|entry| {
+                    entry.weighted_score > options.admission_score
+                        && !archived.contains(&entry.signature)
+                })
+                .take(options.batch_size)
+                .cloned()
+                .collect();
+            best_response_score = responses
+                .iter()
+                .flat_map(|response| &response.beam)
+                .map(|entry| entry.weighted_score)
+                .max_by(f64::total_cmp)
+                .unwrap_or(0.5);
+            full_mixture_validation = true;
+        }
+        let response_converged = responses.iter().all(|response| response.converged);
+        let mut response_reasons = responses
+            .iter()
+            .map(|response| response.convergence_reason)
+            .collect::<Vec<_>>();
+        response_reasons.sort_unstable();
+        response_reasons.dedup();
+        let response_convergence_reason = response_reasons.join(",");
         let archive_size_before = catalog.len();
         let mut added = Vec::new();
-        for entry in profitable {
-            let id = format!("EndogenousResponse{}", catalog.len());
+        let configuration_index = catalog
+            .keys()
+            .filter_map(|id| {
+                id.strip_prefix("ConfigurationResponse")?
+                    .parse::<usize>()
+                    .ok()
+            })
+            .max()
+            .unwrap_or(0)
+            + 1;
+        for (index, entry) in profitable.into_iter().enumerate() {
+            let id = if options.equipment.fixed_equipment {
+                format!("ConfigurationResponse{:03}", configuration_index + index)
+            } else {
+                format!("EndogenousResponse{}", catalog.len())
+            };
             let mut build = entry.build;
-            build.name = format!("Endogenous Response {}", catalog.len());
+            build.name = id.clone();
             build.reference = Some(false);
             catalog.insert(id.clone(), build.clone());
             added.push(AdmittedResponse {
@@ -365,8 +585,12 @@ pub fn endogenous_equipment_search(
             equilibrium: before.inferred_meta,
             opponent_mixture: mixture,
             response_seed_count,
+            promoted_seed_count,
+            best_response_score,
+            full_mixture_validation,
             response_converged,
             response_convergence_reason,
+            elapsed_ms: round_started.elapsed().as_millis(),
         });
         if no_admission {
             let analysis = analyze_build_catalog(catalogs, &catalog)?;
@@ -385,6 +609,54 @@ pub fn endogenous_equipment_search(
         converged: false,
         analysis,
     })
+}
+
+fn validated_response_beam(
+    catalogs: &Catalogs,
+    responses: &[crate::search::JointEquipmentStatResponse],
+    opponents: &[Player],
+    opponent_ids: &[String],
+    opponent_weights: &[f64],
+) -> Result<Vec<JointResponseEntry>> {
+    let mut by_signature = HashMap::<CombatSignature, JointResponseEntry>::new();
+    for response in responses {
+        for entry in &response.beam {
+            if by_signature
+                .get(&entry.signature)
+                .is_none_or(|existing| entry.weighted_score > existing.weighted_score)
+            {
+                by_signature.insert(entry.signature.clone(), entry.clone());
+            }
+        }
+    }
+    let mut beam = by_signature.into_values().collect::<Vec<_>>();
+    let groups = beam
+        .iter()
+        .map(|entry| {
+            Ok(ResponseGroup {
+                signature: entry.signature.clone(),
+                representative: catalogs.materialize(&entry.build, MatchupRole::Active)?,
+                sources: vec![entry.build.clone()],
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let validation = candidate_frontiers(
+        &groups,
+        opponents,
+        opponent_ids,
+        Some(opponent_weights),
+        0.0,
+    )?;
+    for entry in &mut beam {
+        entry.weighted_score = validation
+            .candidates
+            .iter()
+            .find(|candidate| candidate.signature == entry.signature)
+            .context("validated response signature is missing")?
+            .weighted_score;
+    }
+    beam.sort_by(|left, right| right.weighted_score.total_cmp(&left.weighted_score));
+    Ok(beam)
 }
 
 fn equilibrium_seed_ids(catalog: &BuildCatalog, weights: &[StrategyWeight]) -> Result<Vec<String>> {
@@ -508,6 +780,13 @@ mod tests {
     }
 
     #[test]
+    fn pruning_bound_distinguishes_safe_and_ambiguous_closure() {
+        assert!(pruned_score_proves_below(0.49, 0.005, 0.51));
+        assert!(!pruned_score_proves_below(0.509, 0.005, 0.51));
+        assert!(pruned_score_proves_below(0.51, 0.0, 0.51));
+    }
+
+    #[test]
     fn response_seeds_cover_supported_equipment_concepts() {
         let catalogs = Catalogs::bundled().unwrap();
         let first = catalogs.build("ShadowDojoDLGunBuild2").unwrap().clone();
@@ -542,13 +821,13 @@ mod tests {
     #[test]
     fn global_weapon_screen_preserves_profile_diversity() {
         let catalogs = Catalogs::bundled().unwrap();
-        let baseline = catalogs.build("ControlledKernel").unwrap();
+        let baseline = catalogs.build("EntryLevelCrystalSwords").unwrap();
         let opponent = catalogs.materialize(baseline, MatchupRole::Active).unwrap();
         let seeds = global_weapon_seeds(
             &catalogs,
             baseline,
             &[opponent],
-            &["ControlledKernel".to_owned()],
+            &["EntryLevelCrystalSwords".to_owned()],
             &[1.0],
             6,
         )
@@ -611,5 +890,17 @@ mod tests {
         assert!(result.converged);
         assert_eq!(result.catalog.len(), 1);
         assert!(result.rounds[0].added.is_empty());
+        assert!(result.rounds[0].best_response_score.is_finite());
+        assert!(!result.rounds[0].full_mixture_validation);
+
+        options.screening_iterations = Some(1);
+        options.screening_promotion_score = 2.0;
+        options.admission_score = 2.0;
+        let screened = endogenous_equipment_search(&catalogs, &catalog, &options).unwrap();
+        assert!(screened.converged);
+        assert_eq!(screened.rounds[0].promoted_seed_count, 0);
+        assert!(screened.rounds[0].response_converged);
+        assert!(!screened.rounds[0].response_convergence_reason.is_empty());
+        assert!(screened.rounds[0].best_response_score.is_finite());
     }
 }
