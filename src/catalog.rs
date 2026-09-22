@@ -6,6 +6,7 @@ use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::model::{
     AttackType, BuildDefinition, EquivalentBuildGroup, ItemSelection, Matchup, MatchupRole,
@@ -14,6 +15,40 @@ use crate::model::{
 
 /// Ordered mapping from stable build keys to build definitions.
 pub type BuildCatalog = BTreeMap<String, BuildDefinition>;
+
+/// SHA-256 fingerprint of every bundled data document that affects combat or
+/// candidate generation.
+pub fn bundled_data_fingerprint() -> String {
+    let mut digest = Sha256::new();
+    for (name, data) in [
+        (
+            "equipment.json",
+            include_bytes!("../data/equipment.json").as_slice(),
+        ),
+        (
+            "crystals.json",
+            include_bytes!("../data/crystals.json").as_slice(),
+        ),
+        (
+            "weapon-mods.json",
+            include_bytes!("../data/weapon-mods.json").as_slice(),
+        ),
+        (
+            "builds.json",
+            include_bytes!("../data/builds.json").as_slice(),
+        ),
+        (
+            "game-builds.json",
+            include_bytes!("../data/game-builds.json").as_slice(),
+        ),
+    ] {
+        digest.update(name.as_bytes());
+        digest.update([0]);
+        digest.update(data);
+        digest.update([0]);
+    }
+    format!("{:x}", digest.finalize())
+}
 
 /// One concrete way to socket and modify an equipment item.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -154,10 +189,6 @@ impl Catalogs {
         for (name, data) in [
             ("builds.json", include_str!("../data/builds.json")),
             ("game-builds.json", include_str!("../data/game-builds.json")),
-            (
-                "kernel-builds.json",
-                include_str!("../data/kernel-builds.json"),
-            ),
         ] {
             catalogs.merge_builds(deserialize_validated(
                 name,
@@ -181,6 +212,12 @@ impl Catalogs {
             &data,
             include_str!("../data/builds.schema.json"),
         )?;
+        self.validate_builds(&builds)?;
+        self.merge_builds(builds)
+    }
+
+    /// Merges an already deserialized build catalog.
+    pub fn add_builds(&mut self, builds: BuildCatalog) -> Result<()> {
         self.validate_builds(&builds)?;
         self.merge_builds(builds)
     }
@@ -260,6 +297,27 @@ impl Catalogs {
         let mut keys = catalog.keys().map(String::as_str).collect::<Vec<_>>();
         keys.sort_unstable();
         Ok(keys)
+    }
+
+    /// Returns every base weapon and compatible fully populated modifier set for
+    /// one weapon family. Crystals are intentionally omitted so callers can
+    /// specialize a stable equipment signature independently.
+    pub fn weapon_descriptors(&self, weapon_type: WeaponType) -> Result<Vec<ItemSelection>> {
+        let mut descriptors = Vec::new();
+        for key in self.item_keys("weapons")? {
+            let definition = self.item_definition(key)?;
+            if definition.weapon_type != Some(weapon_type) {
+                continue;
+            }
+            for mods in self.mod_combinations(key, definition)? {
+                descriptors.push(ItemSelection {
+                    item: key.to_owned(),
+                    crystals: Vec::new(),
+                    mods,
+                });
+            }
+        }
+        Ok(descriptors)
     }
 
     /// Returns the minimal crystal keys that dominate `key`, or the key itself

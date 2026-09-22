@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::catalog::{BuildCatalog, Catalogs};
 use crate::combat::combat_signature;
@@ -52,7 +52,7 @@ pub struct CandidateAnalysis {
 }
 
 /// Weighted equilibrium member.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct StrategyWeight {
     /// Representative build key.
     pub candidate: String,
@@ -61,7 +61,7 @@ pub struct StrategyWeight {
 }
 
 /// Named mixed-equilibrium report.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InferredMeta {
     /// Positive-weight strategies.
     pub weights: Vec<StrategyWeight>,

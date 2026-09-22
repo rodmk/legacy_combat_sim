@@ -478,13 +478,10 @@ pub struct JointEquipmentStatResponse {
 /// Returns a canonical equipment identity that ignores interchangeable slot order
 /// and repeated copies of the same crystal type.
 pub fn equipment_concept_signature(build: &BuildDefinition) -> String {
-    fn descriptor(item: &ItemSelection) -> (String, Vec<String>, Vec<String>) {
+    fn descriptor(item: &ItemSelection) -> (String, Vec<String>) {
         let mut mods = item.mods.clone();
         mods.sort();
-        let mut crystals = item.crystals.clone();
-        crystals.sort();
-        crystals.dedup();
-        (item.item.clone(), mods, crystals)
+        (item.item.clone(), mods)
     }
     let mut weapons = [
         descriptor(&build.equipment.weapon1),
@@ -576,6 +573,7 @@ pub fn equipment_response_beam(
         opponent_weights,
         options,
         beam_width,
+        None,
         &mut variant_cache,
         &mut approximate_cache,
         &mut exact_cache,
@@ -591,6 +589,7 @@ fn equipment_response_beam_cached(
     opponent_weights: Option<&[f64]>,
     options: &EquipmentNeighborhoodOptions,
     beam_width: usize,
+    screening: Option<(&mut MatchupEvaluationCache, usize)>,
     variant_cache: &mut ItemVariantReportCache,
     approximate_cache: &mut MatchupEvaluationCache,
     exact_cache: &mut MatchupEvaluationCache,
@@ -599,8 +598,47 @@ fn equipment_response_beam_cached(
         bail!("equipment response beam width must be positive");
     }
     let neighborhood = equipment_neighborhood_cached(catalogs, build, options, variant_cache)?;
+    let validation_groups = if let Some((screening_cache, screening_beam_width)) = screening {
+        let screened = candidate_frontiers_cached(
+            &neighborhood.groups,
+            opponents,
+            opponent_ids,
+            opponent_weights,
+            screening_cache,
+        )?;
+        let mut concepts = HashMap::<String, f64>::new();
+        for candidate in screened.candidates {
+            for source in candidate.sources {
+                let signature = equipment_concept_signature(&source.build);
+                concepts
+                    .entry(signature)
+                    .and_modify(|score| *score = score.max(candidate.weighted_score))
+                    .or_insert(candidate.weighted_score);
+            }
+        }
+        let mut concepts = concepts.into_iter().collect::<Vec<_>>();
+        concepts.sort_by(|left, right| right.1.total_cmp(&left.1));
+        let retained = concepts
+            .into_iter()
+            .take(screening_beam_width)
+            .map(|(signature, _)| signature)
+            .collect::<HashSet<_>>();
+        neighborhood
+            .groups
+            .iter()
+            .filter(|group| {
+                group
+                    .sources
+                    .iter()
+                    .any(|source| retained.contains(&equipment_concept_signature(&source.build)))
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        neighborhood.groups.clone()
+    };
     let approximate = candidate_frontiers_cached(
-        &neighborhood.groups,
+        &validation_groups,
         opponents,
         opponent_ids,
         opponent_weights,
@@ -853,6 +891,8 @@ pub fn joint_equipment_stat_response_beam(
         MatchupEvaluationCache::new(stat_options.minimum_survival_probability);
     let mut stat_exact_cache = MatchupEvaluationCache::new(0.0);
     let mut equipment_approximate_cache = MatchupEvaluationCache::new(minimum_survival_probability);
+    let mut equipment_validation_cache =
+        MatchupEvaluationCache::new(stat_options.minimum_survival_probability);
     let mut equipment_exact_cache = MatchupEvaluationCache::new(0.0);
     let mut item_variant_cache = ItemVariantReportCache::default();
     for iteration in 1..=maximum_iterations {
@@ -876,8 +916,9 @@ pub fn joint_equipment_stat_response_beam(
                     opponent_weights,
                     equipment_options,
                     beam_width,
+                    Some((&mut equipment_approximate_cache, beam_width * 2)),
                     &mut item_variant_cache,
-                    &mut equipment_approximate_cache,
+                    &mut equipment_validation_cache,
                     &mut equipment_exact_cache,
                 )?;
                 equipment_candidate_count += response.candidate_count;
@@ -1835,6 +1876,24 @@ fn replace_if<S: Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn equipment_concepts_ignore_crystals_but_preserve_mods() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let build = catalogs.build("EntryLevelCrystalSwords").unwrap();
+        let mut crystals = build.clone();
+        crystals.equipment.weapon1.crystals = vec!["PerfectFire".to_owned()];
+        assert_eq!(
+            equipment_concept_signature(build),
+            equipment_concept_signature(&crystals)
+        );
+        let mut mods = build.clone();
+        mods.equipment.weapon1.mods = vec!["Focused".to_owned()];
+        assert_ne!(
+            equipment_concept_signature(build),
+            equipment_concept_signature(&mods)
+        );
+    }
 
     #[test]
     fn stat_allocation_generation_matches_expected_counts() {

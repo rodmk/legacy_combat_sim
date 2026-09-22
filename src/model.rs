@@ -139,10 +139,10 @@ pub struct Loadout {
 pub struct ItemSelection {
     /// Equipment catalog key.
     pub item: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Crystal catalog keys applied together after weapon modifications.
     pub crystals: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Weapon-mod catalog keys applied together before crystals.
     pub mods: Vec<String>,
 }

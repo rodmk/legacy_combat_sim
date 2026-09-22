@@ -326,6 +326,7 @@ fn defeat_round_distribution(
         .map(|hp| healing_cost(hp, defender.max_hp))
         .collect::<Vec<_>>();
     let mut remaining_hp = vec![0.0; max_hp + 1];
+    let mut next_remaining_hp = vec![0.0; max_hp + 1];
     let mut defeat_rounds = vec![0.0; MAX_COMBAT_ROUNDS + 1];
     let mut surviving_hp_by_round = vec![0.0; MAX_COMBAT_ROUNDS + 1];
     let mut surviving_healing_cost_by_round = vec![0.0; MAX_COMBAT_ROUNDS + 1];
@@ -340,7 +341,7 @@ fn defeat_round_distribution(
         .map_or(0.0, |cache| cache.minimum_survival_probability);
 
     for round in 1..=MAX_COMBAT_ROUNDS {
-        let mut next_remaining_hp = vec![0.0; max_hp + 1];
+        next_remaining_hp.fill(0.0);
         for hit_points in 1..=max_hp {
             let state_probability = remaining_hp[hit_points];
             if state_probability == 0.0 {
@@ -375,7 +376,7 @@ fn defeat_round_distribution(
         defeat_rounds[round] = survives - next_survives;
         survives = next_survives;
         let full_hp_probability = next_remaining_hp[max_hp];
-        remaining_hp = next_remaining_hp;
+        std::mem::swap(&mut remaining_hp, &mut next_remaining_hp);
         surviving_hp_by_round[round] = next_surviving_hp;
         surviving_healing_cost_by_round[round] = next_surviving_healing;
         full_hp_probability_by_round[round] = full_hp_probability;

@@ -27,6 +27,8 @@
 
 /// Catalog-level matchup analysis and equilibrium reports.
 pub mod analysis;
+/// Active-archive equilibrium solving over generated candidate pools.
+pub mod candidate_meta;
 /// JSON catalog loading and build materialization.
 pub mod catalog;
 /// Monte Carlo combat rules and probability helpers.
@@ -35,9 +37,13 @@ pub mod combat;
 pub mod exact;
 /// Matchup metrics, payoff matrices, and finite-game analysis.
 pub mod game;
+/// Global challenger selection and response search.
+pub mod global_meta;
 /// Restricted-meta inference and endogenous response closure.
 pub mod inference;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
+/// Global equipment-signature candidate generation.
+pub mod regions;
 /// Stat-allocation and candidate-frontier search primitives.
 pub mod search;
