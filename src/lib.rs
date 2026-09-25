@@ -15,7 +15,7 @@
 //! # fn main() -> anyhow::Result<()> {
 //! let catalogs = Catalogs::bundled()?;
 //! let matchup = catalogs.materialize_matchup(
-//!     catalogs.build("CurrentBuild")?,
+//!     catalogs.build("EntryLevelCrystalSwords")?,
 //!     catalogs.build("ShadowDojoDLGunBuild2")?,
 //! )?;
 //! let mut rng = SmallRng::seed_from_u64(42);
