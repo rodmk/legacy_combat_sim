@@ -292,6 +292,24 @@
     }
   },
   "miscs": {
+    "AeonAmulet": {
+      "name": "Aeon Amulet",
+      "accuracy": 6,
+      "dodge": 6,
+      "def_skill": 25,
+      "melee_skill": 25,
+      "gun_skill": 25,
+      "proj_skill": 25
+    },
+    "Amulet": {
+      "name": "Amulet",
+      "accuracy": 5,
+      "dodge": 5,
+      "def_skill": 14,
+      "melee_skill": 12,
+      "gun_skill": 12,
+      "proj_skill": 12
+    },
     "ArchaticRing": {
       "name": "Archatic Ring",
       "dodge": 30,

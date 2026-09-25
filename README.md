@@ -10,7 +10,7 @@ Run Monte Carlo simulations for a catalog build against the bundled Shadow Dojo 
 
 ```sh
 cargo run --release -- simulate \
-  --build DualVoidBowsWithScouts \
+  --build CurrentBuild \
   --enemy-set shadow-dojo \
   --fights 100000 \
   --seed 42

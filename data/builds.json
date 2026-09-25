@@ -1,167 +1,118 @@
 {
-  "DualRiftsWithBios": {
-    "name": "Dual Rifts w/ Bios",
-    "level": 80,
-    "stats": { "hp": 70, "speed": 17, "accuracy": 4, "dodge": 92 },
-    "equipment": {
-      "armor": {
-        "item": "DarkLegionArmor",
-        "crystals": ["PerfectVoid", "PerfectVoid", "PerfectVoid", "PerfectVoid"]
-      },
-      "weapon1": {
-        "item": "RiftGun",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "weapon2": {
-        "item": "RiftGun",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "misc1": {
-        "item": "BioSpinalEnhancer",
-        "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]
-      },
-      "misc2": {
-        "item": "BioSpinalEnhancer",
-        "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]
-      }
-    }
-  },
-  "DualRiftsWithBiosAbyss": {
-    "name": "Dual Rifts w/ Bios (Abyss/Ammy Cs)",
+  "CurrentBuild": {
+    "name": "Current Build",
     "level": 80,
     "reference": false,
-    "stats": { "hp": 150, "speed": 3, "accuracy": 4, "dodge": 26 },
+    "stats": {
+      "hp": 150,
+      "speed": 3,
+      "accuracy": 4,
+      "dodge": 26
+    },
     "equipment": {
       "armor": {
         "item": "DarkLegionArmor",
-        "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]
+        "crystals": [
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater",
+          "CorruptedWater"
+        ]
       },
       "weapon1": {
         "item": "RiftGun",
-        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+        "crystals": [
+          "AmuletCrystal",
+          "AmuletCrystal",
+          "AmuletCrystal",
+          "AmuletCrystal"
+        ]
       },
       "weapon2": {
         "item": "RiftGun",
-        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+        "crystals": [
+          "AmuletCrystal",
+          "AmuletCrystal",
+          "AmuletCrystal",
+          "AmuletCrystal"
+        ]
       },
       "misc1": {
         "item": "BioSpinalEnhancer",
-        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "PerfectPink"]
+        "crystals": [
+          "CorruptedPink",
+          "CorruptedPink",
+          "CorruptedPink",
+          "PerfectPink"
+        ]
       },
       "misc2": {
         "item": "BioSpinalEnhancer",
-        "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]
+        "crystals": [
+          "PerfectPink",
+          "PerfectPink",
+          "PerfectPink",
+          "PerfectPink"
+        ]
       }
-    }
-  },
-  "DualVoidBowsWithScouts": {
-    "name": "Dual VBows w/ Scouts",
-    "level": 80,
-    "stats": { "hp": 70, "speed": 9, "accuracy": 4, "dodge": 100 },
-    "equipment": {
-      "armor": {
-        "item": "DarkLegionArmor",
-        "crystals": ["PerfectVoid", "PerfectVoid", "PerfectVoid", "PerfectVoid"]
-      },
-      "weapon1": {
-        "item": "VoidBow",
-        "mods": ["LaserSight"],
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "weapon2": {
-        "item": "VoidBow",
-        "mods": ["LaserSight"],
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "misc1": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectYellow", "PerfectYellow", "PerfectYellow", "PerfectYellow"]
-      },
-      "misc2": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectYellow", "PerfectYellow", "PerfectYellow", "PerfectYellow"]
-      }
-    }
-  },
-  "CoreStaffVoidSwordWithScouts": {
-    "name": "CStaff/VSword w/ Scouts",
-    "level": 80,
-    "stats": { "hp": 70, "speed": 10, "accuracy": 4, "dodge": 99 },
-    "equipment": {
-      "armor": {
-        "item": "DarkLegionArmor",
-        "crystals": ["PerfectVoid", "PerfectVoid", "PerfectVoid", "PerfectVoid"]
-      },
-      "weapon1": {
-        "item": "CoreStaff",
-        "crystals": ["PerfectOrange", "PerfectOrange", "PerfectOrange", "PerfectOrange"]
-      },
-      "weapon2": {
-        "item": "VoidSword",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "misc1": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectAir", "PerfectAir", "PerfectAir", "PerfectAir"]
-      },
-      "misc2": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectAir", "PerfectAir", "PerfectAir", "PerfectAir"]
-      }
-    }
-  },
-  "CoreStaffVoidSwordWithScoutsAbyss": {
-    "name": "CStaff/VSword w/ Scouts (Abyss/Ammy Cs)",
-    "level": 80,
-    "stats": { "hp": 70, "speed": 5, "accuracy": 4, "dodge": 104 },
-    "equipment": {
-      "armor": {
-        "item": "DarkLegionArmor",
-        "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]
-      },
-      "weapon1": {
-        "item": "CoreStaff",
-        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
-      },
-      "weapon2": {
-        "item": "VoidSword",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
-      },
-      "misc1": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectAir", "PerfectAir", "PerfectAir", "PerfectAir"]
-      },
-      "misc2": {
-        "item": "ScoutDrones",
-        "crystals": ["PerfectAir", "PerfectAir", "PerfectAir", "PerfectAir"]
-      }
-    }
+    },
+    "attack_type": "cover"
   },
   "EntryLevelCrystalSwords": {
     "name": "Entry-Level Crystal Swords",
     "level": 80,
     "reference": false,
-    "stats": { "hp": 70, "speed": 37, "accuracy": 38, "dodge": 38 },
+    "stats": {
+      "hp": 70,
+      "speed": 37,
+      "accuracy": 38,
+      "dodge": 38
+    },
     "equipment": {
       "armor": {
         "item": "TitanGuard",
-        "crystals": ["PerfectVoid", "PerfectVoid", "PerfectVoid", "PerfectVoid"]
+        "crystals": [
+          "PerfectVoid",
+          "PerfectVoid",
+          "PerfectVoid",
+          "PerfectVoid"
+        ]
       },
       "weapon1": {
         "item": "CrystalSword",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
+        "crystals": [
+          "PerfectFire",
+          "PerfectFire",
+          "PerfectFire",
+          "PerfectFire"
+        ]
       },
       "weapon2": {
         "item": "CrystalSword",
-        "crystals": ["PerfectFire", "PerfectFire", "PerfectFire", "PerfectFire"]
+        "crystals": [
+          "PerfectFire",
+          "PerfectFire",
+          "PerfectFire",
+          "PerfectFire"
+        ]
       },
       "misc1": {
         "item": "DroidDrone",
-        "crystals": ["PerfectOrange", "PerfectOrange", "PerfectOrange", "PerfectOrange"]
+        "crystals": [
+          "PerfectOrange",
+          "PerfectOrange",
+          "PerfectOrange",
+          "PerfectOrange"
+        ]
       },
       "misc2": {
         "item": "DroidDrone",
-        "crystals": ["PerfectOrange", "PerfectOrange", "PerfectOrange", "PerfectOrange"]
+        "crystals": [
+          "PerfectOrange",
+          "PerfectOrange",
+          "PerfectOrange",
+          "PerfectOrange"
+        ]
       }
     }
   }
