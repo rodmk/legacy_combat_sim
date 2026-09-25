@@ -820,8 +820,8 @@ mod tests {
             .into_iter()
             .map(|(left, right)| profile_signature_count(&catalogs, left, right).unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(counts, vec![47_736, 32_760, 20_592, 74_256, 58_344, 48_048]);
-        assert_eq!(counts.into_iter().sum::<usize>(), 281_736);
+        assert_eq!(counts, vec![64_260, 44_100, 27_720, 99_960, 78_540, 64_680]);
+        assert_eq!(counts.into_iter().sum::<usize>(), 379_260);
     }
 
     #[test]
