@@ -1880,7 +1880,7 @@ mod tests {
     #[test]
     fn equipment_concepts_ignore_crystals_but_preserve_mods() {
         let catalogs = Catalogs::bundled().unwrap();
-        let build = catalogs.build("CurrentDualRifts750").unwrap();
+        let build = catalogs.build("EntryLevelCrystalSwords").unwrap();
         let mut crystals = build.clone();
         crystals.equipment.weapon1.crystals = vec!["PerfectFire".to_owned()];
         assert_eq!(

@@ -75,7 +75,7 @@ enum Command {
     /// Generate a global candidate catalog from canonical equipment signatures.
     GenerateCandidates {
         /// Build used by the screening proxy; may be specified more than once.
-        #[arg(long = "opponent-build", default_value = "CurrentDualRifts750")]
+        #[arg(long = "opponent-build", default_value = "EntryLevelCrystalSwords")]
         opponent_builds: Vec<String>,
         /// Candidate-meta checkpoint whose final equilibrium conditions screening.
         #[arg(long, conflicts_with = "opponent_builds")]
@@ -723,8 +723,10 @@ fn resolve_meta(directory: &Path, maximum_cycles: usize) -> Result<Value> {
     } else {
         eprintln!("generating initial endogenous candidate pool");
         let catalogs = Catalogs::bundled()?;
-        let opponent =
-            catalogs.materialize(catalogs.build("CurrentDualRifts750")?, MatchupRole::Active)?;
+        let opponent = catalogs.materialize(
+            catalogs.build("EntryLevelCrystalSwords")?,
+            MatchupRole::Active,
+        )?;
         let generated = generate_candidate_catalog(
             &catalogs,
             &[opponent],

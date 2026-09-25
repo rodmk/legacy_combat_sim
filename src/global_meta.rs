@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn global_seed_selection_covers_every_weapon_profile() {
         let catalogs = Catalogs::bundled().unwrap();
-        let base = catalogs.build("CurrentDualRifts750").unwrap();
+        let base = catalogs.build("EntryLevelCrystalSwords").unwrap();
         let profiles = (0..6)
             .map(|profile| {
                 let finalists = (0..4)
