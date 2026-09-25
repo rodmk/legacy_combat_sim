@@ -446,29 +446,29 @@ mod tests {
         let catalogs = Catalogs::bundled().unwrap();
         let matchup = catalogs
             .materialize_matchup(
-                catalogs.build("DualVoidBowsWithScouts").unwrap(),
+                catalogs.build("ShadowDojoDualBowBuild1").unwrap(),
                 catalogs.build("ShadowDojoDLGunBuild2").unwrap(),
             )
             .unwrap();
         let result = combat_result_distribution(&matchup.active, &matchup.opponent, None);
         assert_abs_diff_eq!(
             result.outcome.player1_wins,
-            0.053433800933837185,
+            0.3501282308941569,
             epsilon = 1e-12
         );
         assert_abs_diff_eq!(
             result.outcome.player2_wins,
-            0.9465661990661627,
+            0.649871769105843,
             epsilon = 1e-12
         );
         assert_abs_diff_eq!(
             result.player1.expected_healing_cost,
-            62.07704858111972,
+            136.83788814186465,
             epsilon = 1e-10
         );
         assert_abs_diff_eq!(
             result.player2.expected_hp_lost,
-            422.021857964081,
+            708.6118321506272,
             epsilon = 1e-9
         );
     }
@@ -478,7 +478,7 @@ mod tests {
         let catalogs = Catalogs::bundled().unwrap();
         let matchup = catalogs
             .materialize_matchup(
-                catalogs.build("DualVoidBowsWithScouts").unwrap(),
+                catalogs.build("ShadowDojoDualBowBuild1").unwrap(),
                 catalogs.build("ShadowDojoDLGunBuild2").unwrap(),
             )
             .unwrap();

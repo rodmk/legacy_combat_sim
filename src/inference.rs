@@ -821,13 +821,13 @@ mod tests {
     #[test]
     fn global_weapon_screen_preserves_profile_diversity() {
         let catalogs = Catalogs::bundled().unwrap();
-        let baseline = catalogs.build("EntryLevelCrystalSwords").unwrap();
+        let baseline = catalogs.build("CurrentDualRifts750").unwrap();
         let opponent = catalogs.materialize(baseline, MatchupRole::Active).unwrap();
         let seeds = global_weapon_seeds(
             &catalogs,
             baseline,
             &[opponent],
-            &["EntryLevelCrystalSwords".to_owned()],
+            &["CurrentDualRifts750".to_owned()],
             &[1.0],
             6,
         )

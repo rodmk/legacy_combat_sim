@@ -827,7 +827,7 @@ mod tests {
     #[test]
     fn diverse_leaders_prefer_distinct_weapon_pairs() {
         let catalogs = Catalogs::bundled().unwrap();
-        let base = catalogs.build("EntryLevelCrystalSwords").unwrap();
+        let base = catalogs.build("CurrentDualRifts750").unwrap();
         let candidate = |score, weapon1: &str, weapon2: &str, armor: &str| {
             let mut build = base.clone();
             build.equipment.weapon1 = plain(weapon1);

@@ -967,10 +967,7 @@ mod tests {
     #[test]
     fn groups_combat_equivalent_builds() {
         let catalogs = Catalogs::bundled().unwrap();
-        let original = catalogs
-            .build("CoreStaffVoidSwordWithScouts")
-            .unwrap()
-            .clone();
+        let original = catalogs.build("CurrentDualRifts750").unwrap().clone();
         let mut reordered = original.clone();
         reordered.name = "Reordered weapons".to_owned();
         std::mem::swap(

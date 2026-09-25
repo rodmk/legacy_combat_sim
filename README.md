@@ -10,7 +10,7 @@ Run Monte Carlo simulations for a catalog build against the bundled Shadow Dojo 
 
 ```sh
 cargo run --release -- simulate \
-  --build DualVoidBowsWithScouts \
+  --build CurrentDualRifts750 \
   --enemy-set shadow-dojo \
   --fights 100000 \
   --seed 42
@@ -25,8 +25,8 @@ cargo run -- list-builds
 ```
 
 Generate the global configured candidate catalog by screening every canonical
-five-item equipment signature. The bundled entry-level Crystal Swords build is
-the default proxy opponent for this discovery stage:
+five-item equipment signature. The bundled current build is the default proxy
+opponent for this discovery stage:
 
 ```sh
 cargo run --release -- generate-candidates > candidate-builds.json
@@ -38,7 +38,7 @@ mode for the retained signatures. Its shortlist sizes and socket capacity are
 configurable through command-line options.
 
 Meta solving starts from this endogenously generated candidate catalog. The
-entry-level proxy and the Shadow Dojo builds are benchmarks for discovery and
+current build and the Shadow Dojo builds are benchmarks for discovery and
 validation; neither is the strategic kernel or the initial meta archive.
 
 Resolve the meta end to end with the native orchestration command:
