@@ -35,12 +35,16 @@ pub mod catalog;
 pub mod combat;
 /// Exact combat distributions and economic outcome metrics.
 pub mod exact;
+/// Field-conditioned build suggestion.
+pub mod field;
 /// Matchup metrics, payoff matrices, and finite-game analysis.
 pub mod game;
 /// Global challenger selection and response search.
 pub mod global_meta;
 /// Restricted-meta inference and endogenous response closure.
 pub mod inference;
+/// Owned equipment and consumable quantities for constrained searches.
+pub mod inventory;
 /// Shared domain types used by catalogs and simulation.
 pub mod model;
 /// Global equipment-signature candidate generation.

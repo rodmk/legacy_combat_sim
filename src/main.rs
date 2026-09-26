@@ -9,6 +9,7 @@ use legacy_combat_sim::candidate_meta::{
 };
 use legacy_combat_sim::catalog::{bundled_data_fingerprint, BuildCatalog, Catalogs};
 use legacy_combat_sim::combat;
+use legacy_combat_sim::field::{suggest_field_builds, FieldOpponent, FieldSuggestionOptions};
 use legacy_combat_sim::global_meta::{
     global_seeds, run_global_challenge, GlobalChallengeOptions, GlobalChallengeResult,
     GlobalScreeningCheckpoint,
@@ -16,6 +17,7 @@ use legacy_combat_sim::global_meta::{
 use legacy_combat_sim::inference::{
     endogenous_equipment_search, endogenous_equipment_search_with_screening, InferenceOptions,
 };
+use legacy_combat_sim::inventory::Inventory;
 use legacy_combat_sim::model::{AttackType, BuildDefinition, CombatSignature, MatchupRole};
 use legacy_combat_sim::regions::{generate_candidate_catalog, CandidateGenerationOptions};
 use legacy_combat_sim::search::{
@@ -39,6 +41,51 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Suggest builds against a weighted sample of observed opponents.
+    Suggest {
+        /// Current build key used as a response-search starting point.
+        #[arg(long, default_value = "CurrentBuild")]
+        build: String,
+        /// Named opponent set; repeat to combine sets.
+        #[arg(long, default_value = "live-samples")]
+        enemy_set: Vec<String>,
+        /// Optional JSON map from opponent build key to relative encounter weight.
+        #[arg(long)]
+        weights: Option<PathBuf>,
+        /// Local JSON inventory limiting items, crystals, and weapon mods.
+        #[arg(long)]
+        inventory: Option<PathBuf>,
+        /// Screen owned equipment combinations as search starting points.
+        #[arg(long, requires = "inventory")]
+        inventory_first: bool,
+        /// Additional JSON build catalog; may be specified more than once.
+        #[arg(long = "catalog")]
+        catalogs: Vec<PathBuf>,
+        /// Distinct starting concepts sent to joint response search.
+        #[arg(long, default_value_t = 4)]
+        search_seeds: usize,
+        /// Joint response passes per selected starting concept.
+        #[arg(long, default_value_t = 1)]
+        search_iterations: usize,
+        /// Coarse responses receiving finer stat refinement.
+        #[arg(long, default_value_t = 2)]
+        refinement_seeds: usize,
+        /// Number of suggested builds returned.
+        #[arg(long, default_value_t = 5)]
+        result_count: usize,
+        /// Distinct responses retained during each search pass.
+        #[arg(long, default_value_t = 4)]
+        beam_width: usize,
+        /// Crystal sockets filled on generated equipment.
+        #[arg(long, default_value_t = 4)]
+        socket_capacity: usize,
+        /// Also search neighboring base items and weapon modifications.
+        #[arg(long)]
+        vary_equipment: bool,
+        /// Parallel response searches.
+        #[arg(long, default_value_t = 1)]
+        workers: usize,
+    },
     /// Resolve the endogenous meta through configuration and global closure.
     ResolveMeta {
         /// Directory containing resumable stage artifacts.
@@ -122,7 +169,7 @@ enum Command {
         /// Build key from a bundled or supplied catalog.
         #[arg(long)]
         build: String,
-        /// Named enemy set: shadow-dojo or reference.
+        /// Named enemy set: shadow-dojo, live-samples, or reference.
         #[arg(long, conflicts_with = "enemy")]
         enemy_set: Option<String>,
         /// Enemy build key; may be specified more than once.
@@ -291,6 +338,90 @@ struct SearchReport {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Suggest {
+            build,
+            enemy_set,
+            weights,
+            inventory,
+            inventory_first,
+            catalogs,
+            search_seeds,
+            search_iterations,
+            refinement_seeds,
+            result_count,
+            beam_width,
+            socket_capacity,
+            vary_equipment,
+            workers,
+        } => {
+            if workers == 0 {
+                bail!("worker count must be positive");
+            }
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .build_global()
+                .context("failed to configure response-search workers")?;
+            let catalogs = load_catalogs(&catalogs)?;
+            let owned_inventory = inventory
+                .as_deref()
+                .map(|path| Inventory::from_path(path, &catalogs))
+                .transpose()?;
+            let current = catalogs.build(&build)?;
+            let mut enemies = std::collections::BTreeMap::new();
+            for set in &enemy_set {
+                for (id, opponent) in catalogs.enemy_set(set)? {
+                    enemies.insert(id, opponent);
+                }
+            }
+            let supplied_weights = weights
+                .as_ref()
+                .map(|path| -> Result<std::collections::BTreeMap<String, f64>> {
+                    serde_json::from_str(&fs::read_to_string(path)?)
+                        .with_context(|| format!("invalid field weights: {}", path.display()))
+                })
+                .transpose()?;
+            if let Some(supplied) = &supplied_weights {
+                let known = enemies
+                    .keys()
+                    .copied()
+                    .collect::<std::collections::HashSet<_>>();
+                if let Some(unknown) = supplied.keys().find(|id| !known.contains(id.as_str())) {
+                    bail!("field weights contain unknown opponent {unknown}");
+                }
+            }
+            let field = enemies
+                .into_iter()
+                .map(|(id, build)| FieldOpponent {
+                    id: id.to_owned(),
+                    build: build.clone(),
+                    weight: supplied_weights
+                        .as_ref()
+                        .map_or(1.0, |entries| entries.get(id).copied().unwrap_or(0.0)),
+                })
+                .collect::<Vec<_>>();
+            let options = FieldSuggestionOptions {
+                inventory_first,
+                search_seeds,
+                search_iterations,
+                refinement_seeds,
+                result_count,
+                inference: InferenceOptions {
+                    beam_width,
+                    expansion_width: 1,
+                    equipment: EquipmentNeighborhoodOptions {
+                        socket_capacity,
+                        fixed_equipment: !vary_equipment
+                            && (inventory_first || owned_inventory.is_none()),
+                        normalize: owned_inventory.is_none(),
+                        inventory: owned_inventory,
+                        ..EquipmentNeighborhoodOptions::default()
+                    },
+                    ..InferenceOptions::default()
+                },
+            };
+            let report = suggest_field_builds(&catalogs, &build, current, &field, &options)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         Command::ResolveMeta {
             directory,
             max_cycles,

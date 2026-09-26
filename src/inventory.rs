@@ -1,0 +1,418 @@
+use std::collections::{BTreeMap, HashSet};
+use std::fs;
+use std::path::Path;
+
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+
+use crate::catalog::Catalogs;
+use crate::model::{BuildDefinition, ItemSelection, MatchupRole};
+
+/// Owned quantities available to one complete build.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Inventory {
+    /// Counts of base equipment items.
+    #[serde(default)]
+    pub items: BTreeMap<String, usize>,
+    /// Counts of loose crystals, shared across all equipment slots.
+    #[serde(default)]
+    pub crystals: BTreeMap<String, usize>,
+    /// Counts of weapon modifications, shared across both weapons.
+    #[serde(default)]
+    pub mods: BTreeMap<String, usize>,
+}
+
+impl Inventory {
+    /// Reads an inventory document and checks its keys against the catalogs.
+    pub fn from_path(path: &Path, catalogs: &Catalogs) -> Result<Self> {
+        let data = fs::read_to_string(path)
+            .with_context(|| format!("failed to read inventory {}", path.display()))?;
+        let inventory: Self = serde_json::from_str(&data)
+            .with_context(|| format!("invalid inventory JSON in {}", path.display()))?;
+        inventory.validate(catalogs)?;
+        Ok(inventory)
+    }
+
+    /// Rejects unknown item, crystal, and modification keys.
+    pub fn validate(&self, catalogs: &Catalogs) -> Result<()> {
+        let items = ["armor", "weapons", "miscs"]
+            .into_iter()
+            .map(|category| catalogs.item_keys(category))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<_>>();
+        let crystals = catalogs.crystal_keys().into_iter().collect::<HashSet<_>>();
+        let mods = catalogs.mod_keys().into_iter().collect::<HashSet<_>>();
+        for key in self.items.keys() {
+            if !items.contains(key.as_str()) {
+                bail!("inventory contains unknown item {key}");
+            }
+        }
+        for key in self.crystals.keys() {
+            if !crystals.contains(key.as_str()) {
+                bail!("inventory contains unknown crystal {key}");
+            }
+        }
+        for key in self.mods.keys() {
+            if !mods.contains(key.as_str()) {
+                bail!("inventory contains unknown weapon modification {key}");
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether every equipped item, crystal, and modification is owned.
+    pub fn contains(&self, build: &BuildDefinition) -> bool {
+        self.shortages(build).is_empty()
+    }
+
+    /// Returns missing quantities for a complete build.
+    pub fn shortages(&self, build: &BuildDefinition) -> Vec<String> {
+        let mut items = BTreeMap::<&str, usize>::new();
+        let mut crystals = BTreeMap::<&str, usize>::new();
+        let mut mods = BTreeMap::<&str, usize>::new();
+        for selection in selections(build) {
+            *items.entry(&selection.item).or_default() += 1;
+            for crystal in &selection.crystals {
+                *crystals.entry(crystal).or_default() += 1;
+            }
+            for modification in &selection.mods {
+                *mods.entry(modification).or_default() += 1;
+            }
+        }
+        let mut shortages = Vec::new();
+        for (key, needed) in items {
+            let owned = self.items.get(key).copied().unwrap_or(0);
+            if needed > owned {
+                shortages.push(format!("item {key}: need {needed}, own {owned}"));
+            }
+        }
+        for (key, needed) in crystals {
+            let owned = self.crystals.get(key).copied().unwrap_or(0);
+            if needed > owned {
+                shortages.push(format!("crystal {key}: need {needed}, own {owned}"));
+            }
+        }
+        for (key, needed) in mods {
+            let owned = self.mods.get(key).copied().unwrap_or(0);
+            if needed > owned {
+                shortages.push(format!("mod {key}: need {needed}, own {owned}"));
+            }
+        }
+        shortages
+    }
+
+    /// Enumerates owned equipment and weapon-mod combinations using available template crystals.
+    pub fn equipment_seeds(
+        &self,
+        catalogs: &Catalogs,
+        template: &BuildDefinition,
+    ) -> Result<Vec<BuildDefinition>> {
+        let mut template = template.clone();
+        let mut crystals_left = self.crystals.clone();
+        for selection in [
+            &mut template.equipment.armor,
+            &mut template.equipment.weapon1,
+            &mut template.equipment.weapon2,
+            &mut template.equipment.misc1,
+            &mut template.equipment.misc2,
+        ] {
+            selection.crystals.retain(|crystal| {
+                let Some(left) = crystals_left.get_mut(crystal) else {
+                    return false;
+                };
+                if *left == 0 {
+                    return false;
+                }
+                *left -= 1;
+                true
+            });
+        }
+        let weapon_crystals = [
+            template.equipment.weapon1.crystals.clone(),
+            template.equipment.weapon2.crystals.clone(),
+        ];
+        let misc_crystals = [
+            template.equipment.misc1.crystals.clone(),
+            template.equipment.misc2.crystals.clone(),
+        ];
+        let owned = |category| -> Result<Vec<String>> {
+            Ok(catalogs
+                .item_keys(category)?
+                .into_iter()
+                .filter(|key| self.items.get(*key).copied().unwrap_or(0) > 0)
+                .map(str::to_owned)
+                .collect())
+        };
+        let armors = owned("armor")?;
+        let weapons = owned("weapons")?;
+        let miscs = owned("miscs")?;
+        let owned_mods = self
+            .mods
+            .iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let weapon_mods = weapons
+            .iter()
+            .map(|weapon| {
+                let weapon_type = catalogs
+                    .item_weapon_type(weapon)?
+                    .with_context(|| format!("{weapon} is not a weapon"))?;
+                let report = catalogs.item_variant_report_with_owned_mods(
+                    weapon,
+                    &[weapon_type],
+                    Some(&[]),
+                    0,
+                    &owned_mods,
+                )?;
+                let variants = report
+                    .groups
+                    .into_iter()
+                    .flat_map(|group| group.sources.into_iter().map(|source| source.mods))
+                    .collect::<Vec<_>>();
+                Ok(variants)
+            })
+            .collect::<Result<Vec<Vec<Vec<String>>>>>()?;
+        let mut seeds = Vec::new();
+        for armor in &armors {
+            for (first_index, first_weapon) in weapons.iter().enumerate() {
+                for (second_index, second_weapon) in weapons.iter().enumerate().skip(first_index) {
+                    for (first_misc_index, first_misc) in miscs.iter().enumerate() {
+                        for (second_misc_index, second_misc) in
+                            miscs.iter().enumerate().skip(first_misc_index)
+                        {
+                            for first_mods in &weapon_mods[first_index] {
+                                for second_mods in &weapon_mods[second_index] {
+                                    if first_index == second_index && first_mods > second_mods {
+                                        continue;
+                                    }
+                                    for swap_weapons in [false, true] {
+                                        if swap_weapons
+                                            && (weapon_crystals[0] == weapon_crystals[1]
+                                                || (first_index == second_index
+                                                    && first_mods == second_mods))
+                                        {
+                                            continue;
+                                        }
+                                        for swap_miscs in [false, true] {
+                                            if swap_miscs
+                                                && (misc_crystals[0] == misc_crystals[1]
+                                                    || first_misc_index == second_misc_index)
+                                            {
+                                                continue;
+                                            }
+                                            let mut build = template.clone();
+                                            build.equipment.armor.item = armor.clone();
+                                            build.equipment.weapon1.item = first_weapon.clone();
+                                            build.equipment.weapon1.mods = first_mods.clone();
+                                            build.equipment.weapon2.item = second_weapon.clone();
+                                            build.equipment.weapon2.mods = second_mods.clone();
+                                            build.equipment.misc1.item = first_misc.clone();
+                                            build.equipment.misc2.item = second_misc.clone();
+                                            build.equipment.weapon1.crystals =
+                                                weapon_crystals[usize::from(swap_weapons)].clone();
+                                            build.equipment.weapon2.crystals =
+                                                weapon_crystals[usize::from(!swap_weapons)].clone();
+                                            build.equipment.misc1.crystals =
+                                                misc_crystals[usize::from(swap_miscs)].clone();
+                                            build.equipment.misc2.crystals =
+                                                misc_crystals[usize::from(!swap_miscs)].clone();
+                                            for selection in [
+                                                &mut build.equipment.armor,
+                                                &mut build.equipment.misc1,
+                                                &mut build.equipment.misc2,
+                                            ] {
+                                                selection.mods.clear();
+                                            }
+                                            if !self.contains(&build) {
+                                                continue;
+                                            }
+                                            catalogs.materialize(&build, MatchupRole::Active)?;
+                                            seeds.push(build);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(seeds)
+    }
+}
+
+fn selections(build: &BuildDefinition) -> [&ItemSelection; 5] {
+    [
+        &build.equipment.armor,
+        &build.equipment.weapon1,
+        &build.equipment.weapon2,
+        &build.equipment.misc1,
+        &build.equipment.misc2,
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::{equipment_neighborhood, EquipmentNeighborhoodOptions, EquipmentSlot};
+
+    fn current_inventory(build: &BuildDefinition) -> Inventory {
+        let mut inventory = Inventory::default();
+        for selection in selections(build) {
+            *inventory.items.entry(selection.item.clone()).or_default() += 1;
+            for crystal in &selection.crystals {
+                *inventory.crystals.entry(crystal.clone()).or_default() += 1;
+            }
+            for modification in &selection.mods {
+                *inventory.mods.entry(modification.clone()).or_default() += 1;
+            }
+        }
+        inventory
+    }
+
+    #[test]
+    fn quantities_are_shared_across_equipment_slots() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.validate(&catalogs).unwrap();
+        assert!(inventory.contains(current));
+        inventory.items.insert("RiftGun".to_owned(), 1);
+        assert!(inventory
+            .shortages(current)
+            .iter()
+            .any(|line| line.contains("RiftGun")));
+        inventory.items.insert("RiftGun".to_owned(), 2);
+        inventory.crystals.insert("AmuletCrystal".to_owned(), 7);
+        assert!(inventory
+            .shortages(current)
+            .iter()
+            .any(|line| line.contains("AmuletCrystal")));
+    }
+
+    #[test]
+    fn unknown_keys_are_rejected() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let mut inventory = Inventory::default();
+        inventory.items.insert("UnknownItem".to_owned(), 1);
+        assert!(inventory.validate(&catalogs).is_err());
+    }
+
+    #[test]
+    fn neighborhood_uses_only_owned_resources_and_can_leave_sockets_empty() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.items.insert("AlienRifle".to_owned(), 1);
+        let neighborhood = equipment_neighborhood(
+            &catalogs,
+            current,
+            &EquipmentNeighborhoodOptions {
+                slots: vec![EquipmentSlot::Weapon1],
+                item_keys_by_slot: std::collections::HashMap::from([(
+                    EquipmentSlot::Weapon1,
+                    vec!["AlienRifle".to_owned()],
+                )]),
+                inventory: Some(inventory.clone()),
+                ..EquipmentNeighborhoodOptions::default()
+            },
+        )
+        .unwrap();
+        let sources = neighborhood
+            .groups
+            .iter()
+            .flat_map(|group| &group.sources)
+            .collect::<Vec<_>>();
+        assert!(!sources.is_empty());
+        assert!(sources
+            .iter()
+            .all(|source| inventory.contains(&source.build)));
+        assert!(sources
+            .iter()
+            .any(|source| source.equipment.crystals.is_empty()));
+    }
+
+    #[test]
+    fn mod_slots_can_remain_empty_when_no_mod_is_owned() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let mut build = catalogs.build("LiveSample013").unwrap().clone();
+        build.equipment.weapon2.mods.clear();
+        let inventory = current_inventory(&build);
+        let neighborhood = equipment_neighborhood(
+            &catalogs,
+            &build,
+            &EquipmentNeighborhoodOptions {
+                slots: vec![EquipmentSlot::Weapon2],
+                item_keys_by_slot: std::collections::HashMap::from([(
+                    EquipmentSlot::Weapon2,
+                    vec!["CrystalCrossbow".to_owned()],
+                )]),
+                inventory: Some(inventory.clone()),
+                ..EquipmentNeighborhoodOptions::default()
+            },
+        )
+        .unwrap();
+        let sources = neighborhood
+            .groups
+            .iter()
+            .flat_map(|group| &group.sources)
+            .collect::<Vec<_>>();
+        assert!(!sources.is_empty());
+        assert!(sources
+            .iter()
+            .all(|source| source.equipment.mods.is_empty()));
+        assert!(sources
+            .iter()
+            .all(|source| inventory.contains(&source.build)));
+    }
+
+    #[test]
+    fn owned_equipment_combinations_are_enumerated() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.items.insert("CoreStaff".to_owned(), 2);
+        inventory.items.insert("VoidAxe".to_owned(), 2);
+        inventory.items.insert("OrphicAmulet".to_owned(), 1);
+        let seeds = inventory.equipment_seeds(&catalogs, current).unwrap();
+        assert_eq!(seeds.len(), 18);
+        assert!(seeds.iter().all(|build| inventory.contains(build)));
+        assert!(seeds.iter().any(|build| {
+            build.equipment.weapon1.item == "CoreStaff"
+                && build.equipment.weapon2.item == "VoidAxe"
+                && build.equipment.misc2.item == "OrphicAmulet"
+        }));
+        let orphic_crystals = seeds
+            .iter()
+            .filter(|build| {
+                build.equipment.weapon1.item == "CoreStaff"
+                    && build.equipment.weapon2.item == "CoreStaff"
+                    && build.equipment.misc2.item == "OrphicAmulet"
+            })
+            .map(|build| build.equipment.misc2.crystals.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(orphic_crystals.len(), 2);
+        assert!(orphic_crystals.contains(&current.equipment.misc1.crystals));
+        assert!(orphic_crystals.contains(&current.equipment.misc2.crystals));
+    }
+
+    #[test]
+    fn owned_weapon_mods_are_enumerated() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.items.insert("VoidSword".to_owned(), 1);
+        inventory.mods.insert("VoidCore".to_owned(), 1);
+        let seeds = inventory.equipment_seeds(&catalogs, current).unwrap();
+        assert_eq!(seeds.len(), 3);
+        assert!(seeds.iter().any(|build| {
+            build.equipment.weapon2.item == "VoidSword"
+                && build.equipment.weapon2.mods == ["VoidCore"]
+        }));
+        assert!(seeds.iter().all(|build| inventory.contains(build)));
+    }
+}

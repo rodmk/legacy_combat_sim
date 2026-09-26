@@ -24,6 +24,51 @@ List bundled builds:
 cargo run -- list-builds
 ```
 
+Suggest builds against the bundled sample of active players:
+
+```sh
+cargo run --release -- suggest --build CurrentBuild --workers 2 > suggestions.json
+```
+
+The command scores the current build and every observed build against the sample,
+then refines a small set of distinct equipment concepts. The final scores are
+exact win-plus-half-draw averages against all sampled opponents. Without observed
+encounter counts, each sample has equal weight. Use `--weights weights.json` to
+provide a JSON object mapping opponent build keys to relative encounter counts;
+omitted opponents receive zero weight. `--search-seeds 0` reports exact scores
+without refinement. By default, refinement adjusts crystals, allocated stats,
+and attack mode while retaining each seed's equipment concept. `--vary-equipment`
+also searches neighboring base items and weapon modifications at higher cost.
+The two strongest coarse responses receive finer stat refinement by default.
+Results include distinct equipment concepts, directional offense and defense
+scores, per-opponent score dispersion, and leave-one-opponent-out sensitivity.
+
+To search only builds your inventory can equip, fill in the local `inventory.json`
+and run `cargo run --release -- suggest --inventory inventory.json --build CurrentBuild`.
+Repeat `--enemy-set` to combine opponent sets, for example
+`--enemy-set live-samples --enemy-set shadow-dojo`.
+Use `--inventory-first` to screen every owned equipment and weapon-mod
+combination before selecting concepts for crystal and stat refinement;
+`--search-seeds` controls how many concepts receive that refinement.
+The file is gitignored. Each map contains catalog keys and quantities, for example:
+
+```json
+{
+  "items": {"DarkLegionArmor": 1, "RiftGun": 2, "BioSpinalEnhancer": 2},
+  "crystals": {"CorruptedWater": 4, "AmuletCrystal": 8, "CorruptedPink": 3, "PerfectPink": 5},
+  "mods": {}
+}
+```
+
+Those counts are illustrative; list everything you own before searching. Items,
+crystals, and weapon mods are counted across the entire five-slot build. The
+starting `--build` must be owned in ordinary inventory search. In inventory-first
+search it is only a comparison baseline and a source of initial stats and crystals;
+unowned crystals are omitted from the search seeds. Sampled opponents need not be
+owned. Inventory search can change base items and fill fewer than four sockets
+when supplies are limited. Unknown inventory keys and insufficient quantities
+are reported as errors.
+
 Generate the global configured candidate catalog by screening every canonical
 five-item equipment signature. The bundled entry-level Crystal Swords build is
 the default proxy opponent for this discovery stage:
