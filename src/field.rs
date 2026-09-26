@@ -27,6 +27,8 @@ pub struct FieldOpponent {
 /// Search budget for field suggestions.
 #[derive(Clone, Debug)]
 pub struct FieldSuggestionOptions {
+    /// Enumerate owned equipment concepts before selecting search seeds.
+    pub inventory_first: bool,
     /// Maximum number of distinct concepts sent to joint response search.
     pub search_seeds: usize,
     /// Joint response passes for each selected seed.
@@ -42,6 +44,7 @@ pub struct FieldSuggestionOptions {
 impl Default for FieldSuggestionOptions {
     fn default() -> Self {
         Self {
+            inventory_first: false,
             search_seeds: 4,
             search_iterations: 1,
             refinement_seeds: 2,
@@ -104,9 +107,11 @@ pub struct FieldSuggestionReport {
     pub field: Vec<(String, f64)>,
     /// Whether suggestions are limited to owned inventory.
     pub inventory_constrained: bool,
+    /// Whether owned equipment combinations supplied the initial search concepts.
+    pub inventory_first: bool,
     /// Exact score of the supplied current build.
     pub current: FieldSuggestion,
-    /// Unique equipment concepts among the current and observed builds.
+    /// Unique equipment concepts considered as search starts.
     pub observed_seed_count: usize,
     /// Starting points sent to joint search.
     pub searched_seeds: Vec<String>,
@@ -149,6 +154,8 @@ pub fn suggest_field_builds(
                 shortages.join(", ")
             );
         }
+    } else if options.inventory_first {
+        bail!("inventory-first search requires an inventory");
     }
     let total_weight = field.iter().map(|entry| entry.weight).sum::<f64>();
     if total_weight <= 0.0 {
@@ -168,20 +175,34 @@ pub fn suggest_field_builds(
         .collect::<Vec<_>>();
     let current_score = score_build(catalogs, current_id, current, &opponents, &weights)?;
 
+    let mut starting_builds = Vec::new();
+    if options.inventory_first {
+        let inventory = options.inference.equipment.inventory.as_ref().unwrap();
+        starting_builds.extend(
+            inventory
+                .equipment_seeds(catalogs, current)?
+                .into_iter()
+                .enumerate()
+                .map(|(index, build)| (format!("InventoryConcept{:03}", index + 1), build)),
+        );
+    } else {
+        starting_builds.push((current_id.to_owned(), current.clone()));
+        starting_builds.extend(
+            field
+                .iter()
+                .filter(|entry| {
+                    options
+                        .inference
+                        .equipment
+                        .inventory
+                        .as_ref()
+                        .is_none_or(|inventory| inventory.contains(&entry.build))
+                })
+                .map(|entry| (entry.id.clone(), entry.build.clone())),
+        );
+    }
     let mut observed = Vec::new();
-    for (id, build) in std::iter::once((current_id.to_owned(), current.clone())).chain(
-        field
-            .iter()
-            .filter(|entry| {
-                options
-                    .inference
-                    .equipment
-                    .inventory
-                    .as_ref()
-                    .is_none_or(|inventory| inventory.contains(&entry.build))
-            })
-            .map(|entry| (entry.id.clone(), entry.build.clone())),
-    ) {
+    for (id, build) in starting_builds {
         let player = catalogs.materialize(&build, MatchupRole::Active)?;
         let mut types = [player.weapon1.weapon_type, player.weapon2.weapon_type];
         types.sort();
@@ -220,9 +241,11 @@ pub fn suggest_field_builds(
     let mut selected = Vec::new();
     let mut selected_ids = HashSet::new();
     if options.search_seeds > 0 {
-        if let Some(seed) = seeds.iter().find(|seed| seed.id == current_id) {
-            selected_ids.insert(seed.id.clone());
-            selected.push(seed);
+        if !options.inventory_first {
+            if let Some(seed) = seeds.iter().find(|seed| seed.id == current_id) {
+                selected_ids.insert(seed.id.clone());
+                selected.push(seed);
+            }
         }
         let mut profiles = selected
             .iter()
@@ -341,6 +364,7 @@ pub fn suggest_field_builds(
     Ok(FieldSuggestionReport {
         field: opponent_ids.into_iter().zip(weights).collect(),
         inventory_constrained: options.inference.equipment.inventory.is_some(),
+        inventory_first: options.inventory_first,
         current: current_score,
         observed_seed_count,
         searched_seeds: selected.iter().map(|seed| seed.id.clone()).collect(),
@@ -586,5 +610,44 @@ mod tests {
             .suggestions
             .iter()
             .all(|entry| inventory.contains(&entry.build)));
+    }
+
+    #[test]
+    fn inventory_first_uses_owned_concepts_without_current_seed() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let inventory: Inventory = serde_json::from_value(serde_json::json!({
+            "items": {"DarkLegionArmor": 1, "RiftGun": 2, "BioSpinalEnhancer": 2},
+            "crystals": {"CorruptedWater": 4, "AmuletCrystal": 8, "CorruptedPink": 3, "PerfectPink": 5},
+            "mods": {}
+        }))
+        .unwrap();
+        let field = [FieldOpponent {
+            id: "LiveSample001".to_owned(),
+            build: catalogs.build("LiveSample001").unwrap().clone(),
+            weight: 1.0,
+        }];
+        let report = suggest_field_builds(
+            &catalogs,
+            "CurrentBuild",
+            current,
+            &field,
+            &FieldSuggestionOptions {
+                inventory_first: true,
+                search_seeds: 0,
+                inference: InferenceOptions {
+                    equipment: EquipmentNeighborhoodOptions {
+                        inventory: Some(inventory),
+                        ..EquipmentNeighborhoodOptions::default()
+                    },
+                    ..InferenceOptions::default()
+                },
+                ..FieldSuggestionOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(report.inventory_first);
+        assert_eq!(report.observed_seed_count, 1);
+        assert_eq!(report.suggestions[0].source, "InventoryConcept001");
     }
 }

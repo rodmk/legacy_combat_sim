@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::Catalogs;
-use crate::model::{BuildDefinition, ItemSelection};
+use crate::model::{BuildDefinition, ItemSelection, MatchupRole};
 
 /// Owned quantities available to one complete build.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -102,6 +102,57 @@ impl Inventory {
             }
         }
         shortages
+    }
+
+    /// Enumerates owned base-equipment combinations using a build's crystals and stats.
+    pub fn equipment_seeds(
+        &self,
+        catalogs: &Catalogs,
+        template: &BuildDefinition,
+    ) -> Result<Vec<BuildDefinition>> {
+        let owned = |category| -> Result<Vec<String>> {
+            Ok(catalogs
+                .item_keys(category)?
+                .into_iter()
+                .filter(|key| self.items.get(*key).copied().unwrap_or(0) > 0)
+                .map(str::to_owned)
+                .collect())
+        };
+        let armors = owned("armor")?;
+        let weapons = owned("weapons")?;
+        let miscs = owned("miscs")?;
+        let mut seeds = Vec::new();
+        for armor in &armors {
+            for (first_index, first_weapon) in weapons.iter().enumerate() {
+                for second_weapon in weapons.iter().skip(first_index) {
+                    for (first_misc_index, first_misc) in miscs.iter().enumerate() {
+                        for second_misc in miscs.iter().skip(first_misc_index) {
+                            let mut build = template.clone();
+                            build.equipment.armor.item = armor.clone();
+                            build.equipment.weapon1.item = first_weapon.clone();
+                            build.equipment.weapon2.item = second_weapon.clone();
+                            build.equipment.misc1.item = first_misc.clone();
+                            build.equipment.misc2.item = second_misc.clone();
+                            for selection in [
+                                &mut build.equipment.armor,
+                                &mut build.equipment.weapon1,
+                                &mut build.equipment.weapon2,
+                                &mut build.equipment.misc1,
+                                &mut build.equipment.misc2,
+                            ] {
+                                selection.mods.clear();
+                            }
+                            if !self.contains(&build) {
+                                continue;
+                            }
+                            catalogs.materialize(&build, MatchupRole::Active)?;
+                            seeds.push(build);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(seeds)
     }
 }
 
@@ -228,5 +279,23 @@ mod tests {
         assert!(sources
             .iter()
             .all(|source| inventory.contains(&source.build)));
+    }
+
+    #[test]
+    fn owned_equipment_combinations_are_enumerated() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.items.insert("CoreStaff".to_owned(), 2);
+        inventory.items.insert("VoidAxe".to_owned(), 2);
+        inventory.items.insert("OrphicAmulet".to_owned(), 1);
+        let seeds = inventory.equipment_seeds(&catalogs, current).unwrap();
+        assert_eq!(seeds.len(), 12);
+        assert!(seeds.iter().all(|build| inventory.contains(build)));
+        assert!(seeds.iter().any(|build| {
+            build.equipment.weapon1.item == "CoreStaff"
+                && build.equipment.weapon2.item == "VoidAxe"
+                && build.equipment.misc2.item == "OrphicAmulet"
+        }));
     }
 }

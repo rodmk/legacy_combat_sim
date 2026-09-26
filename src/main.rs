@@ -55,6 +55,9 @@ enum Command {
         /// Local JSON inventory limiting items, crystals, and weapon mods.
         #[arg(long)]
         inventory: Option<PathBuf>,
+        /// Screen owned equipment combinations as search starting points.
+        #[arg(long, requires = "inventory")]
+        inventory_first: bool,
         /// Additional JSON build catalog; may be specified more than once.
         #[arg(long = "catalog")]
         catalogs: Vec<PathBuf>,
@@ -340,6 +343,7 @@ fn main() -> Result<()> {
             enemy_set,
             weights,
             inventory,
+            inventory_first,
             catalogs,
             search_seeds,
             search_iterations,
@@ -396,6 +400,7 @@ fn main() -> Result<()> {
                 })
                 .collect::<Vec<_>>();
             let options = FieldSuggestionOptions {
+                inventory_first,
                 search_seeds,
                 search_iterations,
                 refinement_seeds,
@@ -405,7 +410,8 @@ fn main() -> Result<()> {
                     expansion_width: 1,
                     equipment: EquipmentNeighborhoodOptions {
                         socket_capacity,
-                        fixed_equipment: !vary_equipment && owned_inventory.is_none(),
+                        fixed_equipment: !vary_equipment
+                            && (inventory_first || owned_inventory.is_none()),
                         normalize: owned_inventory.is_none(),
                         inventory: owned_inventory,
                         ..EquipmentNeighborhoodOptions::default()
