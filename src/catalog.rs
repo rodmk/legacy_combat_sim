@@ -96,7 +96,7 @@ pub struct ItemVariantCounts {
 pub struct ItemVariantReport {
     /// All distinct effective variants.
     pub groups: Vec<ItemVariantGroup>,
-    /// Variants not componentwise dominated by another variant.
+    /// Nondominated variants, empty when inventory-aware generation skips pruning.
     pub nondominated_groups: Vec<ItemVariantGroup>,
     /// Variant-space counts.
     pub counts: ItemVariantCounts,
@@ -508,21 +508,25 @@ impl Catalogs {
                 }
             }
         }
-        let nondominated_groups = groups
-            .iter()
-            .enumerate()
-            .filter(|(index, group)| {
-                let candidate = relevant_stats(group.stats, active_weapon_types);
-                !groups.iter().enumerate().any(|(other_index, other)| {
-                    other_index != *index
-                        && dominates_stats(
-                            &relevant_stats(other.stats, active_weapon_types),
-                            &candidate,
-                        )
+        let nondominated_groups = if owned_mods.is_some() {
+            Vec::new()
+        } else {
+            groups
+                .iter()
+                .enumerate()
+                .filter(|(index, group)| {
+                    let candidate = relevant_stats(group.stats, active_weapon_types);
+                    !groups.iter().enumerate().any(|(other_index, other)| {
+                        other_index != *index
+                            && dominates_stats(
+                                &relevant_stats(other.stats, active_weapon_types),
+                                &candidate,
+                            )
+                    })
                 })
-            })
-            .map(|(_, group)| group.clone())
-            .collect::<Vec<_>>();
+                .map(|(_, group)| group.clone())
+                .collect::<Vec<_>>()
+        };
         let ordered = |count: usize| {
             (if count == 0 {
                 1

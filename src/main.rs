@@ -46,9 +46,9 @@ enum Command {
         /// Current build key used as a response-search starting point.
         #[arg(long, default_value = "CurrentBuild")]
         build: String,
-        /// Named opponent set.
+        /// Named opponent set; repeat to combine sets.
         #[arg(long, default_value = "live-samples")]
-        enemy_set: String,
+        enemy_set: Vec<String>,
         /// Optional JSON map from opponent build key to relative encounter weight.
         #[arg(long)]
         weights: Option<PathBuf>,
@@ -363,7 +363,12 @@ fn main() -> Result<()> {
                 .map(|path| Inventory::from_path(path, &catalogs))
                 .transpose()?;
             let current = catalogs.build(&build)?;
-            let enemies = catalogs.enemy_set(&enemy_set)?;
+            let mut enemies = std::collections::BTreeMap::new();
+            for set in &enemy_set {
+                for (id, opponent) in catalogs.enemy_set(set)? {
+                    enemies.insert(id, opponent);
+                }
+            }
             let supplied_weights = weights
                 .as_ref()
                 .map(|path| -> Result<std::collections::BTreeMap<String, f64>> {
@@ -373,8 +378,8 @@ fn main() -> Result<()> {
                 .transpose()?;
             if let Some(supplied) = &supplied_weights {
                 let known = enemies
-                    .iter()
-                    .map(|(id, _)| *id)
+                    .keys()
+                    .copied()
                     .collect::<std::collections::HashSet<_>>();
                 if let Some(unknown) = supplied.keys().find(|id| !known.contains(id.as_str())) {
                     bail!("field weights contain unknown opponent {unknown}");

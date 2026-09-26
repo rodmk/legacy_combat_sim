@@ -45,6 +45,8 @@ scores, per-opponent score dispersion, and leave-one-opponent-out sensitivity.
 
 To search only builds your inventory can equip, fill in the local `inventory.json`
 and run `cargo run --release -- suggest --inventory inventory.json --build CurrentBuild`.
+Repeat `--enemy-set` to combine opponent sets, for example
+`--enemy-set live-samples --enemy-set shadow-dojo`.
 The file is gitignored. Each map contains catalog keys and quantities, for example:
 
 ```json
