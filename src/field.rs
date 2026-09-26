@@ -147,12 +147,14 @@ pub fn suggest_field_builds(
     }
     if let Some(inventory) = &options.inference.equipment.inventory {
         inventory.validate(catalogs)?;
-        let shortages = inventory.shortages(current);
-        if !shortages.is_empty() {
-            bail!(
-                "starting build {current_id} is not in inventory: {}; select an owned build with --build",
-                shortages.join(", ")
-            );
+        if !options.inventory_first {
+            let shortages = inventory.shortages(current);
+            if !shortages.is_empty() {
+                bail!(
+                    "starting build {current_id} is not in inventory: {}; select an owned build with --build",
+                    shortages.join(", ")
+                );
+            }
         }
     } else if options.inventory_first {
         bail!("inventory-first search requires an inventory");
@@ -649,5 +651,48 @@ mod tests {
         assert!(report.inventory_first);
         assert_eq!(report.observed_seed_count, 1);
         assert_eq!(report.suggestions[0].source, "InventoryConcept001");
+    }
+
+    #[test]
+    fn inventory_first_accepts_unowned_baseline() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let inventory: Inventory = serde_json::from_value(serde_json::json!({
+            "items": {"DarkLegionArmor": 1, "CoreStaff": 2, "BioSpinalEnhancer": 2},
+            "crystals": {},
+            "mods": {}
+        }))
+        .unwrap();
+        let field = [FieldOpponent {
+            id: "LiveSample001".to_owned(),
+            build: catalogs.build("LiveSample001").unwrap().clone(),
+            weight: 1.0,
+        }];
+        let report = suggest_field_builds(
+            &catalogs,
+            "CurrentBuild",
+            current,
+            &field,
+            &FieldSuggestionOptions {
+                inventory_first: true,
+                search_seeds: 0,
+                inference: InferenceOptions {
+                    equipment: EquipmentNeighborhoodOptions {
+                        inventory: Some(inventory.clone()),
+                        ..EquipmentNeighborhoodOptions::default()
+                    },
+                    ..InferenceOptions::default()
+                },
+                ..FieldSuggestionOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(report.inventory_first);
+        assert_eq!(report.observed_seed_count, 1);
+        assert!(!inventory.contains(&report.current.build));
+        assert!(report
+            .suggestions
+            .iter()
+            .all(|suggestion| inventory.contains(&suggestion.build)));
     }
 }

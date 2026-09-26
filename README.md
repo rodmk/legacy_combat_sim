@@ -62,9 +62,12 @@ The file is gitignored. Each map contains catalog keys and quantities, for examp
 
 Those counts are illustrative; list everything you own before searching. Items,
 crystals, and weapon mods are counted across the entire five-slot build. The
-starting `--build` must be owned, while sampled opponents need not be. Inventory
-search can change base items and fill fewer than four sockets when supplies are
-limited. Unknown inventory keys and insufficient quantities are reported as errors.
+starting `--build` must be owned in ordinary inventory search. In inventory-first
+search it is only a comparison baseline and a source of initial stats and crystals;
+unowned crystals are omitted from the search seeds. Sampled opponents need not be
+owned. Inventory search can change base items and fill fewer than four sockets
+when supplies are limited. Unknown inventory keys and insufficient quantities
+are reported as errors.
 
 Generate the global configured candidate catalog by screening every canonical
 five-item equipment signature. The bundled entry-level Crystal Swords build is

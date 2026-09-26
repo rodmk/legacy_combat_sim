@@ -104,12 +104,40 @@ impl Inventory {
         shortages
     }
 
-    /// Enumerates owned equipment and weapon-mod combinations using a build's crystals and stats.
+    /// Enumerates owned equipment and weapon-mod combinations using available template crystals.
     pub fn equipment_seeds(
         &self,
         catalogs: &Catalogs,
         template: &BuildDefinition,
     ) -> Result<Vec<BuildDefinition>> {
+        let mut template = template.clone();
+        let mut crystals_left = self.crystals.clone();
+        for selection in [
+            &mut template.equipment.armor,
+            &mut template.equipment.weapon1,
+            &mut template.equipment.weapon2,
+            &mut template.equipment.misc1,
+            &mut template.equipment.misc2,
+        ] {
+            selection.crystals.retain(|crystal| {
+                let Some(left) = crystals_left.get_mut(crystal) else {
+                    return false;
+                };
+                if *left == 0 {
+                    return false;
+                }
+                *left -= 1;
+                true
+            });
+        }
+        let weapon_crystals = [
+            template.equipment.weapon1.crystals.clone(),
+            template.equipment.weapon2.crystals.clone(),
+        ];
+        let misc_crystals = [
+            template.equipment.misc1.crystals.clone(),
+            template.equipment.misc2.crystals.clone(),
+        ];
         let owned = |category| -> Result<Vec<String>> {
             Ok(catalogs
                 .item_keys(category)?
@@ -153,32 +181,59 @@ impl Inventory {
             for (first_index, first_weapon) in weapons.iter().enumerate() {
                 for (second_index, second_weapon) in weapons.iter().enumerate().skip(first_index) {
                     for (first_misc_index, first_misc) in miscs.iter().enumerate() {
-                        for second_misc in miscs.iter().skip(first_misc_index) {
+                        for (second_misc_index, second_misc) in
+                            miscs.iter().enumerate().skip(first_misc_index)
+                        {
                             for first_mods in &weapon_mods[first_index] {
                                 for second_mods in &weapon_mods[second_index] {
                                     if first_index == second_index && first_mods > second_mods {
                                         continue;
                                     }
-                                    let mut build = template.clone();
-                                    build.equipment.armor.item = armor.clone();
-                                    build.equipment.weapon1.item = first_weapon.clone();
-                                    build.equipment.weapon1.mods = first_mods.clone();
-                                    build.equipment.weapon2.item = second_weapon.clone();
-                                    build.equipment.weapon2.mods = second_mods.clone();
-                                    build.equipment.misc1.item = first_misc.clone();
-                                    build.equipment.misc2.item = second_misc.clone();
-                                    for selection in [
-                                        &mut build.equipment.armor,
-                                        &mut build.equipment.misc1,
-                                        &mut build.equipment.misc2,
-                                    ] {
-                                        selection.mods.clear();
+                                    for swap_weapons in [false, true] {
+                                        if swap_weapons
+                                            && (weapon_crystals[0] == weapon_crystals[1]
+                                                || (first_index == second_index
+                                                    && first_mods == second_mods))
+                                        {
+                                            continue;
+                                        }
+                                        for swap_miscs in [false, true] {
+                                            if swap_miscs
+                                                && (misc_crystals[0] == misc_crystals[1]
+                                                    || first_misc_index == second_misc_index)
+                                            {
+                                                continue;
+                                            }
+                                            let mut build = template.clone();
+                                            build.equipment.armor.item = armor.clone();
+                                            build.equipment.weapon1.item = first_weapon.clone();
+                                            build.equipment.weapon1.mods = first_mods.clone();
+                                            build.equipment.weapon2.item = second_weapon.clone();
+                                            build.equipment.weapon2.mods = second_mods.clone();
+                                            build.equipment.misc1.item = first_misc.clone();
+                                            build.equipment.misc2.item = second_misc.clone();
+                                            build.equipment.weapon1.crystals =
+                                                weapon_crystals[usize::from(swap_weapons)].clone();
+                                            build.equipment.weapon2.crystals =
+                                                weapon_crystals[usize::from(!swap_weapons)].clone();
+                                            build.equipment.misc1.crystals =
+                                                misc_crystals[usize::from(swap_miscs)].clone();
+                                            build.equipment.misc2.crystals =
+                                                misc_crystals[usize::from(!swap_miscs)].clone();
+                                            for selection in [
+                                                &mut build.equipment.armor,
+                                                &mut build.equipment.misc1,
+                                                &mut build.equipment.misc2,
+                                            ] {
+                                                selection.mods.clear();
+                                            }
+                                            if !self.contains(&build) {
+                                                continue;
+                                            }
+                                            catalogs.materialize(&build, MatchupRole::Active)?;
+                                            seeds.push(build);
+                                        }
                                     }
-                                    if !self.contains(&build) {
-                                        continue;
-                                    }
-                                    catalogs.materialize(&build, MatchupRole::Active)?;
-                                    seeds.push(build);
                                 }
                             }
                         }
@@ -324,13 +379,25 @@ mod tests {
         inventory.items.insert("VoidAxe".to_owned(), 2);
         inventory.items.insert("OrphicAmulet".to_owned(), 1);
         let seeds = inventory.equipment_seeds(&catalogs, current).unwrap();
-        assert_eq!(seeds.len(), 12);
+        assert_eq!(seeds.len(), 18);
         assert!(seeds.iter().all(|build| inventory.contains(build)));
         assert!(seeds.iter().any(|build| {
             build.equipment.weapon1.item == "CoreStaff"
                 && build.equipment.weapon2.item == "VoidAxe"
                 && build.equipment.misc2.item == "OrphicAmulet"
         }));
+        let orphic_crystals = seeds
+            .iter()
+            .filter(|build| {
+                build.equipment.weapon1.item == "CoreStaff"
+                    && build.equipment.weapon2.item == "CoreStaff"
+                    && build.equipment.misc2.item == "OrphicAmulet"
+            })
+            .map(|build| build.equipment.misc2.crystals.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(orphic_crystals.len(), 2);
+        assert!(orphic_crystals.contains(&current.equipment.misc1.crystals));
+        assert!(orphic_crystals.contains(&current.equipment.misc2.crystals));
     }
 
     #[test]
