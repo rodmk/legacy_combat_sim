@@ -47,9 +47,9 @@ To search only builds your inventory can equip, fill in the local `inventory.jso
 and run `cargo run --release -- suggest --inventory inventory.json --build CurrentBuild`.
 Repeat `--enemy-set` to combine opponent sets, for example
 `--enemy-set live-samples --enemy-set shadow-dojo`.
-Use `--inventory-first` to screen every owned base-equipment combination before
-selecting concepts for crystal and stat refinement; `--search-seeds` controls how
-many concepts receive that refinement.
+Use `--inventory-first` to screen every owned equipment and weapon-mod
+combination before selecting concepts for crystal and stat refinement;
+`--search-seeds` controls how many concepts receive that refinement.
 The file is gitignored. Each map contains catalog keys and quantities, for example:
 
 ```json

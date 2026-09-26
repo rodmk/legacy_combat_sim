@@ -104,7 +104,7 @@ impl Inventory {
         shortages
     }
 
-    /// Enumerates owned base-equipment combinations using a build's crystals and stats.
+    /// Enumerates owned equipment and weapon-mod combinations using a build's crystals and stats.
     pub fn equipment_seeds(
         &self,
         catalogs: &Catalogs,
@@ -121,32 +121,66 @@ impl Inventory {
         let armors = owned("armor")?;
         let weapons = owned("weapons")?;
         let miscs = owned("miscs")?;
+        let owned_mods = self
+            .mods
+            .iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let weapon_mods = weapons
+            .iter()
+            .map(|weapon| {
+                let weapon_type = catalogs
+                    .item_weapon_type(weapon)?
+                    .with_context(|| format!("{weapon} is not a weapon"))?;
+                let report = catalogs.item_variant_report_with_owned_mods(
+                    weapon,
+                    &[weapon_type],
+                    Some(&[]),
+                    0,
+                    &owned_mods,
+                )?;
+                let variants = report
+                    .groups
+                    .into_iter()
+                    .flat_map(|group| group.sources.into_iter().map(|source| source.mods))
+                    .collect::<Vec<_>>();
+                Ok(variants)
+            })
+            .collect::<Result<Vec<Vec<Vec<String>>>>>()?;
         let mut seeds = Vec::new();
         for armor in &armors {
             for (first_index, first_weapon) in weapons.iter().enumerate() {
-                for second_weapon in weapons.iter().skip(first_index) {
+                for (second_index, second_weapon) in weapons.iter().enumerate().skip(first_index) {
                     for (first_misc_index, first_misc) in miscs.iter().enumerate() {
                         for second_misc in miscs.iter().skip(first_misc_index) {
-                            let mut build = template.clone();
-                            build.equipment.armor.item = armor.clone();
-                            build.equipment.weapon1.item = first_weapon.clone();
-                            build.equipment.weapon2.item = second_weapon.clone();
-                            build.equipment.misc1.item = first_misc.clone();
-                            build.equipment.misc2.item = second_misc.clone();
-                            for selection in [
-                                &mut build.equipment.armor,
-                                &mut build.equipment.weapon1,
-                                &mut build.equipment.weapon2,
-                                &mut build.equipment.misc1,
-                                &mut build.equipment.misc2,
-                            ] {
-                                selection.mods.clear();
+                            for first_mods in &weapon_mods[first_index] {
+                                for second_mods in &weapon_mods[second_index] {
+                                    if first_index == second_index && first_mods > second_mods {
+                                        continue;
+                                    }
+                                    let mut build = template.clone();
+                                    build.equipment.armor.item = armor.clone();
+                                    build.equipment.weapon1.item = first_weapon.clone();
+                                    build.equipment.weapon1.mods = first_mods.clone();
+                                    build.equipment.weapon2.item = second_weapon.clone();
+                                    build.equipment.weapon2.mods = second_mods.clone();
+                                    build.equipment.misc1.item = first_misc.clone();
+                                    build.equipment.misc2.item = second_misc.clone();
+                                    for selection in [
+                                        &mut build.equipment.armor,
+                                        &mut build.equipment.misc1,
+                                        &mut build.equipment.misc2,
+                                    ] {
+                                        selection.mods.clear();
+                                    }
+                                    if !self.contains(&build) {
+                                        continue;
+                                    }
+                                    catalogs.materialize(&build, MatchupRole::Active)?;
+                                    seeds.push(build);
+                                }
                             }
-                            if !self.contains(&build) {
-                                continue;
-                            }
-                            catalogs.materialize(&build, MatchupRole::Active)?;
-                            seeds.push(build);
                         }
                     }
                 }
@@ -297,5 +331,21 @@ mod tests {
                 && build.equipment.weapon2.item == "VoidAxe"
                 && build.equipment.misc2.item == "OrphicAmulet"
         }));
+    }
+
+    #[test]
+    fn owned_weapon_mods_are_enumerated() {
+        let catalogs = Catalogs::bundled().unwrap();
+        let current = catalogs.build("CurrentBuild").unwrap();
+        let mut inventory = current_inventory(current);
+        inventory.items.insert("VoidSword".to_owned(), 1);
+        inventory.mods.insert("VoidCore".to_owned(), 1);
+        let seeds = inventory.equipment_seeds(&catalogs, current).unwrap();
+        assert_eq!(seeds.len(), 3);
+        assert!(seeds.iter().any(|build| {
+            build.equipment.weapon2.item == "VoidSword"
+                && build.equipment.weapon2.mods == ["VoidCore"]
+        }));
+        assert!(seeds.iter().all(|build| inventory.contains(build)));
     }
 }
