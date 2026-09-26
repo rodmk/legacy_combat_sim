@@ -8,6 +8,7 @@ use crate::combat::combat_signature;
 use crate::exact::DefeatRoundCache;
 use crate::game::role_averaged_matchup;
 use crate::game::MatchupResult;
+use crate::inventory::Inventory;
 use crate::model::{
     AttackType, BuildDefinition, CombatSignature, ItemSelection, Loadout, MatchupRole, Player,
     StatAllocation, WeaponType,
@@ -210,6 +211,8 @@ pub struct EquipmentNeighborhoodOptions {
     pub normalize: bool,
     /// Vary crystals and mods while keeping each slot's base item fixed.
     pub fixed_equipment: bool,
+    /// Owned quantities limiting every generated build.
+    pub inventory: Option<Inventory>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -235,6 +238,7 @@ impl Default for EquipmentNeighborhoodOptions {
             socket_capacity: 4,
             normalize: true,
             fixed_equipment: false,
+            inventory: None,
         }
     }
 }
@@ -1072,7 +1076,7 @@ fn equipment_neighborhood_cached(
     } else {
         options.slots.clone()
     };
-    let normalized_builds = if options.normalize {
+    let normalized_builds = if options.normalize && options.inventory.is_none() {
         normalize_equipment(catalogs, build, &slots)?
     } else {
         vec![(build.clone(), Vec::new())]
@@ -1099,6 +1103,11 @@ fn equipment_neighborhood_cached(
                 if !catalogs.item_keys(category)?.contains(&item_key.as_str()) {
                     bail!("unknown {category} item: {item_key}");
                 }
+                if options.inventory.as_ref().is_some_and(|inventory| {
+                    inventory.items.get(&item_key).copied().unwrap_or(0) == 0
+                }) {
+                    continue;
+                }
                 let mut weapon_types = [
                     catalogs.item_weapon_type(&base_build.equipment.weapon1.item)?,
                     catalogs.item_weapon_type(&base_build.equipment.weapon2.item)?,
@@ -1119,6 +1128,18 @@ fn equipment_neighborhood_cached(
                 active_weapon_types.sort();
                 active_weapon_types.dedup();
                 let mut crystal_keys = options.crystal_keys.clone();
+                if let Some(inventory) = &options.inventory {
+                    let owned = inventory
+                        .crystals
+                        .iter()
+                        .filter(|(_, count)| **count > 0)
+                        .map(|(key, _)| key.clone())
+                        .collect::<HashSet<_>>();
+                    crystal_keys = Some(match crystal_keys {
+                        Some(keys) => keys.into_iter().filter(|key| owned.contains(key)).collect(),
+                        None => owned.into_iter().collect(),
+                    });
+                }
                 if let Some(keys) = &mut crystal_keys {
                     keys.sort();
                 }
@@ -1127,62 +1148,95 @@ fn equipment_neighborhood_cached(
                     mods.sort();
                     mods
                 });
-                let cache_key = ItemVariantCacheKey {
-                    item: item_key.clone(),
-                    weapon_types: active_weapon_types.clone(),
-                    crystal_keys,
-                    socket_capacity: options.socket_capacity,
-                    fixed_mods,
-                };
-                let report = if let Some(report) = variant_cache.reports.get(&cache_key) {
-                    report.clone()
+                let capacities = if options.inventory.is_some() {
+                    0..=options.socket_capacity
                 } else {
-                    let report = if options.fixed_equipment {
-                        catalogs.descriptor_variant_report(
-                            get_slot(&base_build.equipment, slot),
-                            &active_weapon_types,
-                            options.crystal_keys.as_deref(),
-                            options.socket_capacity,
-                        )?
-                    } else {
-                        catalogs.item_variant_report(
-                            &item_key,
-                            &active_weapon_types,
-                            options.crystal_keys.as_deref(),
-                            options.socket_capacity,
-                        )?
-                    };
-                    variant_cache.reports.insert(cache_key, report.clone());
-                    report
+                    options.socket_capacity..=options.socket_capacity
                 };
-                slot_variants += report.nondominated_groups.len();
-                for variant in report.nondominated_groups {
-                    for descriptor in variant.sources {
-                        let selection = ItemSelection {
-                            item: descriptor.item,
-                            crystals: descriptor.crystals,
-                            mods: descriptor.mods,
-                        };
-                        let mut candidate = base_build.clone();
-                        set_slot(&mut candidate.equipment, slot, selection.clone());
-                        let representative =
-                            catalogs.materialize(&candidate, MatchupRole::Active)?;
-                        let signature = combat_signature(&representative);
-                        let source = EquipmentSource {
-                            slot,
-                            equipment: selection,
-                            build: candidate,
-                            normalization: normalization.clone(),
-                        };
-                        if let Some(index) = group_by_signature.get(&signature) {
-                            groups[*index].sources.push(source);
+                for capacity in capacities {
+                    let cache_key = ItemVariantCacheKey {
+                        item: item_key.clone(),
+                        weapon_types: active_weapon_types.clone(),
+                        crystal_keys: crystal_keys.clone(),
+                        socket_capacity: capacity,
+                        fixed_mods: fixed_mods.clone(),
+                    };
+                    let report = if let Some(report) = variant_cache.reports.get(&cache_key) {
+                        report.clone()
+                    } else {
+                        let report = if options.fixed_equipment {
+                            catalogs.descriptor_variant_report(
+                                get_slot(&base_build.equipment, slot),
+                                &active_weapon_types,
+                                crystal_keys.as_deref(),
+                                capacity,
+                            )?
+                        } else if let Some(inventory) = &options.inventory {
+                            let owned_mods = inventory
+                                .mods
+                                .iter()
+                                .filter(|(_, count)| **count > 0)
+                                .map(|(key, _)| key.clone())
+                                .collect::<Vec<_>>();
+                            catalogs.item_variant_report_with_owned_mods(
+                                &item_key,
+                                &active_weapon_types,
+                                crystal_keys.as_deref(),
+                                capacity,
+                                &owned_mods,
+                            )?
                         } else {
-                            group_by_signature.insert(signature.clone(), groups.len());
-                            groups.push(EquipmentGroup {
-                                signature,
-                                representative,
-                                sources: vec![source],
-                            });
+                            catalogs.item_variant_report(
+                                &item_key,
+                                &active_weapon_types,
+                                crystal_keys.as_deref(),
+                                capacity,
+                            )?
+                        };
+                        variant_cache.reports.insert(cache_key, report.clone());
+                        report
+                    };
+                    let variants = if options.inventory.is_some() {
+                        report.groups
+                    } else {
+                        report.nondominated_groups
+                    };
+                    slot_variants += variants.len();
+                    for variant in variants {
+                        for descriptor in variant.sources {
+                            let selection = ItemSelection {
+                                item: descriptor.item,
+                                crystals: descriptor.crystals,
+                                mods: descriptor.mods,
+                            };
+                            let mut candidate = base_build.clone();
+                            set_slot(&mut candidate.equipment, slot, selection.clone());
+                            if options
+                                .inventory
+                                .as_ref()
+                                .is_some_and(|inventory| !inventory.contains(&candidate))
+                            {
+                                continue;
+                            }
+                            let representative =
+                                catalogs.materialize(&candidate, MatchupRole::Active)?;
+                            let signature = combat_signature(&representative);
+                            let source = EquipmentSource {
+                                slot,
+                                equipment: selection,
+                                build: candidate,
+                                normalization: normalization.clone(),
+                            };
+                            if let Some(index) = group_by_signature.get(&signature) {
+                                groups[*index].sources.push(source);
+                            } else {
+                                group_by_signature.insert(signature.clone(), groups.len());
+                                groups.push(EquipmentGroup {
+                                    signature,
+                                    representative,
+                                    sources: vec![source],
+                                });
+                            }
                         }
                     }
                 }

@@ -12,3 +12,4 @@ target/
 
 # Local search checkpoints
 .local/
+/inventory.json

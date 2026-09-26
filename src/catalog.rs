@@ -41,6 +41,10 @@ pub fn bundled_data_fingerprint() -> String {
             "game-builds.json",
             include_bytes!("../data/game-builds.json").as_slice(),
         ),
+        (
+            "live-builds.json",
+            include_bytes!("../data/live-builds.json").as_slice(),
+        ),
     ] {
         digest.update(name.as_bytes());
         digest.update([0]);
@@ -189,6 +193,7 @@ impl Catalogs {
         for (name, data) in [
             ("builds.json", include_str!("../data/builds.json")),
             ("game-builds.json", include_str!("../data/game-builds.json")),
+            ("live-builds.json", include_str!("../data/live-builds.json")),
         ] {
             catalogs.merge_builds(deserialize_validated(
                 name,
@@ -299,6 +304,24 @@ impl Catalogs {
         Ok(keys)
     }
 
+    /// Returns stable crystal catalog keys.
+    pub fn crystal_keys(&self) -> Vec<&str> {
+        let mut keys = self.crystals.keys().map(String::as_str).collect::<Vec<_>>();
+        keys.sort_unstable();
+        keys
+    }
+
+    /// Returns stable weapon-modification catalog keys.
+    pub fn mod_keys(&self) -> Vec<&str> {
+        let mut keys = self
+            .weapon_mods
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        keys.sort_unstable();
+        keys
+    }
+
     /// Returns every base weapon and compatible fully populated modifier set for
     /// one weapon family. Crystals are intentionally omitted so callers can
     /// specialize a stable equipment signature independently.
@@ -370,6 +393,26 @@ impl Catalogs {
             crystal_keys,
             socket_capacity,
             None,
+            None,
+        )
+    }
+
+    /// Generates variants with optional unfilled mod slots from owned mod keys.
+    pub fn item_variant_report_with_owned_mods(
+        &self,
+        item_key: &str,
+        active_weapon_types: &[WeaponType],
+        crystal_keys: Option<&[String]>,
+        socket_capacity: usize,
+        owned_mods: &[String],
+    ) -> Result<ItemVariantReport> {
+        self.item_variant_report_with_mods(
+            item_key,
+            active_weapon_types,
+            crystal_keys,
+            socket_capacity,
+            None,
+            Some(owned_mods),
         )
     }
 
@@ -387,6 +430,7 @@ impl Catalogs {
             crystal_keys,
             socket_capacity,
             Some(&descriptor.mods),
+            None,
         )
     }
 
@@ -397,6 +441,7 @@ impl Catalogs {
         crystal_keys: Option<&[String]>,
         socket_capacity: usize,
         fixed_mods: Option<&[String]>,
+        owned_mods: Option<&[String]>,
     ) -> Result<ItemVariantReport> {
         let definition = self.item_definition(item_key)?;
         let mut crystals = crystal_keys.map(<[String]>::to_vec).unwrap_or_else(|| {
@@ -428,7 +473,10 @@ impl Catalogs {
                 })?;
                 vec![mods.to_vec()]
             }
-            None => self.mod_combinations(item_key, definition)?,
+            None => match owned_mods {
+                Some(owned) => self.mod_combinations_owned(item_key, definition, owned),
+                None => self.mod_combinations(item_key, definition)?,
+            },
         };
         let mut groups = Vec::<ItemVariantGroup>::new();
         let mut group_by_key = HashMap::<(Option<WeaponType>, Vec<i32>), usize>::new();
@@ -498,12 +546,13 @@ impl Catalogs {
 
     /// Returns the members of a bundled named enemy set.
     ///
-    /// Supported names are `shadow-dojo` and `reference`. Shadow Dojo membership
-    /// follows the existing `ShadowDojo` build-key convention; reference membership
+    /// Supported names are `shadow-dojo`, `live-samples`, and `reference`.
+    /// Named set membership follows build-key conventions; reference membership
     /// includes builds whose `reference` property is absent or true.
     pub fn enemy_set(&self, name: &str) -> Result<Vec<(&str, &BuildDefinition)>> {
         let prefix = match name {
             "shadow-dojo" => "ShadowDojo",
+            "live-samples" => "LiveSample",
             "reference" => {
                 return Ok(self
                     .builds
@@ -512,7 +561,9 @@ impl Catalogs {
                     .map(|(key, build)| (key.as_str(), build))
                     .collect())
             }
-            _ => bail!("unknown enemy set: {name}; available sets: shadow-dojo, reference"),
+            _ => bail!(
+                "unknown enemy set: {name}; available sets: shadow-dojo, live-samples, reference"
+            ),
         };
         Ok(self
             .builds
@@ -756,6 +807,42 @@ impl Catalogs {
                 .collect();
         }
         Ok(combinations)
+    }
+
+    fn mod_combinations_owned(
+        &self,
+        item_key: &str,
+        definition: &ItemDefinition,
+        owned_mods: &[String],
+    ) -> Vec<Vec<String>> {
+        let owned = owned_mods
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        let mut combinations = vec![Vec::new()];
+        for slot in 1..=definition.mod_slots {
+            let mut compatible = self
+                .weapon_mods
+                .iter()
+                .filter(|(key, weapon_mod)| {
+                    owned.contains(key.as_str())
+                        && weapon_mod.slot == slot
+                        && weapon_mod.compatible.iter().any(|item| item == item_key)
+                })
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
+            compatible.sort();
+            let mut next = combinations.clone();
+            for combination in &combinations {
+                for key in &compatible {
+                    let mut with_mod = combination.clone();
+                    with_mod.push(key.clone());
+                    next.push(with_mod);
+                }
+            }
+            combinations = next;
+        }
+        combinations
     }
 }
 
