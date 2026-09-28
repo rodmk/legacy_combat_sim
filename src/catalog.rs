@@ -552,7 +552,7 @@ impl Catalogs {
     ///
     /// Supported names are `shadow-dojo`, `live-samples`, and `reference`.
     /// Named set membership follows build-key conventions; reference membership
-    /// includes builds whose `reference` property is absent or true.
+    /// requires an explicit `reference: true`.
     pub fn enemy_set(&self, name: &str) -> Result<Vec<(&str, &BuildDefinition)>> {
         let prefix = match name {
             "shadow-dojo" => "ShadowDojo",
@@ -561,7 +561,7 @@ impl Catalogs {
                 return Ok(self
                     .builds
                     .iter()
-                    .filter(|(_, build)| build.reference != Some(false))
+                    .filter(|(_, build)| build.reference == Some(true))
                     .map(|(key, build)| (key.as_str(), build))
                     .collect())
             }
@@ -1021,6 +1021,54 @@ mod tests {
         let catalogs = Catalogs::bundled().unwrap();
         assert_eq!(catalogs.enemy_set("shadow-dojo").unwrap().len(), 15);
         assert!(catalogs.build("ShadowDojoDLGunBuild2").is_ok());
+    }
+
+    #[test]
+    fn reference_set_requires_explicit_opt_in() {
+        let mut catalogs = Catalogs::bundled().unwrap();
+        let mut additions = BuildCatalog::new();
+        let template = catalogs.build("CurrentBuild").unwrap().clone();
+        for (key, reference) in [
+            ("ReferenceOmitted", None),
+            ("ReferenceFalse", Some(false)),
+            ("ReferenceTrue", Some(true)),
+        ] {
+            let mut build = template.clone();
+            build.reference = reference;
+            additions.insert(key.to_owned(), build);
+        }
+        catalogs.add_builds(additions).unwrap();
+
+        let reference = catalogs
+            .enemy_set("reference")
+            .unwrap()
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect::<HashSet<_>>();
+        assert_eq!(reference.len(), 31);
+        assert!(reference.contains("ReferenceTrue"));
+        assert!(reference.contains("ShadowDojoDLGunBuild2"));
+        assert!(reference.contains("LiveSample001"));
+        assert!(!reference.contains("ReferenceFalse"));
+        assert!(!reference.contains("ReferenceOmitted"));
+        assert!(!reference.contains("CurrentBuild"));
+    }
+
+    #[test]
+    fn theorycrafted_catalog_joins_reference_set_when_loaded() {
+        let mut catalogs = Catalogs::bundled().unwrap();
+        catalogs
+            .add_build_catalog(Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/data/theorycrafted-builds.json"
+            )))
+            .unwrap();
+
+        let reference = catalogs.enemy_set("reference").unwrap();
+        assert_eq!(reference.len(), 40);
+        assert!(reference
+            .iter()
+            .any(|(key, _)| *key == "TheorycraftedDualCrystalCrossbows"));
     }
 
     #[test]

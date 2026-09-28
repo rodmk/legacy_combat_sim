@@ -2,7 +2,7 @@
   "LiveSample001": {
     "name": "Live Sample 001",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 162, "speed": 2, "accuracy": 4, "dodge": 15},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -15,7 +15,7 @@
   "LiveSample002": {
     "name": "Live Sample 002",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -28,7 +28,7 @@
   "LiveSample003": {
     "name": "Live Sample 003",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 170, "speed": 2, "accuracy": 7, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
@@ -41,7 +41,7 @@
   "LiveSample004": {
     "name": "Live Sample 004",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 120, "speed": 2, "accuracy": 4, "dodge": 57},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -54,7 +54,7 @@
   "LiveSample005": {
     "name": "Live Sample 005",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "CorruptedWater"]},
@@ -67,7 +67,7 @@
   "LiveSample006": {
     "name": "Live Sample 006",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
@@ -80,7 +80,7 @@
   "LiveSample007": {
     "name": "Live Sample 007",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 86, "speed": 2, "accuracy": 4, "dodge": 91},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -93,7 +93,7 @@
   "LiveSample008": {
     "name": "Live Sample 008",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 160, "speed": 2, "accuracy": 4, "dodge": 17},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -106,7 +106,7 @@
   "LiveSample009": {
     "name": "Live Sample 009",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 160, "speed": 2, "accuracy": 4, "dodge": 17},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -119,7 +119,7 @@
   "LiveSample010": {
     "name": "Live Sample 010",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 120, "speed": 2, "accuracy": 4, "dodge": 57},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -132,7 +132,7 @@
   "LiveSample011": {
     "name": "Live Sample 011",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 150, "speed": 2, "accuracy": 4, "dodge": 27},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -145,7 +145,7 @@
   "LiveSample012": {
     "name": "Live Sample 012",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 123, "speed": 2, "accuracy": 37, "dodge": 21},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -158,7 +158,7 @@
   "LiveSample013": {
     "name": "Live Sample 013",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 130, "speed": 2, "accuracy": 4, "dodge": 47},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -171,7 +171,7 @@
   "LiveSample014": {
     "name": "Live Sample 014",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 84, "speed": 2, "accuracy": 4, "dodge": 93},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -184,7 +184,7 @@
   "LiveSample015": {
     "name": "Live Sample 015",
     "level": 80,
-    "reference": false,
+    "reference": true,
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
