@@ -95,7 +95,7 @@ pub struct BuildDefinition {
     /// Character level; materialization currently accepts level 80 only.
     pub level: u32,
     #[serde(default)]
-    /// Whether the build participates in the `reference` enemy set.
+    /// Only an explicit true includes the build in the `reference` enemy set.
     pub reference: Option<bool>,
     #[serde(default)]
     /// Mode used when this build initiates combat.

@@ -2,6 +2,7 @@
   "ShadowDojoDLGunBuild1": {
     "name": "DL Gun Build",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -14,6 +15,7 @@
   "ShadowDojoDLGunBuild2": {
     "name": "DL Gun Build 2",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -26,6 +28,7 @@
   "ShadowDojoDLGunBuild3": {
     "name": "DL Gun Build 3",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -38,6 +41,7 @@
   "ShadowDojoDLGunBuild4": {
     "name": "DL Gun Build 4",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -50,6 +54,7 @@
   "ShadowDojoDLGunBuild5": {
     "name": "DL Gun Build 5",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -62,6 +67,7 @@
   "ShadowDojoDLGunBuild6": {
     "name": "DL Gun Build 6",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -74,6 +80,7 @@
   "ShadowDojoDLGunBuild7": {
     "name": "DL Gun Build 7",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -86,6 +93,7 @@
   "ShadowDojoDLGunBuild8": {
     "name": "DL Gun Build 8",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 140, "speed": 2, "dodge": 4, "accuracy": 37 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -98,6 +106,7 @@
   "ShadowDojoCoreVoidBuild1": {
     "name": "Core/Void Build 1",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -110,6 +119,7 @@
   "ShadowDojoDualBowBuild1": {
     "name": "Dual Bow Build 1",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -122,6 +132,7 @@
   "ShadowDojoRiftBowBuild1": {
     "name": "Rift Bow Build 1",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -134,6 +145,7 @@
   "ShadowDojoT2ScytheBuild": {
     "name": "T2 Scythe Build",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -146,6 +158,7 @@
   "ShadowDojoSG1SplitBombs": {
     "name": "SG1 Split bombs",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "SG1Armor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"] },
@@ -158,6 +171,7 @@
   "ShadowDojoHFCoreVoid": {
     "name": "HF Core/Void",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "HellforgedArmor", "crystals": ["CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal"] },
@@ -170,6 +184,7 @@
   "ShadowDojoArmorStackCores": {
     "name": "Armour stack Cores",
     "level": 80,
+    "reference": true,
     "stats": { "hp": 173, "speed": 2, "dodge": 4, "accuracy": 4 },
     "equipment": {
       "armor": { "item": "HellforgedArmor", "crystals": ["CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal"] },

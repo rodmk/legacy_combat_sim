@@ -1,0 +1,347 @@
+{
+  "TheorycraftedDBSniperAlienRifle": {
+    "name": "Double Barrel Sniper Rifle + Alien Rifle",
+    "level": 80,
+    "reference": true,
+    "attack_type": "aimed",
+    "stats": {
+      "hp": 159,
+      "speed": 2,
+      "accuracy": 18,
+      "dodge": 4
+    },
+    "equipment": {
+      "armor": {
+        "item": "SG1Armor",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "weapon1": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "AlienRifle",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      }
+    }
+  },
+  "TheorycraftedDarkShadowCrystalCrossbow": {
+    "name": "Dark Shadow + Crystal Crossbow",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 130,
+      "speed": 2,
+      "accuracy": 6,
+      "dodge": 45
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "DarkShadow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "CrystalCrossbow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"],
+        "mods": ["AmuletTip"]
+      },
+      "misc1": {
+        "item": "ProjectorBots",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc2": {
+        "item": "ProjectorBots",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      }
+    }
+  },
+  "TheorycraftedDualReaperAxes": {
+    "name": "Dual Reaper Axes",
+    "level": 80,
+    "reference": true,
+    "attack_type": "aimed",
+    "stats": {
+      "hp": 162,
+      "speed": 2,
+      "accuracy": 15,
+      "dodge": 4
+    },
+    "equipment": {
+      "armor": {
+        "item": "HellforgedArmor",
+        "crystals": ["CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal", "CabrusionCrystal"]
+      },
+      "weapon1": {
+        "item": "ReaperAxe",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "ReaperAxe",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      }
+    }
+  },
+  "TheorycraftedDBSniperHavocLauncher": {
+    "name": "Double Barrel Sniper Rifle + Havoc Launcher T2",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 122,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 55
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": ["BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal"]
+      },
+      "weapon2": {
+        "item": "HavocLauncherT2",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "ArchaticRing",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "OrphicAmulet",
+        "crystals": ["GreenInferno", "GreenInferno", "GreenInferno", "GreenInferno"]
+      }
+    }
+  },
+  "TheorycraftedRiftGunCrystalCrossbow": {
+    "name": "Rift Gun + Crystal Crossbow",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 122,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 55
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "RiftGun",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "CrystalCrossbow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"],
+        "mods": ["AmuletTip"]
+      },
+      "misc1": {
+        "item": "ArchaticRing",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "ProjectorBots",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      }
+    }
+  },
+  "TheorycraftedCoreStaffCrystalMaul": {
+    "name": "Core Staff + Crystal Maul",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 127,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 50
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "CoreStaff",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "CrystalMaul",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "ArchaticRing",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "OrphicAmulet",
+        "crystals": ["OrangeInferno", "OrangeInferno", "OrangeInferno", "OrangeInferno"]
+      }
+    }
+  },
+  "TheorycraftedDarkShadowCBombs": {
+    "name": "Dark Shadow + Concentrated C Bombs T2",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 130,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 47
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "DarkShadow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "weapon2": {
+        "item": "ConcentratedCBombsT2",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "ProjectorBots",
+        "crystals": ["YellowInferno", "YellowInferno", "YellowInferno", "YellowInferno"]
+      },
+      "misc2": {
+        "item": "ProjectorBots",
+        "crystals": ["YellowInferno", "YellowInferno", "YellowInferno", "YellowInferno"]
+      }
+    }
+  },
+  "TheorycraftedDBSniperRiftGun": {
+    "name": "Double Barrel Sniper Rifle + Rift Gun",
+    "level": 80,
+    "reference": true,
+    "attack_type": "aimed",
+    "stats": {
+      "hp": 173,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 4
+    },
+    "equipment": {
+      "armor": {
+        "item": "SG1Armor",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "weapon1": {
+        "item": "DoubleBarrelSniperRifle",
+        "crystals": ["BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal"]
+      },
+      "weapon2": {
+        "item": "RiftGun",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["GreenInferno", "GreenInferno", "GreenInferno", "GreenInferno"]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      }
+    }
+  },
+  "TheorycraftedRiftGunChainBladeT2": {
+    "name": "Rift Gun + Chain Blade T2",
+    "level": 80,
+    "reference": true,
+    "attack_type": "aimed",
+    "stats": {
+      "hp": 166,
+      "speed": 3,
+      "accuracy": 10,
+      "dodge": 4
+    },
+    "equipment": {
+      "armor": {
+        "item": "SG1Armor",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "weapon1": {
+        "item": "ChainBladeT2",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"],
+        "mods": ["BloodCore"]
+      },
+      "weapon2": {
+        "item": "RiftGun",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc1": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      },
+      "misc2": {
+        "item": "BioSpinalEnhancer",
+        "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]
+      }
+    }
+  },
+  "TheorycraftedDualCrystalCrossbows": {
+    "name": "Dual Crystal Crossbows",
+    "level": 80,
+    "reference": true,
+    "attack_type": "cover",
+    "stats": {
+      "hp": 127,
+      "speed": 2,
+      "accuracy": 4,
+      "dodge": 50
+    },
+    "equipment": {
+      "armor": {
+        "item": "DarkLegionArmor",
+        "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]
+      },
+      "weapon1": {
+        "item": "CrystalCrossbow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"],
+        "mods": ["AmuletTip"]
+      },
+      "weapon2": {
+        "item": "CrystalCrossbow",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"],
+        "mods": ["AmuletTip"]
+      },
+      "misc1": {
+        "item": "ProjectorBots",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      },
+      "misc2": {
+        "item": "ProjectorBots",
+        "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]
+      }
+    }
+  }
+}
