@@ -122,7 +122,7 @@
     "reference": true,
     "stats": {"hp": 120, "speed": 2, "accuracy": 4, "dodge": 57},
     "equipment": {
-      "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
+      "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
       "weapon1": {"item": "CrystalCrossbow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"], "mods": ["AmuletTip"]},
       "weapon2": {"item": "DarkShadow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
       "misc1": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
@@ -135,7 +135,7 @@
     "reference": true,
     "stats": {"hp": 150, "speed": 2, "accuracy": 4, "dodge": 27},
     "equipment": {
-      "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
+      "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
       "weapon1": {"item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
       "weapon2": {"item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
       "misc1": {"item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -192,6 +192,32 @@
       "weapon2": {"item": "ScytheT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"], "mods": ["BloodCore"]},
       "misc1": {"item": "ScoutDrones", "crystals": ["PerfectOrange", "PerfectOrange", "AmuletCrystal", "AmuletCrystal"]},
       "misc2": {"item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]}
+    }
+  },
+  "LiveSample016": {
+    "name": "Live Sample 016",
+    "level": 80,
+    "reference": true,
+    "stats": {"hp": 140, "speed": 2, "accuracy": 4, "dodge": 37},
+    "equipment": {
+      "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "CorruptedWater"]},
+      "weapon1": {"item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "weapon2": {"item": "HavocLauncherT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "PerfectFire", "PerfectFire"]},
+      "misc1": {"item": "ScoutDrones", "crystals": ["PerfectYellow", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "misc2": {"item": "BioSpinalEnhancer", "crystals": ["PerfectGreen", "PerfectGreen", "PerfectGreen", "PerfectGreen"]}
+    }
+  },
+  "LiveSample017": {
+    "name": "Live Sample 017",
+    "level": 80,
+    "reference": true,
+    "stats": {"hp": 60, "speed": 2, "accuracy": 4, "dodge": 117},
+    "equipment": {
+      "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
+      "weapon1": {"item": "ReaperAxe", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "weapon2": {"item": "CrystalMaul", "crystals": ["BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal", "AmuletCrystal"]},
+      "misc1": {"item": "CoreShield", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
+      "misc2": {"item": "OrphicAmulet", "crystals": ["OrangeInferno", "OrangeInferno", "OrangeInferno", "OrangeInferno"]}
     }
   }
 }
