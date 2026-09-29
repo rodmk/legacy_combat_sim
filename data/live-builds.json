@@ -31,11 +31,11 @@
     "reference": true,
     "stats": {"hp": 170, "speed": 2, "accuracy": 7, "dodge": 4},
     "equipment": {
-      "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
+      "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "CorruptedPink"]},
       "weapon1": {"item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
-      "weapon2": {"item": "SplitCBombsT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
-      "misc1": {"item": "AeonAmulet", "crystals": []},
-      "misc2": {"item": "InfernoAmulet", "crystals": []}
+      "weapon2": {"item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "misc1": {"item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
+      "misc2": {"item": "BioSpinalEnhancer", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]}
     }
   },
   "LiveSample004": {
@@ -218,6 +218,19 @@
       "weapon2": {"item": "CrystalMaul", "crystals": ["BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal", "AmuletCrystal"]},
       "misc1": {"item": "CoreShield", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
       "misc2": {"item": "OrphicAmulet", "crystals": ["OrangeInferno", "OrangeInferno", "OrangeInferno", "OrangeInferno"]}
+    }
+  },
+  "LiveSample018": {
+    "name": "Live Sample 018",
+    "level": 80,
+    "reference": true,
+    "stats": {"hp": 140, "speed": 2, "accuracy": 4, "dodge": 37},
+    "equipment": {
+      "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
+      "weapon1": {"item": "SplitCBombsT2", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "weapon2": {"item": "CrystalCrossbow", "crystals": ["PrimeCrystal"], "mods": ["AmuletTip"]},
+      "misc1": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "misc2": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]}
     }
   }
 }
