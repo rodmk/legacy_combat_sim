@@ -1045,7 +1045,7 @@ mod tests {
             .into_iter()
             .map(|(key, _)| key)
             .collect::<HashSet<_>>();
-        assert_eq!(reference.len(), 31);
+        assert_eq!(reference.len(), 35);
         assert!(reference.contains("ReferenceTrue"));
         assert!(reference.contains("ShadowDojoDLGunBuild2"));
         assert!(reference.contains("LiveSample001"));
@@ -1065,7 +1065,7 @@ mod tests {
             .unwrap();
 
         let reference = catalogs.enemy_set("reference").unwrap();
-        assert_eq!(reference.len(), 40);
+        assert_eq!(reference.len(), 44);
         assert!(reference
             .iter()
             .any(|(key, _)| *key == "TheorycraftedDualCrystalCrossbows"));
