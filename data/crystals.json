@@ -120,6 +120,18 @@
       "max_damage": 1.06
     }
   },
+  "DiminishedCrystal": {
+    "name": "Diminished Crystal",
+    "mult": {
+      "proj_skill": 1.05,
+      "gun_skill": 1.05,
+      "melee_skill": 1.05,
+      "def_skill": 1.05,
+      "accuracy": 1.04,
+      "min_damage": 1.04,
+      "max_damage": 1.04
+    }
+  },
   "CabrusionCrystal": {
     "name": "Cabrusion Crystal",
     "mult": {

@@ -232,5 +232,18 @@
       "misc1": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
       "misc2": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]}
     }
+  },
+  "LiveSample019": {
+    "name": "Live Sample 019",
+    "level": 80,
+    "reference": true,
+    "stats": {"hp": 80, "speed": 2, "accuracy": 4, "dodge": 97},
+    "equipment": {
+      "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
+      "weapon1": {"item": "CrystalCrossbow", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal"], "mods": ["AmuletTip"]},
+      "weapon2": {"item": "RiftGun", "crystals": ["DiminishedCrystal", "AmuletCrystal", "AmuletCrystal"]},
+      "misc1": {"item": "ReconDrones", "crystals": ["GreenInferno", "PerfectGreen", "PerfectGreen"]},
+      "misc2": {"item": "ScoutDrones", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "DiminishedCrystal"]}
+    }
   }
 }
