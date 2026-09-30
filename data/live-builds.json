@@ -3,7 +3,8 @@
     "name": "Live Sample 001",
     "level": 80,
     "reference": true,
-    "stats": {"hp": 162, "speed": 2, "accuracy": 4, "dodge": 15},
+    "attack_type": "aimed",
+    "stats": {"hp": 162, "speed": 2, "accuracy": 13, "dodge": 6},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
       "weapon1": {"item": "CoreStaff", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "AmuletCrystal"]},
@@ -16,6 +17,7 @@
     "name": "Live Sample 002",
     "level": 80,
     "reference": true,
+    "attack_type": "aimed",
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
@@ -29,6 +31,7 @@
     "name": "Live Sample 003",
     "level": 80,
     "reference": true,
+    "attack_type": "aimed",
     "stats": {"hp": 170, "speed": 2, "accuracy": 7, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "CorruptedPink"]},
@@ -42,6 +45,7 @@
     "name": "Live Sample 004",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 120, "speed": 2, "accuracy": 4, "dodge": 57},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -55,6 +59,7 @@
     "name": "Live Sample 005",
     "level": 80,
     "reference": true,
+    "attack_type": "aimed",
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "CorruptedWater"]},
@@ -68,6 +73,7 @@
     "name": "Live Sample 006",
     "level": 80,
     "reference": true,
+    "attack_type": "aimed",
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
@@ -81,6 +87,7 @@
     "name": "Live Sample 007",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 86, "speed": 2, "accuracy": 4, "dodge": 91},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -94,7 +101,8 @@
     "name": "Live Sample 008",
     "level": 80,
     "reference": true,
-    "stats": {"hp": 160, "speed": 2, "accuracy": 4, "dodge": 17},
+    "attack_type": "aimed",
+    "stats": {"hp": 160, "speed": 2, "accuracy": 16, "dodge": 5},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
       "weapon1": {"item": "RiftGun", "crystals": ["AmuletCrystal", "AmuletCrystal", "AmuletCrystal", "BerserkerCrystal"]},
@@ -107,6 +115,7 @@
     "name": "Live Sample 009",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 160, "speed": 2, "accuracy": 4, "dodge": 17},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -120,6 +129,7 @@
     "name": "Live Sample 010",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 120, "speed": 2, "accuracy": 4, "dodge": 57},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -133,6 +143,7 @@
     "name": "Live Sample 011",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 150, "speed": 2, "accuracy": 4, "dodge": 27},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -146,7 +157,8 @@
     "name": "Live Sample 012",
     "level": 80,
     "reference": true,
-    "stats": {"hp": 123, "speed": 2, "accuracy": 37, "dodge": 21},
+    "attack_type": "aimed",
+    "stats": {"hp": 123, "speed": 2, "accuracy": 54, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
       "weapon1": {"item": "VoidSword", "crystals": ["BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal", "BerserkerCrystal"], "mods": ["VoidCore"]},
@@ -159,6 +171,7 @@
     "name": "Live Sample 013",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 130, "speed": 2, "accuracy": 4, "dodge": 47},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -172,6 +185,7 @@
     "name": "Live Sample 014",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 84, "speed": 2, "accuracy": 4, "dodge": 93},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -185,6 +199,7 @@
     "name": "Live Sample 015",
     "level": 80,
     "reference": true,
+    "attack_type": "aimed",
     "stats": {"hp": 173, "speed": 2, "accuracy": 4, "dodge": 4},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["PerfectPink", "PerfectPink", "PerfectPink", "PerfectPink"]},
@@ -198,6 +213,7 @@
     "name": "Live Sample 016",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 140, "speed": 2, "accuracy": 4, "dodge": 37},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "CorruptedWater"]},
@@ -211,6 +227,7 @@
     "name": "Live Sample 017",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 60, "speed": 2, "accuracy": 4, "dodge": 117},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["CorruptedWater", "CorruptedWater", "CorruptedWater", "CorruptedWater"]},
@@ -224,6 +241,7 @@
     "name": "Live Sample 018",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 140, "speed": 2, "accuracy": 4, "dodge": 37},
     "equipment": {
       "armor": {"item": "DarkLegionArmor", "crystals": ["AbyssCrystal", "AbyssCrystal", "AbyssCrystal", "AbyssCrystal"]},
@@ -237,6 +255,7 @@
     "name": "Live Sample 019",
     "level": 80,
     "reference": true,
+    "attack_type": "cover",
     "stats": {"hp": 80, "speed": 2, "accuracy": 4, "dodge": 97},
     "equipment": {
       "armor": {"item": "SG1Armor", "crystals": ["CorruptedPink", "CorruptedPink", "CorruptedPink", "CorruptedPink"]},
